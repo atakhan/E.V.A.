@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Request
+
+from app.api.channels.telegram_utils import default_skill_id, normalize_telegram_update
+from infrastructure.redis.event_bus import publish_event
+
+router = APIRouter(prefix="/api/channels", tags=["channels"])
+
+
+def _enqueue_inbound(*, agent_slug: str, payload: dict[str, Any]) -> dict[str, Any]:
+    skill_id = default_skill_id(agent_slug)
+    event: dict[str, Any] = {
+        "type": "channel.message.received",
+        "agentSlug": agent_slug,
+        "payload": payload,
+    }
+    if skill_id:
+        event["skillId"] = skill_id
+    message_id = publish_event(event)
+    return {"ok": True, "queued": True, "messageId": message_id}
+
+
+@router.post("/telegram/{agent_slug}")
+async def telegram_webhook(agent_slug: str, request: Request) -> dict[str, Any]:
+    body = await request.json()
+    if "message" in body or "edited_message" in body:
+        payload = normalize_telegram_update(body)
+        if payload is None:
+            return {"ok": True, "ignored": True}
+        return _enqueue_inbound(agent_slug=agent_slug, payload=payload)
+
+    # Legacy simplified payload for tests/manual calls
+    conversation_id = body.get("conversation_id") or body.get("chat_id")
+    message = body.get("message")
+    if message:
+        conversation_id = conversation_id or message.get("chat_id")
+        text = message.get("text", body.get("text", ""))
+    else:
+        text = body.get("text", "")
+
+    if not conversation_id:
+        return {"ok": False, "error": "conversation_id or chat_id required"}
+
+    return _enqueue_inbound(
+        agent_slug=agent_slug,
+        payload={
+            "conversation_id": str(conversation_id),
+            "text": text,
+        },
+    )
+
+
+@router.post("/telegram")
+async def telegram_webhook_legacy(request: Request) -> dict[str, Any]:
+    """Backward-compatible endpoint defaulting to foreman agent."""
+    return await telegram_webhook("foreman", request)

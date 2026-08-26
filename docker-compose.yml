@@ -1,14 +1,96 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: eva
+      POSTGRES_PASSWORD: eva
+      POSTGRES_DB: eva
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eva -d eva"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.dev.backend
     environment:
       PORT: 8000
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg2://eva:eva@postgres:5432/eva
+      REDIS_URL: redis://redis:6379/0
+      EVA_AUTO_MIGRATE: "true"
+      EVA_TELEGRAM_MODE: stub
+      EVA_DEFAULT_SKILL_IDS: foreman=process_foreman_request
     volumes:
-      - ./backend/app:/app/app
+      - ./backend:/app
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  runtime-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.backend
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg2://eva:eva@postgres:5432/eva
+      REDIS_URL: redis://redis:6379/0
+      EVA_AUTO_MIGRATE: "false"
+      EVA_TELEGRAM_MODE: stub
+      EVA_DEFAULT_SKILL_IDS: foreman=process_foreman_request
+    volumes:
+      - ./backend:/app
+    command: python -m workers.runtime_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  telegram-poller:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.backend
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg2://eva:eva@postgres:5432/eva
+      REDIS_URL: redis://redis:6379/0
+      EVA_AUTO_MIGRATE: "false"
+      EVA_TELEGRAM_POLLING: "false"
+      EVA_TELEGRAM_MODE: stub
+      EVA_DEFAULT_SKILL_IDS: foreman=process_foreman_request
+    volumes:
+      - ./backend:/app
+    command: python -m workers.telegram_poller
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
 
   frontend:
     build:
@@ -26,3 +108,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  postgres_data:

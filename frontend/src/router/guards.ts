@@ -4,53 +4,49 @@ import type {
   RouteLocationNormalized,
 } from "vue-router";
 import {
-  getApplicationById,
-  getApplicationBySlug,
-} from "@/features/applications/services/applicationsStorage";
-import { getFsmModuleData } from "@/features/modules/fsm/types/fsmModule";
+  getAgentById,
+  getAgentBySlug,
+} from "@/features/agents/services/agentsStorage";
+import { findWorkspaceSection } from "@/features/workspace/config/nav";
 import {
-  applicationModulePath,
-  defaultModuleSlug,
+  agentHomePath,
+  agentSectionPath,
+  agentSkillsPath,
+  legacyModuleSlugToSection,
   RouteNames,
-  sectionIdFromSlug,
+  skillPath,
 } from "@/router/paths";
 
-export function applicationRouteGuard(
+const workspaceRouteNames = new Set<string>([
+  RouteNames.agentOverview,
+  RouteNames.agentSkills,
+  RouteNames.agentActions,
+  RouteNames.agentTools,
+  RouteNames.skillCanvas,
+]);
+
+export function agentRouteGuard(
   to: RouteLocationNormalized,
   _from: RouteLocationNormalized,
   next: NavigationGuardNext,
 ) {
-  if (
-    to.name !== RouteNames.applicationModule &&
-    to.name !== RouteNames.fsmCanvas
-  ) {
+  if (!to.name || !workspaceRouteNames.has(String(to.name))) {
     next();
     return;
   }
 
-  const appSlug = String(to.params.appSlug);
-  const app = getApplicationBySlug(appSlug);
-  if (!app) {
-    next({ name: RouteNames.applications });
+  const agentSlug = String(to.params.agentSlug);
+  const agent = getAgentBySlug(agentSlug);
+  if (!agent) {
+    next({ name: RouteNames.agents });
     return;
   }
 
-  if (to.name === RouteNames.applicationModule) {
-    const moduleSlug = String(to.params.moduleSlug);
-    if (!sectionIdFromSlug(moduleSlug)) {
-      next(applicationModulePath(app.slug, defaultModuleSlug));
-      return;
-    }
-  }
-
-  if (to.name === RouteNames.fsmCanvas) {
-    const canvasId = String(to.params.canvasId);
-    const canvas = getFsmModuleData(app.modules).canvases.find(
-      (item) => item.id === canvasId,
-    );
-
-    if (!canvas) {
-      next(applicationModulePath(app.slug, defaultModuleSlug));
+  if (to.name === RouteNames.skillCanvas) {
+    const skillId = String(to.params.skillId);
+    const skill = agent.skills.find((item) => item.id === skillId);
+    if (!skill) {
+      next(agentSkillsPath(agent.slug));
       return;
     }
   }
@@ -58,23 +54,41 @@ export function applicationRouteGuard(
   next();
 }
 
-export function legacyApplicationRedirect(to: RouteLocationGeneric): string {
-  const legacyAppId = String(to.params.legacyAppId);
-  const app =
-    getApplicationById(legacyAppId) ?? getApplicationBySlug(legacyAppId);
+export function legacyAgentModuleRedirect(to: RouteLocationGeneric): string {
+  const legacyAgentId = String(to.params.legacyAgentId);
+  const agent = getAgentById(legacyAgentId) ?? getAgentBySlug(legacyAgentId);
+  if (!agent) return "/agents";
 
-  if (!app) return "/applications";
+  const section = legacyModuleSlugToSection(String(to.params.moduleSlug));
+  return agentSectionPath(agent.slug, section);
+}
 
-  const moduleSlug = sectionIdFromSlug(String(to.params.moduleSlug))
-    ? String(to.params.moduleSlug)
-    : defaultModuleSlug;
+export function legacyAgentSlugModuleRedirect(to: RouteLocationGeneric): string {
+  const agentSlug = String(to.params.agentSlug);
+  const agent = getAgentBySlug(agentSlug);
+  if (!agent) return "/agents";
 
-  return applicationModulePath(app.slug, moduleSlug);
+  const section = legacyModuleSlugToSection(String(to.params.moduleSlug));
+  return agentSectionPath(agent.slug, section);
 }
 
 export function legacyFsmCanvasRedirect(to: RouteLocationGeneric): string {
-  const legacyAppId = String(to.params.legacyAppId);
-  const app = getApplicationById(legacyAppId);
-  if (!app) return "/applications";
-  return `/${app.slug}/fsm/canvases/${String(to.params.canvasId)}`;
+  const legacyAgentId = String(to.params.legacyAgentId ?? to.params.agentSlug);
+  const agent = getAgentById(legacyAgentId) ?? getAgentBySlug(legacyAgentId);
+  if (!agent) return "/agents";
+
+  const skillId = String(to.params.canvasId ?? to.params.skillId);
+  if (agent.skills.some((skill) => skill.id === skillId)) {
+    return skillPath(agent.slug, skillId);
+  }
+  return agentSkillsPath(agent.slug);
+}
+
+export function legacyAgentRootRedirect(to: RouteLocationGeneric): string {
+  const agentSlug = String(to.params.agentSlug);
+  if (findWorkspaceSection(agentSlug)) {
+    // reserved — should not happen due to reserved slugs
+    return "/agents";
+  }
+  return agentHomePath(agentSlug);
 }

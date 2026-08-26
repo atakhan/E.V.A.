@@ -1,50 +1,65 @@
-import { defaultModuleSectionId } from "@/features/workspace/config/modules";
+import { defaultWorkspaceSectionSlug } from "@/features/workspace/config/nav";
 
 export const RouteNames = {
-  applications: "applications",
-  applicationModule: "application-module",
-  fsmCanvas: "fsm-canvas",
+  agents: "agents",
+  agentWorkspace: "agent-workspace",
+  agentOverview: "agent-overview",
+  agentSkills: "agent-skills",
+  agentActions: "agent-actions",
+  agentTools: "agent-tools",
+  agentRun: "agent-run",
+  skillCanvas: "skill-canvas",
 } as const;
 
-export const moduleSlugBySectionId: Record<string, string> = {
-  "core.fsm": "fsm",
-  "core.tasks": "tasks",
-  "core.llm": "llm",
-  "core.events": "events",
-  "tools-and-actions": "tools-and-actions",
-  "memory.memory": "memory",
-  "memory.entity-graph": "entity-graph",
-  "memory.business-data": "business-data",
-  "context-manager": "context-manager",
-  reflection: "reflection",
-};
-
-export const sectionIdByModuleSlug: Record<string, string> = Object.fromEntries(
-  Object.entries(moduleSlugBySectionId).map(([sectionId, slug]) => [slug, sectionId]),
-);
-
-export const defaultModuleSlug = moduleSlugBySectionId[defaultModuleSectionId];
-
-export function sectionIdFromSlug(slug: string): string | undefined {
-  return sectionIdByModuleSlug[slug];
+export function agentsPath(): string {
+  return "/agents";
 }
 
-export function moduleSlugFromSectionId(sectionId: string): string {
-  return moduleSlugBySectionId[sectionId] ?? defaultModuleSlug;
+export function agentOverviewPath(agentSlug: string): string {
+  return `/${agentSlug}/overview`;
 }
 
-export function applicationsPath(): string {
-  return "/applications";
+export function agentSectionPath(agentSlug: string, sectionSlug: string): string {
+  return `/${agentSlug}/${sectionSlug}`;
 }
 
-export function applicationModulePath(appSlug: string, moduleSlug = defaultModuleSlug): string {
-  return `/${appSlug}/modules/${moduleSlug}`;
+export function agentSkillsPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "skills");
 }
 
-export function applicationModulePathBySection(appSlug: string, sectionId: string): string {
-  return applicationModulePath(appSlug, moduleSlugFromSectionId(sectionId));
+export function agentActionsPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "actions");
 }
 
-export function fsmCanvasPath(appSlug: string, canvasId: string): string {
-  return `/${appSlug}/fsm/canvases/${canvasId}`;
+export function agentToolsPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "tools");
+}
+
+export function agentRunPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "run");
+}
+
+export function skillPath(agentSlug: string, skillId: string): string {
+  return `/${agentSlug}/skills/${skillId}`;
+}
+
+/** Default landing inside an agent workspace. */
+export function agentHomePath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, defaultWorkspaceSectionSlug);
+}
+
+/** Map legacy module slugs to constructor sections. */
+export function legacyModuleSlugToSection(moduleSlug: string): string {
+  if (moduleSlug === "fsm") return "skills";
+  if (moduleSlug === "tools-and-actions") return "tools";
+  if (
+    moduleSlug === "overview" ||
+    moduleSlug === "skills" ||
+    moduleSlug === "actions" ||
+    moduleSlug === "tools" ||
+    moduleSlug === "run"
+  ) {
+    return moduleSlug;
+  }
+  return defaultWorkspaceSectionSlug;
 }
