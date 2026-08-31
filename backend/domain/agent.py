@@ -11,6 +11,7 @@ class SkillRunStatus(str, Enum):
     running = "running"
     waiting = "waiting"
     completed = "completed"
+    cancelled = "cancelled"
     error = "error"
 
 
@@ -30,9 +31,12 @@ class SkillRun(BaseModel):
     skill_version: str = "0.1.0"
     current_state: str
     status: SkillRunStatus = SkillRunStatus.running
+    params: dict[str, Any] = Field(default_factory=dict)
     vars: dict[str, Any] = Field(default_factory=dict)
     history: list[str] = Field(default_factory=list)
     error: str | None = None
+    revision: int = 0
+    expires_at: str | None = None
 
     def record_state(self, state_id: str) -> None:
         self.current_state = state_id

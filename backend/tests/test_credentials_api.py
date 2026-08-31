@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -12,9 +10,9 @@ def client():
         yield test_client
 
 
-def test_credentials_crud_and_secret_not_exposed(client: TestClient):
-    slug = f"cred-agent-{uuid.uuid4().hex[:8]}"
-    client.post("/api/agents", json={"name": "Cred", "slug": slug, "description": ""})
+@pytest.mark.integration
+def test_credentials_crud_and_secret_not_exposed(client: TestClient, ephemeral_agent_slug: str):
+    slug = ephemeral_agent_slug
 
     create = client.post(
         f"/api/agents/{slug}/credentials",

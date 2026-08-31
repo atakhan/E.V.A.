@@ -3,6 +3,12 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class SkillParam(BaseModel):
+    name: str
+    type: str = "string"
+    required: bool = False
+
+
 class FsmTransition(BaseModel):
     id: str = ""
     event: str
@@ -24,6 +30,7 @@ class SkillDefinition(BaseModel):
     description: str = ""
     version: str = "0.1.0"
     initial: str
+    params: list[SkillParam] = Field(default_factory=list)
     states: list[FsmState] = Field(default_factory=list)
 
     def state_map(self) -> dict[str, FsmState]:

@@ -31,16 +31,11 @@ def test_validate_unknown_action():
     assert any(issue["code"] == "unknown_action" for issue in report["issues"])
 
 
-def test_agents_crud_and_publish(client: TestClient):
-    slug = f"test-agent-{uuid.uuid4().hex[:8]}"
-    create_resp = client.post(
-        "/api/agents",
-        json={"name": "Test", "slug": slug, "description": "demo"},
-    )
-    assert create_resp.status_code == 201
+@pytest.mark.integration
+def test_agents_crud_and_publish(client: TestClient, ephemeral_agent_slug: str):
+    slug = ephemeral_agent_slug
 
     get_resp = client.get(f"/api/agents/{slug}")
-    assert get_resp.status_code == 200
     assert get_resp.json()["slug"] == slug
 
     validate_resp = client.post(f"/api/agents/{slug}/validate")
@@ -50,6 +45,7 @@ def test_agents_crud_and_publish(client: TestClient):
     assert publish_resp.status_code in (200, 400)
 
 
+@pytest.mark.integration
 def test_tools_catalog(client: TestClient):
     resp = client.get("/api/tools/catalog")
     assert resp.status_code == 200
@@ -57,6 +53,7 @@ def test_tools_catalog(client: TestClient):
     assert any(tool["id"] == "telegram" for tool in tools)
 
 
+@pytest.mark.integration
 def test_runtime_foreman_happy_path(client: TestClient):
     conversation_id = f"tg:chat:test-{uuid.uuid4().hex[:8]}"
     first = client.post(
@@ -96,6 +93,7 @@ def test_runtime_foreman_happy_path(client: TestClient):
     assert second_body["status"] == "completed"
 
 
+@pytest.mark.integration
 def test_telegram_webhook_queues_event(client: TestClient):
     resp = client.post(
         "/api/channels/telegram/foreman",

@@ -36,12 +36,16 @@ def build_foreman_agent_document() -> dict:
                 "id": "parse_request",
                 "name": "Parse foreman request",
                 "description": "",
+                "version": "0.1.0",
+                "policy": "auto",
+                "inputSchema": {},
+                "outputSchema": {},
                 "recipe": [
                     {
                         "id": str(uuid.uuid4()),
                         "tool": "llm",
                         "command": "parse_request",
-                        "args": '{"text": "${vars.last_message}"}',
+                        "input": {"text": "{{vars.last_message}}"},
                     }
                 ],
                 "createdAt": now,
@@ -51,15 +55,19 @@ def build_foreman_agent_document() -> dict:
                 "id": "clarify",
                 "name": "Clarify with foreman",
                 "description": "",
+                "version": "0.1.0",
+                "policy": "auto",
+                "inputSchema": {},
+                "outputSchema": {},
                 "recipe": [
                     {
                         "id": str(uuid.uuid4()),
                         "tool": "telegram",
                         "command": "send_message",
-                        "args": (
-                            '{"chat_id": "${vars.conversation_id}", '
-                            '"text": "Уточните, пожалуйста: что именно нужно по грибкам?"}'
-                        ),
+                        "input": {
+                            "chat_id": "{{vars.conversation_id}}",
+                            "text": "Уточните, пожалуйста: что именно нужно по грибкам?",
+                        },
                     }
                 ],
                 "createdAt": now,
@@ -71,11 +79,14 @@ def build_foreman_agent_document() -> dict:
                 "id": skill_id,
                 "name": "Process foreman request",
                 "description": "",
-                "version": "0.1.0",
+                "version": "1.0.0",
                 "createdAt": now,
                 "updatedAt": now,
                 "initial": "NEW",
-                "params": [],
+                "params": [
+                    {"name": "request_id", "type": "string", "required": False},
+                    {"name": "conversation_id", "type": "string", "required": False},
+                ],
                 "viewport": {"panX": 0, "panY": 0, "zoom": 1},
                 "states": [
                     {
@@ -103,15 +114,15 @@ def build_foreman_agent_document() -> dict:
                         "transitions": [
                             {
                                 "id": str(uuid.uuid4()),
-                                "event": "runtime.continue",
-                                "guard": "needs_clarification == true",
+                                "event": "action.parse_request.completed",
+                                "guard": "result.needs_clarification == true",
                                 "actions": [],
                                 "to": "CLARIFYING",
                             },
                             {
                                 "id": str(uuid.uuid4()),
-                                "event": "runtime.continue",
-                                "guard": "needs_clarification == false",
+                                "event": "action.parse_request.completed",
+                                "guard": "result.needs_clarification == false",
                                 "actions": [],
                                 "to": "READY",
                             },
@@ -128,7 +139,7 @@ def build_foreman_agent_document() -> dict:
                         "transitions": [
                             {
                                 "id": str(uuid.uuid4()),
-                                "event": "runtime.continue",
+                                "event": "action.clarify.completed",
                                 "guard": "",
                                 "actions": [],
                                 "to": "WAITING_FOR_FOREMAN",

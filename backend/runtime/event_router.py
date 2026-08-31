@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from domain.action import ActionDefinition
 from domain.agent import SkillRun, SkillRunStatus
@@ -55,6 +56,8 @@ class EventRouter:
                 run.vars[key] = value
         if "text" in event.payload:
             run.vars["last_message"] = event.payload["text"]
+        self._sync_correlation(run, event)
+        run.vars["_last_event_id"] = event.id
 
         trace = self.runner.handle(run, event)
         store_save_run(self.store, run)
@@ -81,10 +84,49 @@ class EventRouter:
             skill_version=self.catalog.skill.version,
             current_state=self.catalog.skill.initial,
             history=[self.catalog.skill.initial],
-            vars={},
+            params=self._build_run_params(event),
+            vars=self._build_run_vars(event),
         )
         store_save_run(self.store, run)
         return run, True
+
+    def _build_run_params(self, event: Event) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        for param in self.catalog.skill.params:
+            value = event.payload.get(param.name)
+            if value is not None:
+                params[param.name] = value
+        for key in ("request_id", "conversation_id", "user_id", "entity_id", "parent_run_id"):
+            if key in event.payload and key not in params:
+                params[key] = event.payload[key]
+        return params
+
+    @staticmethod
+    def _build_run_vars(event: Event) -> dict[str, Any]:
+        vars: dict[str, Any] = {}
+        for key in ("request_id", "conversation_id", "user_id", "entity_id", "parent_run_id"):
+            if key in event.payload:
+                vars[key] = event.payload[key]
+        return vars
+
+    @staticmethod
+    def _sync_correlation(run: SkillRun, event: Event) -> None:
+        corr = event.correlation
+        values = {
+            "request_id": corr.request_id,
+            "conversation_id": corr.conversation_id,
+            "user_id": corr.user_id,
+            "entity_id": corr.entity_id,
+            "parent_run_id": corr.parent_run_id,
+        }
+        for key, value in values.items():
+            if value:
+                run.params[key] = value
+                run.vars[key] = value
+        for key in values:
+            if key in event.payload:
+                run.params[key] = event.payload[key]
+                run.vars[key] = event.payload[key]
 
 
 __all__ = ["EventRouter", "InMemoryStore", "RuntimeCatalog", "RouterResult"]

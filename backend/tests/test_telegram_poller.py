@@ -28,9 +28,10 @@ def test_skip_test_dev_token():
     assert _is_pollable_credential(cred, "000000:TEST-DEV-TOKEN") is False
 
 
+@patch("workers.telegram_poller._load_offset", return_value=0)
 @patch("workers.telegram_poller.publish_event")
 @patch("workers.telegram_poller.httpx.get")
-def test_poll_handles_401(mock_get: MagicMock, _publish: MagicMock):
+def test_poll_handles_401(mock_get: MagicMock, _publish: MagicMock, _offset: MagicMock):
     mock_get.return_value = MagicMock(status_code=401, is_success=False, text="Unauthorized")
     cred = ToolCredentialRow(
         id="c1",

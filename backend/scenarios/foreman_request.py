@@ -3,11 +3,11 @@ from __future__ import annotations
 from domain.action import ActionDefinition, ActionRecipeStep
 from domain.agent import AgentDefinition
 from domain.events import Event
-from domain.skill import FsmState, FsmTransition, SkillDefinition
+from domain.skill import FsmState, FsmTransition, SkillDefinition, SkillParam
 from domain.tool import ToolCommandDef, ToolDefinition
 from runtime.event_router import EventRouter, RuntimeCatalog
 from tools.registry import ToolRegistry
-from tools.telegram_stub import TelegramStubTool
+from tools.telegram import TelegramStubTool
 
 
 def build_foreman_definitions() -> tuple[
@@ -19,8 +19,12 @@ def build_foreman_definitions() -> tuple[
     skill = SkillDefinition(
         id="process_foreman_request",
         name="Process foreman request",
-        version="0.1.0",
+        version="1.0.0",
         initial="NEW",
+        params=[
+            SkillParam(name="request_id", type="string", required=False),
+            SkillParam(name="conversation_id", type="string", required=False),
+        ],
         states=[
             FsmState(
                 id="NEW",
@@ -38,14 +42,14 @@ def build_foreman_definitions() -> tuple[
                 transitions=[
                     FsmTransition(
                         id="t_needs_clarify",
-                        event="runtime.continue",
-                        guard="needs_clarification == true",
+                        event="action.parse_request.completed",
+                        guard="result.needs_clarification == true",
                         to="CLARIFYING",
                     ),
                     FsmTransition(
                         id="t_ready_direct",
-                        event="runtime.continue",
-                        guard="needs_clarification == false",
+                        event="action.parse_request.completed",
+                        guard="result.needs_clarification == false",
                         to="READY",
                     ),
                 ],
@@ -56,7 +60,7 @@ def build_foreman_definitions() -> tuple[
                 transitions=[
                     FsmTransition(
                         id="t_wait",
-                        event="runtime.continue",
+                        event="action.clarify.completed",
                         to="WAITING_FOR_FOREMAN",
                     )
                 ],
@@ -80,25 +84,29 @@ def build_foreman_definitions() -> tuple[
         "parse_request": ActionDefinition(
             id="parse_request",
             name="Parse foreman request",
+            version="0.1.0",
+            policy="auto",
             recipe=[
                 ActionRecipeStep(
                     id="llm_parse",
                     tool="llm",
                     command="parse_request",
-                    args={"text": "${vars.last_message}"},
+                    input={"text": "{{vars.last_message}}"},
                 )
             ],
         ),
         "clarify": ActionDefinition(
             id="clarify",
             name="Clarify with foreman",
+            version="0.1.0",
+            policy="auto",
             recipe=[
                 ActionRecipeStep(
                     id="tg_ask",
                     tool="telegram",
                     command="send_message",
-                    args={
-                        "chat_id": "${vars.conversation_id}",
+                    input={
+                        "chat_id": "{{vars.conversation_id}}",
                         "text": "Уточните, пожалуйста: что именно нужно по грибкам?",
                     },
                 )
@@ -120,7 +128,7 @@ def build_foreman_definitions() -> tuple[
             id="telegram",
             name="Telegram",
             commands=[ToolCommandDef(id="send_message")],
-            events=["telegram.message.sent"],
+            events=["channel.message.sent"],
         ),
     ]
 

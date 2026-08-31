@@ -1,11 +1,13 @@
 from tools.base import BaseTool, Tool
-from tools.llm_stub import LlmStubTool
+from tools.llm import LlmStubTool
+from tools.polza import PolzaAiLlmTool
 from tools.registry import ToolRegistry
-from tools.telegram_stub import TelegramStubTool
+from tools.telegram import TelegramStubTool
 
 __all__ = [
     "BaseTool",
     "LlmStubTool",
+    "PolzaAiLlmTool",
     "TelegramStubTool",
     "Tool",
     "ToolRegistry",

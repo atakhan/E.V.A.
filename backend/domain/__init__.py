@@ -2,8 +2,8 @@
 
 from domain.action import ActionDefinition, ActionRecipeStep
 from domain.agent import AgentDefinition, SkillRun, SkillRunStatus
-from domain.events import ActionResult, Event, ToolResult
-from domain.skill import FsmState, FsmTransition, SkillDefinition
+from domain.events import ActionResult, Event, EventCorrelation, ToolResult
+from domain.skill import FsmState, FsmTransition, SkillDefinition, SkillParam
 from domain.tool import ToolCommandDef, ToolDefinition
 
 __all__ = [
@@ -11,10 +11,12 @@ __all__ = [
     "ActionRecipeStep",
     "ActionResult",
     "AgentDefinition",
+    "EventCorrelation",
     "Event",
     "FsmState",
     "FsmTransition",
     "SkillDefinition",
+    "SkillParam",
     "SkillRun",
     "SkillRunStatus",
     "ToolCommandDef",

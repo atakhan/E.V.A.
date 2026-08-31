@@ -6,7 +6,7 @@ BUILTIN_TOOLS: list[dict] = [
     {
         "id": "llm",
         "name": "LLM",
-        "description": "Языковая модель: текст и структурированный вывод.",
+        "description": "Языковая модель: текст и структурированный вывод (локальный stub).",
         "commands": [
             {"id": "run", "description": "Свободный текстовый ответ"},
             {"id": "run_structured", "description": "Ответ по JSON-схеме"},
@@ -14,6 +14,30 @@ BUILTIN_TOOLS: list[dict] = [
         ],
         "events": [],
         "states": [],
+    },
+    {
+        "id": "polza_ai_llm",
+        "name": "PolzaAI_LLM",
+        "description": "LLM через Polza.ai (OpenAI-совместимый API): API key, модель, баланс и логи.",
+        "commands": [
+            {"id": "run", "description": "Chat completion — свободный текстовый ответ"},
+            {"id": "run_structured", "description": "Ответ по JSON-схеме / json_object"},
+            {"id": "parse_request", "description": "Разбор входящего запроса через LLM"},
+        ],
+        "events": [],
+        "states": ["configured", "unconfigured"],
+        "credentialKind": "api_key",
+        "credentialPolicy": "shared_allowed",
+        "configSchema": [
+            {
+                "id": "model",
+                "type": "string",
+                "required": False,
+                "default": "gpt-4o-mini",
+                "scope": "instance",
+                "ui": {"label": "Модель по умолчанию"},
+            }
+        ],
     },
     {
         "id": "memory",
@@ -32,12 +56,53 @@ BUILTIN_TOOLS: list[dict] = [
         "states": [],
     },
     {
+        "id": "web_client",
+        "name": "Web Client",
+        "description": "Интеграция с бэкендом веб-приложения: ingress/outbound HTTP API.",
+        "commands": [
+            {"id": "send_message", "description": "Отправить сообщение в UI веб-приложения"},
+            {"id": "get_snapshot", "description": "Получить контекст сессии из веб-приложения"},
+        ],
+        "events": [
+            {"id": "channel.message.received", "description": "Сообщение от пользователя в веб-приложении"},
+            {"id": "web.state.changed", "description": "Изменилось состояние UI"},
+        ],
+        "states": ["disconnected", "connected"],
+        "credentialKind": "web_client",
+        "credentialPolicy": "unique_per_instance",
+        "configSchema": [
+            {"id": "healthPath", "type": "string", "default": "/eva/health", "ui": {"label": "Health path"}},
+            {"id": "sendMessagePath", "type": "string", "default": "/eva/messages", "ui": {"label": "Send message path"}},
+            {"id": "getSnapshotPath", "type": "string", "default": "/eva/context", "ui": {"label": "Snapshot path"}},
+            {
+                "id": "authStyle",
+                "type": "enum",
+                "enum": ["bearer", "x-api-key"],
+                "default": "bearer",
+                "ui": {"label": "Auth style"},
+            },
+            {"id": "timeoutSec", "type": "integer", "default": 30, "ui": {"label": "Timeout (sec)"}},
+        ],
+    },
+    {
         "id": "telegram",
         "name": "Telegram",
         "description": "Канал сообщений с людьми.",
         "commands": [{"id": "send_message", "description": "Отправить сообщение"}],
         "events": [{"id": "channel.message.received", "description": "Входящее сообщение"}],
         "states": ["connected", "disconnected"],
+        "credentialKind": "telegram_bot",
+        "credentialPolicy": "unique_per_instance",
+        "configSchema": [
+            {"id": "default_chat_id", "type": "string", "required": False, "ui": {"label": "Chat ID по умолчанию"}},
+            {
+                "id": "parse_mode",
+                "type": "enum",
+                "enum": ["", "HTML", "Markdown"],
+                "default": "",
+                "ui": {"label": "Parse mode"},
+            },
+        ],
     },
     {
         "id": "crm",

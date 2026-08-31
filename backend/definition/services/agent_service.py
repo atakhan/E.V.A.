@@ -11,6 +11,17 @@ from sqlalchemy.orm import Session
 from definition.validation.validate_agent import validate_agent
 from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow, ToolCredentialRow
 
+# Slugs created by integration tests; safe to delete on dev startup.
+EPHEMERAL_AGENT_SLUG_PREFIXES = (
+    "eva-test-",
+    "test-agent-",
+    "web-agent-",
+    "cred-agent-",
+)
+
+# Demo agents seeded in dev; never pruned automatically.
+DEMO_AGENT_SLUGS = frozenset({"foreman", "supplier"})
+
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -125,6 +136,12 @@ class AgentService:
             raise KeyError(f"Agent '{slug}' not found")
         self.session.delete(agent)
 
+    def is_ephemeral_slug(self, slug: str) -> bool:
+        normalized = slug.strip().lower()
+        if normalized in DEMO_AGENT_SLUGS:
+            return False
+        return any(normalized.startswith(prefix) for prefix in EPHEMERAL_AGENT_SLUG_PREFIXES)
+
     def validate_draft(self, slug: str) -> dict[str, Any]:
         agent_doc = self.get_agent_by_slug(slug)
         if agent_doc is None:
@@ -191,6 +208,31 @@ class AgentService:
             .limit(1)
         )
 
+    def get_publication(self, slug: str, version: str) -> AgentPublicationRow | None:
+        agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
+        if agent is None:
+            return None
+        return self.session.scalar(
+            select(AgentPublicationRow).where(
+                AgentPublicationRow.agent_id == agent.id,
+                AgentPublicationRow.version == version,
+            )
+        )
+
+
+def prune_ephemeral_agents(session: Session) -> list[str]:
+    """Remove test agents left over from integration tests."""
+    service = AgentService(session)
+    removed: list[str] = []
+    for summary in service.list_agents():
+        slug = summary["slug"]
+        if service.is_ephemeral_slug(slug):
+            service.delete_agent(slug)
+            removed.append(slug)
+    if removed:
+        session.flush()
+    return removed
+
 
 def seed_tool_catalog(session: Session) -> None:
     from definition.catalog.builtin_tools import BUILTIN_TOOLS
@@ -210,6 +252,34 @@ def seed_tool_catalog(session: Session) -> None:
             existing.name = tool["name"]
             existing.description = tool.get("description", "")
             existing.definition = tool
+
+
+def _patch_tool_credential(doc: dict[str, Any], tool_id: str, credential_id: str) -> dict[str, Any]:
+    tools: list[dict[str, Any]] = []
+    for tool in doc.get("tools", []):
+        if not isinstance(tool, dict):
+            continue
+        entry = dict(tool)
+        if entry.get("toolId") == tool_id:
+            entry["credentialId"] = credential_id
+        tools.append(entry)
+    return {**doc, "tools": tools}
+
+
+def _seed_agent_draft(
+    service: AgentService,
+    slug: str,
+    template: dict[str, Any],
+    *,
+    tool_id: str,
+    credential_id: str,
+) -> None:
+    """Seed demo agent without overwriting a customized draft (skills/layout in DB)."""
+    existing = service.get_agent_by_slug(slug)
+    if existing and existing.get("skills"):
+        service.upsert_draft(slug, _patch_tool_credential(existing, tool_id, credential_id))
+        return
+    service.upsert_draft(slug, _patch_tool_credential(template, tool_id, credential_id))
 
 
 def seed_foreman_agent(session: Session) -> None:
@@ -247,7 +317,57 @@ def seed_foreman_agent(session: Session) -> None:
         if tool.get("toolId") == "telegram":
             tool["credentialId"] = credential_id
 
-    service.upsert_draft(slug, doc)
+    _seed_agent_draft(service, slug, doc, tool_id="telegram", credential_id=credential_id)
+
+    publication = service.get_latest_publication(slug)
+    if publication is not None and publication.body.get("skills"):
+        return
+
+    report = validate_agent(service.get_agent_by_slug(slug) or doc)
+    if report["errors"] == 0:
+        service.publish(slug)
+
+
+def seed_supplier_agent(session: Session) -> None:
+    from definition.services.credential_service import CredentialService
+    from scenarios.supplier_agent_document import build_supplier_agent_document
+
+    slug = "supplier"
+    doc = build_supplier_agent_document()
+    service = AgentService(session)
+    cred_service = CredentialService(session)
+
+    if service.get_agent_by_slug(slug) is None:
+        service.create_agent(name=doc["name"], slug=slug, description=doc.get("description", ""))
+
+    agent = session.scalar(select(AgentRow).where(AgentRow.slug == slug))
+    assert agent is not None
+
+    credentials = cred_service.list_credentials(slug, tool_id="web_client")
+    if not credentials:
+        created = cred_service.create_credential(
+            slug,
+            tool_id="web_client",
+            name="ai_supplier dev",
+            secret={
+                "backend_base_url": "http://host.docker.internal:3000",
+                "outbound_api_key": "dev-outbound-key",
+                "inbound_api_key": "dev-inbound-key",
+            },
+        )
+        credential_id = created["id"]
+        row = session.get(ToolCredentialRow, credential_id)
+        if row is not None:
+            row.meta = {"dev_stub": True, "source": "ai_supplier"}
+            session.flush()
+    else:
+        credential_id = credentials[0]["id"]
+
+    for tool in doc.get("tools", []):
+        if tool.get("toolId") == "web_client":
+            tool["credentialId"] = credential_id
+
+    _seed_agent_draft(service, slug, doc, tool_id="web_client", credential_id=credential_id)
 
     publication = service.get_latest_publication(slug)
     if publication is not None and publication.body.get("skills"):

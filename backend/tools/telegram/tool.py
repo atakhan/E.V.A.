@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import httpx
 
-from domain.events import Event, ToolResult
+from definition.catalog.builtin_events import channel_message_sent
+from domain.events import ToolResult
 from tools.base import BaseTool
 
 
@@ -59,9 +59,11 @@ class TelegramTool(BaseTool):
             ok=True,
             data={"sent": message},
             events=[
-                Event(
-                    type="telegram.message.sent",
-                    payload=message,
+                channel_message_sent(
+                    conversation_id=message["chat_id"],
+                    text=text,
+                    source="telegram",
+                    message_id=str(result.get("message_id")) if result.get("message_id") else None,
                     skill_run_id=context.get("skill_run_id"),
                 )
             ],

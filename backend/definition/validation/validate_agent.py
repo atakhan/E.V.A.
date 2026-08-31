@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from definition.catalog.builtin_tools import get_tool_definition
+from definition.validation.validate_skill import validate_skill
+from runtime.tool_instance_resolver import list_tool_instances, resolve_recipe_tool
 
 AgentIssueSeverity = Literal["error", "warning", "info"]
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_VALID_POLICIES = frozenset({"auto", "needs_human"})
+_CREDENTIAL_TYPES = frozenset({"telegram", "polza_ai_llm", "web_client"})
 
 
 def _issue(
@@ -39,13 +45,12 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
     """Port of frontend validateAgent.ts — operates on camelCase agent dict."""
     issues: list[dict[str, Any]] = []
     action_ids = {action["id"] for action in agent.get("actions", []) if action.get("id")}
-    enabled_tools = {
-        tool["toolId"]
-        for tool in agent.get("tools", [])
-        if tool.get("enabled") and tool.get("toolId")
-    }
+    instances = list_tool_instances(agent)
+    enabled_instance_ids = {item["id"] for item in instances if item.get("enabled")}
     referenced_actions = _collect_referenced_action_ids(agent)
     slug = agent.get("slug", "")
+    tools_href = f"/agents/{slug}/tools" if slug else None
+    actions_href = f"/agents/{slug}/actions" if slug else None
 
     if not agent.get("skills"):
         issues.append(
@@ -60,103 +65,37 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
 
     for skill in agent.get("skills", []):
         skill_id = skill.get("id", "")
-        skill_name = skill.get("name", skill_id)
         skill_href = f"/agents/{slug}/skills/{skill_id}" if slug else None
-        state_ids = {state["id"] for state in skill.get("states", []) if state.get("id")}
-
-        if not skill.get("states"):
-            issues.append(
-                _issue(
-                    f"skill.{skill_id}.empty",
-                    "warning",
-                    "skill_empty",
-                    f"Skill «{skill_name}» без states",
-                    skill_href,
-                )
-            )
-            continue
-
-        initial = skill.get("initial")
-        if not initial:
-            issues.append(
-                _issue(
-                    f"skill.{skill_id}.no-initial",
-                    "error",
-                    "missing_initial",
-                    f"Skill «{skill_name}»: не задан initial state",
-                    skill_href,
-                )
-            )
-        elif initial not in state_ids:
-            issues.append(
-                _issue(
-                    f"skill.{skill_id}.bad-initial",
-                    "error",
-                    "invalid_initial",
-                    f"Skill «{skill_name}»: initial «{initial}» отсутствует среди states",
-                    skill_href,
-                )
-            )
-
-        for state in skill.get("states", []):
-            state_id = state.get("id", "")
-            for action_id in state.get("onEnter", []):
-                if action_id not in action_ids:
-                    issues.append(
-                        _issue(
-                            f"skill.{skill_id}.state.{state_id}.on_enter.{action_id}",
-                            "error",
-                            "unknown_action",
-                            f"Skill «{skill_name}» / {state_id}: on_enter ссылается на неизвестный Action «{action_id}»",
-                            skill_href,
-                        )
-                    )
-
-            for transition in state.get("transitions", []):
-                transition_id = transition.get("id", "")
-                event = (transition.get("event") or "").strip()
-                if not event:
-                    issues.append(
-                        _issue(
-                            f"skill.{skill_id}.transition.{transition_id}.event",
-                            "warning",
-                            "empty_event",
-                            f"Skill «{skill_name}» / {state_id}→{transition.get('to') or '?'}: пустой event",
-                            skill_href,
-                        )
-                    )
-
-                to_state = transition.get("to")
-                if not to_state or to_state not in state_ids:
-                    issues.append(
-                        _issue(
-                            f"skill.{skill_id}.transition.{transition_id}.to",
-                            "error",
-                            "invalid_transition_target",
-                            f"Skill «{skill_name}» / {state_id}: переход ведёт в неизвестный state «{to_state or '—'}»",
-                            skill_href,
-                        )
-                    )
-
-                for action_id in transition.get("actions", []):
-                    if action_id not in action_ids:
-                        issues.append(
-                            _issue(
-                                f"skill.{skill_id}.transition.{transition_id}.action.{action_id}",
-                                "error",
-                                "unknown_action",
-                                f"Skill «{skill_name}» / {state_id}: transition ссылается на неизвестный Action «{action_id}»",
-                                skill_href,
-                            )
-                        )
-
-    actions_href = f"/agents/{slug}/actions" if slug else None
-    tools_href = f"/agents/{slug}/tools" if slug else None
+        issues.extend(validate_skill(skill, action_ids=action_ids, href=skill_href))
 
     for action in agent.get("actions", []):
         action_id = action.get("id", "")
         action_name = action.get("name", action_id)
         recipe = action.get("recipe", [])
+        version = str(action.get("version") or "0.1.0")
+        policy = str(action.get("policy") or "auto")
+
+        if not _SEMVER_RE.match(version):
+            issues.append(
+                _issue(
+                    f"action.{action_id}.bad-version",
+                    "warning",
+                    "invalid_action_version",
+                    f"Action «{action_name}»: version «{version}» не SemVer (ожидается X.Y.Z)",
+                    actions_href,
+                )
+            )
+
+        if policy not in _VALID_POLICIES:
+            issues.append(
+                _issue(
+                    f"action.{action_id}.bad-policy",
+                    "error",
+                    "invalid_action_policy",
+                    f"Action «{action_name}»: policy «{policy}» недопустим",
+                    actions_href,
+                )
+            )
 
         if not recipe:
             issues.append(
@@ -169,35 +108,85 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
                 )
             )
 
+        step_ids: set[str] = set()
         for step in recipe:
             step_id = step.get("id", "")
-            tool_id = step.get("tool", "")
-            command = step.get("command", "")
-            label = f"{tool_id}.{command}" if tool_id and command else tool_id or command or "шаг"
-            tool_def = get_tool_definition(tool_id) if tool_id else None
+            if step_id:
+                if step_id in step_ids:
+                    issues.append(
+                        _issue(
+                            f"action.{action_id}.step.{step_id}.duplicate",
+                            "error",
+                            "duplicate_step_id",
+                            f"Action «{action_name}»: дублирующийся step id «{step_id}»",
+                            actions_href,
+                        )
+                    )
+                step_ids.add(step_id)
 
-            if not tool_id or not tool_def:
+            tool_ref = step.get("tool", "")
+            command = step.get("command", "")
+            resolved = resolve_recipe_tool(agent, tool_ref) if tool_ref else None
+            type_id = resolved.type_id if resolved else tool_ref
+            label = f"{tool_ref}.{command}" if tool_ref and command else tool_ref or command or "шаг"
+            tool_def = get_tool_definition(type_id) if type_id else None
+
+            if not tool_ref or resolved is None:
                 issues.append(
                     _issue(
                         f"action.{action_id}.step.{step_id}.unknown-tool",
                         "error",
-                        "unknown_tool",
-                        f"Action «{action_name}»: неизвестный Tool в шаге «{label}»",
+                        "unknown_tool_instance",
+                        f"Action «{action_name}»: неизвестный Tool instance в шаге «{label}»",
                         actions_href,
                     )
                 )
                 continue
 
-            if tool_id not in enabled_tools:
+            if resolved.status == "ambiguous":
+                issues.append(
+                    _issue(
+                        f"action.{action_id}.step.{step_id}.ambiguous-tool",
+                        "error",
+                        "ambiguous_tool_reference",
+                        f"Action «{action_name}»: «{tool_ref}» неоднозначен — укажите конкретный instance id",
+                        actions_href,
+                    )
+                )
+                continue
+
+            if resolved.status == "disabled":
                 issues.append(
                     _issue(
                         f"action.{action_id}.step.{step_id}.tool-off",
                         "error",
-                        "disabled_tool",
-                        f"Action «{action_name}»: Tool «{tool_id}» не подключён у агента",
+                        "disabled_tool_instance",
+                        f"Action «{action_name}»: instance «{resolved.instance_id}» выключен",
                         tools_href,
                     )
                 )
+            elif resolved.instance_id not in enabled_instance_ids:
+                issues.append(
+                    _issue(
+                        f"action.{action_id}.step.{step_id}.tool-off",
+                        "error",
+                        "disabled_tool_instance",
+                        f"Action «{action_name}»: instance «{resolved.instance_id}» не подключён",
+                        tools_href,
+                    )
+                )
+
+            if not tool_def:
+                issues.append(
+                    _issue(
+                        f"action.{action_id}.step.{step_id}.unknown-type",
+                        "error",
+                        "unknown_tool",
+                        f"Action «{action_name}»: неизвестный тип Tool «{type_id}»",
+                        actions_href,
+                    )
+                )
+                continue
 
             if command and not any(cmd["id"] == command for cmd in tool_def.get("commands", [])):
                 issues.append(
@@ -205,7 +194,7 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
                         f"action.{action_id}.step.{step_id}.unknown-command",
                         "error",
                         "unknown_command",
-                        f"Action «{action_name}»: нет команды «{tool_id}.{command}» в каталоге",
+                        f"Action «{action_name}»: нет команды «{type_id}.{command}» в каталоге",
                         actions_href,
                     )
                 )
@@ -222,31 +211,49 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
             )
 
     has_recipe = any(action.get("recipe") for action in agent.get("actions", []))
-    if not enabled_tools and has_recipe:
+    if not enabled_instance_ids and has_recipe:
         issues.append(
             _issue(
                 "agent.no-enabled-tools",
                 "warning",
                 "no_enabled_tools",
-                "Есть Actions с recipe, но ни один Tool не подключён",
+                "Есть Actions с recipe, но ни один Tool instance не подключён",
                 tools_href,
             )
         )
 
-    for tool in agent.get("tools", []):
-        if not tool.get("enabled"):
+    telegram_creds_seen: set[str] = set()
+    for item in instances:
+        if not item.get("enabled"):
             continue
-        tool_id = tool.get("toolId", "")
-        if tool_id == "telegram" and not tool.get("credentialId"):
+        tool_type = item.get("toolId", "")
+        instance_id = item.get("id", "")
+        if tool_type in _CREDENTIAL_TYPES and not item.get("credentialId"):
+            label = {"telegram": "Telegram", "polza_ai_llm": "PolzaAI_LLM", "web_client": "Web Client"}.get(
+                tool_type, tool_type
+            )
             issues.append(
                 _issue(
-                    f"tool.{tool_id}.missing-credential",
+                    f"tool.{instance_id}.missing-credential",
                     "error",
                     "missing_credential",
-                    "Telegram подключён, но не выбран credential (bot token)",
+                    f"{label} instance «{item.get('name', instance_id)}» без credential",
                     tools_href,
                 )
             )
+        if tool_type == "telegram" and item.get("credentialId"):
+            cred = str(item["credentialId"])
+            if cred in telegram_creds_seen:
+                issues.append(
+                    _issue(
+                        f"tool.{instance_id}.duplicate-credential",
+                        "error",
+                        "duplicate_credential",
+                        "Telegram instances не могут использовать один credential",
+                        tools_href,
+                    )
+                )
+            telegram_creds_seen.add(cred)
 
     errors = sum(1 for issue in issues if issue["severity"] == "error")
     warnings = sum(1 for issue in issues if issue["severity"] == "warning")

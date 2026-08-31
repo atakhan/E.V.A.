@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 from domain.events import Event
-from tools.telegram_tool import TelegramTool
+from tools.telegram import TelegramTool
 
 
-@patch("tools.telegram_tool.httpx.post")
+@patch("tools.telegram.tool.httpx.post")
 def test_telegram_tool_send_message(mock_post: MagicMock):
     mock_post.return_value = MagicMock(
         is_success=True,
@@ -24,7 +24,7 @@ def test_telegram_tool_send_message(mock_post: MagicMock):
     assert result.ok is True
     assert result.data["sent"]["text"] == "hello"
     assert len(result.events) == 1
-    assert result.events[0].type == "telegram.message.sent"
+    assert result.events[0].type == "channel.message.sent"
 
 
 def test_normalize_telegram_update():

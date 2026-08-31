@@ -7,6 +7,9 @@ import httpx
 from sqlalchemy import select
 
 from app.api.channels.telegram_utils import default_skill_id, normalize_telegram_update
+from definition.catalog.builtin_events import channel_message_received
+from definition.services.agent_service import AgentService
+from runtime.tool_instance_resolver import find_instance_by_credential
 from app.config import get_settings
 from app.deps import session_scope
 from infrastructure.crypto.secrets import decrypt_secret
@@ -94,15 +97,23 @@ def _poll_credential(credential: ToolCredentialRow, agent_slug: str, token: str)
         if payload is None:
             continue
 
-        event = {
-            "type": "channel.message.received",
-            "agentSlug": agent_slug,
-            "payload": payload,
-        }
+        instance_id: str | None = None
+        with session_scope() as lookup_session:
+            agent_doc = AgentService(lookup_session).get_agent_by_slug(agent_slug)
+            if agent_doc:
+                instance_id = find_instance_by_credential(agent_doc, str(credential.id))
+
+        event = channel_message_received(
+            conversation_id=str(payload.get("conversation_id") or ""),
+            text=str(payload.get("text") or ""),
+            source="telegram",
+            message_id=str(payload["message_id"]) if payload.get("message_id") else None,
+            sender_id=str(payload["sender_id"]) if payload.get("sender_id") else None,
+            tool_instance_id=instance_id,
+            tool_type_id="telegram",
+        )
         skill_id = default_skill_id(agent_slug)
-        if skill_id:
-            event["skillId"] = skill_id
-        publish_event(event)
+        publish_event(event, agent_slug=agent_slug, skill_id=skill_id)
         processed += 1
     return processed
 

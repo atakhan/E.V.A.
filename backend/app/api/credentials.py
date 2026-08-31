@@ -90,7 +90,7 @@ def verify_credential(
 ) -> dict[str, Any]:
     service = CredentialService(session)
     try:
-        return service.verify_telegram(slug, credential_id)
+        return service.verify_credential(slug, credential_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

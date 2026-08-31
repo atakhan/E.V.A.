@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from tools.base import Tool
-from tools.llm_stub import LlmStubTool
-from tools.telegram_stub import TelegramStubTool
+from tools.llm import LlmStubTool
+from tools.telegram import TelegramStubTool
 
 
 class ToolRegistry:

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from domain.events import Event, ToolResult
+from definition.catalog.builtin_events import channel_message_sent
+from domain.events import ToolResult
 from tools.base import BaseTool
 
 
@@ -23,9 +24,10 @@ class TelegramStubTool(BaseTool):
             ok=True,
             data={"sent": message},
             events=[
-                Event(
-                    type="telegram.message.sent",
-                    payload=message,
+                channel_message_sent(
+                    conversation_id=str(message["chat_id"] or ""),
+                    text=str(message["text"] or ""),
+                    source="telegram",
                     skill_run_id=context.get("skill_run_id"),
                 )
             ],

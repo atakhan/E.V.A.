@@ -19,6 +19,8 @@ class SkillRunStore(Protocol):
 
     def find_waiting_by_conversation(self, conversation_id: str) -> SkillRun | None: ...
 
+    def find_waiting_runs(self, correlation_key: str, value: str) -> list[SkillRun]: ...
+
     def map_conversation(self, conversation_id: str, run_id: str) -> None: ...
 
 
@@ -39,6 +41,29 @@ def store_save_run(store: SkillRunStore | InMemoryStore, run: SkillRun) -> None:
     conversation_id = run.vars.get("conversation_id")
     if isinstance(conversation_id, str) and conversation_id:
         store.map_conversation(conversation_id, run.id)
+
+
+def store_find_waiting_runs(
+    store: SkillRunStore | InMemoryStore,
+    correlation_key: str,
+    value: str,
+) -> list[SkillRun]:
+    if isinstance(store, InMemoryStore):
+        if correlation_key == "conversation_id":
+            run_id = store.by_conversation.get(value)
+            if not run_id:
+                return []
+            existing = store.runs.get(run_id)
+            if existing and existing.status in (SkillRunStatus.waiting, SkillRunStatus.running):
+                return [existing]
+        matches: list[SkillRun] = []
+        for run in store.runs.values():
+            if run.status not in (SkillRunStatus.waiting, SkillRunStatus.running):
+                continue
+            if run.params.get(correlation_key) == value or run.vars.get(correlation_key) == value:
+                matches.append(run)
+        return matches
+    return store.find_waiting_runs(correlation_key, value)
 
 
 def store_find_waiting(store: SkillRunStore | InMemoryStore, conversation_id: str) -> SkillRun | None:

@@ -8,9 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.agents import router as agents_router
 from app.api.credentials import router as credentials_router
 from app.api.channels.telegram import router as telegram_router
+from app.api.channels.web import router as web_channel_router
+from app.api.polza import router as polza_router
 from app.api.runtime import router as runtime_router
 from app.api.runtime_demo import router as runtime_demo_router
+from app.api.tool_logs import router as tool_logs_router
 from app.api.tools import router as tools_router
+from app.api.web_client import router as web_client_router
 from app.deps import init_db
 
 
@@ -30,9 +34,13 @@ app.add_middleware(
 app.include_router(agents_router)
 app.include_router(credentials_router)
 app.include_router(tools_router)
+app.include_router(polza_router)
+app.include_router(web_client_router)
 app.include_router(runtime_router)
 app.include_router(runtime_demo_router)
+app.include_router(tool_logs_router)
 app.include_router(telegram_router)
+app.include_router(web_channel_router)
 
 
 @app.get("/health")

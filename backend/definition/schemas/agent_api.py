@@ -19,6 +19,18 @@ class ToolEventDefApi(BaseModel):
     description: str = ""
 
 
+class ToolConfigFieldApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    type: str = "string"
+    required: bool = False
+    default: Any = None
+    scope: str = "instance"
+    enum: list[Any] | None = None
+    ui: dict[str, Any] = Field(default_factory=dict)
+
+
 class ToolDefinitionApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -28,6 +40,27 @@ class ToolDefinitionApi(BaseModel):
     commands: list[ToolCommandDefApi] = Field(default_factory=list)
     events: list[ToolEventDefApi] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)
+    config_schema: list[ToolConfigFieldApi] = Field(default_factory=list, alias="configSchema")
+    credential_kind: str | None = Field(default=None, alias="credentialKind")
+    credential_policy: str = Field(default="shared_allowed", alias="credentialPolicy")
+
+
+class ToolInstanceApi(BaseModel):
+    """Per-agent tool instance (binding to a catalog type)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    tool_id: str = Field(alias="toolId")
+    name: str = ""
+    enabled: bool = True
+    credential_id: str | None = Field(default=None, alias="credentialId")
+    config: dict[str, Any] = Field(default_factory=dict)
+    config_note: str = Field(alias="configNote", default="")
+
+
+# Backward-compatible alias
+ToolBindingApi = ToolInstanceApi
 
 
 class ActionRecipeStepApi(BaseModel):
@@ -36,7 +69,8 @@ class ActionRecipeStepApi(BaseModel):
     id: str
     tool: str
     command: str
-    args: str = ""
+    input: dict[str, Any] = Field(default_factory=dict)
+    when: str = ""
 
 
 class ActionDefApi(BaseModel):
@@ -45,19 +79,13 @@ class ActionDefApi(BaseModel):
     id: str
     name: str
     description: str = ""
+    version: str = "0.1.0"
+    policy: str = "auto"
+    input_schema: dict[str, Any] = Field(default_factory=dict, alias="inputSchema")
+    output_schema: dict[str, Any] = Field(default_factory=dict, alias="outputSchema")
     recipe: list[ActionRecipeStepApi] = Field(default_factory=list)
     created_at: str = Field(alias="createdAt", default="")
     updated_at: str = Field(alias="updatedAt", default="")
-
-
-class ToolBindingApi(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    tool_id: str = Field(alias="toolId")
-    enabled: bool = True
-    credential_id: str | None = Field(default=None, alias="credentialId")
-    config_note: str = Field(alias="configNote", default="")
 
 
 class FsmTransitionApi(BaseModel):
@@ -68,12 +96,17 @@ class FsmTransitionApi(BaseModel):
     guard: str = ""
     actions: list[str] = Field(default_factory=list)
     to: str
+    from_side: str | None = Field(default=None, alias="fromSide")
+    to_side: str | None = Field(default=None, alias="toSide")
+    from_anchor: float | None = Field(default=None, alias="fromAnchor")
+    to_anchor: float | None = Field(default=None, alias="toAnchor")
 
 
 class FsmStateApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
+    name: str | None = None
     on_enter: list[str] = Field(alias="onEnter", default_factory=list)
     final: bool = False
     transitions: list[FsmTransitionApi] = Field(default_factory=list)
@@ -87,6 +120,7 @@ class SkillParamApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str
+    type: str = "string"
     required: bool = False
 
 
@@ -116,7 +150,7 @@ class AgentApi(BaseModel):
     updated_at: str = Field(alias="updatedAt")
     skills: list[SkillApi] = Field(default_factory=list)
     actions: list[ActionDefApi] = Field(default_factory=list)
-    tools: list[ToolBindingApi] = Field(default_factory=list)
+    tools: list[ToolInstanceApi] = Field(default_factory=list)
 
 
 class AgentSummaryApi(BaseModel):

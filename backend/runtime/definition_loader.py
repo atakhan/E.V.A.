@@ -1,86 +1,133 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from app.config import get_settings
-from domain.action import ActionDefinition, ActionRecipeStep
-from domain.skill import FsmState, FsmTransition, SkillDefinition
+from definition.mappers.action_mapper import normalize_action_document
+from definition.mappers.skill_mapper import skill_from_document
+from domain.action import ActionDefinition
+from domain.skill import SkillDefinition
 from runtime.event_router import RuntimeCatalog
-from tools.credential_resolver import get_telegram_token_for_binding
-from tools.llm_stub import LlmStubTool
+from runtime.tool_instance_resolver import credential_by_instance, enabled_instances, normalize_tool_instance
+from tools.credential_resolver import (
+    get_polza_api_key_for_binding,
+    get_telegram_token_for_binding,
+    get_web_client_secret_for_binding,
+)
+from tools.instance_config import merge_config_defaults, parse_instance_config
+from tools.llm import LlmStubTool
+from tools.polza import PolzaAiLlmTool
 from tools.registry import ToolRegistry
-from tools.telegram_stub import TelegramStubTool
-from tools.telegram_tool import TelegramTool
-
-
-def parse_action_args(raw: str | dict[str, Any] | None) -> dict[str, Any]:
-    if raw is None:
-        return {}
-    if isinstance(raw, dict):
-        return dict(raw)
-    text = str(raw).strip()
-    if not text:
-        return {}
-    try:
-        parsed = json.loads(text)
-        return parsed if isinstance(parsed, dict) else {"value": parsed}
-    except json.JSONDecodeError:
-        return {"raw": text}
-
-
-def skill_from_document(skill_doc: dict[str, Any]) -> SkillDefinition:
-    states: list[FsmState] = []
-    for state_doc in skill_doc.get("states", []):
-        transitions = [
-            FsmTransition(
-                id=transition.get("id", ""),
-                event=transition.get("event", ""),
-                guard=transition.get("guard", ""),
-                actions=list(transition.get("actions", [])),
-                to=transition.get("to", ""),
-            )
-            for transition in state_doc.get("transitions", [])
-        ]
-        states.append(
-            FsmState(
-                id=state_doc["id"],
-                on_enter=list(state_doc.get("onEnter", [])),
-                final=bool(state_doc.get("final")),
-                transitions=transitions,
-            )
-        )
-
-    initial = skill_doc.get("initial") or (states[0].id if states else "")
-    return SkillDefinition(
-        id=skill_doc["id"],
-        name=skill_doc.get("name", ""),
-        description=skill_doc.get("description", ""),
-        version=skill_doc.get("version", "0.1.0"),
-        initial=initial,
-        states=states,
-    )
+from tools.telegram import TelegramStubTool, TelegramTool
+from tools.web_client import (
+    WebClientHttp,
+    WebClientTool,
+    parse_web_client_binding_config,
+)
 
 
 def actions_from_document(actions_doc: list[dict[str, Any]]) -> dict[str, ActionDefinition]:
     actions: dict[str, ActionDefinition] = {}
     for action_doc in actions_doc:
-        recipe = [
-            ActionRecipeStep(
-                id=step.get("id", ""),
-                tool=step.get("tool", ""),
-                command=step.get("command", ""),
-                args=parse_action_args(step.get("args")),
-            )
-            for step in action_doc.get("recipe", [])
-        ]
-        actions[action_doc["id"]] = ActionDefinition(
-            id=action_doc["id"],
-            name=action_doc.get("name", ""),
-            description=action_doc.get("description", ""),
-            recipe=recipe,
-        )
+        normalized = normalize_action_document(action_doc)
+        if normalized.id:
+            actions[normalized.id] = normalized
     return actions
+
+
+def credential_bindings(agent_body: dict[str, Any]) -> dict[str, str]:
+    """Map tool instance id → credential id (for API logs)."""
+    return credential_by_instance(agent_body)
+
+
+def _stamp_instance(tool: Any, *, instance_id: str, tool_type: str, credential_id: str | None) -> Any:
+    tool.id = instance_id
+    tool.tool_type = tool_type
+    tool.credential_id = credential_id
+    return tool
+
+
+def _binding_dict(binding: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_tool_instance(binding)
+    if normalized is None:
+        raise ValueError(f"Invalid tool instance binding: {binding}")
+    return normalized
+
+
+def _build_tool_for_binding(
+    binding: dict[str, Any],
+    *,
+    agent_body: dict[str, Any],
+    agent_id: str,
+    session,
+    settings,
+) -> Any | None:
+    item = _binding_dict(binding)
+    instance_id = item["id"]
+    tool_type = item["toolId"]
+    credential_id = item.get("credentialId")
+    config = merge_config_defaults(tool_type, parse_instance_config(item))
+
+    if tool_type == "llm":
+        return _stamp_instance(LlmStubTool(), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+
+    if tool_type == "polza_ai_llm":
+        default_model = str(config.get("model") or settings.polza_default_model)
+        if settings.polza_mode == "stub":
+            stub = LlmStubTool()
+            stub.commands = ("run", "run_structured", "parse_request")  # type: ignore[misc]
+            return _stamp_instance(stub, instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+        api_key = get_polza_api_key_for_binding(session, agent_id, item)
+        if not api_key:
+            raise KeyError(f"Polza instance '{instance_id}' enabled but credential api_key not found")
+        return _stamp_instance(
+            PolzaAiLlmTool(
+                api_key=api_key,
+                default_model=default_model,
+                base_url=settings.polza_api_base,
+                agent_id=agent_id,
+                credential_id=credential_id,
+                session=session,
+            ),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
+
+    if tool_type == "telegram":
+        if settings.telegram_mode == "stub":
+            return _stamp_instance(TelegramStubTool(), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+        token = get_telegram_token_for_binding(session, agent_id, item)
+        if not token:
+            raise KeyError(f"Telegram instance '{instance_id}' enabled but credential bot_token not found")
+        return _stamp_instance(TelegramTool(token), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+
+    if tool_type == "web_client":
+        secret = get_web_client_secret_for_binding(session, agent_id, item)
+        if not secret or not secret.get("backend_base_url"):
+            raise KeyError(f"Web Client instance '{instance_id}' enabled but credential backend_base_url not found")
+        wc_config = parse_web_client_binding_config(item)
+        http = WebClientHttp(
+            base_url=str(secret["backend_base_url"]),
+            outbound_api_key=str(secret.get("outbound_api_key") or ""),
+            config=wc_config,
+            docker_rewrite=settings.web_client_docker_rewrite,
+            docker_host=settings.web_client_docker_host,
+        )
+        return _stamp_instance(
+            WebClientTool(
+                http=http,
+                agent_id=agent_id,
+                agent_slug=agent_body.get("slug", ""),
+                credential_id=credential_id,
+                session=session,
+            ),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
+
+    return None
 
 
 def build_tool_registry(
@@ -90,27 +137,17 @@ def build_tool_registry(
     session,
 ) -> ToolRegistry:
     settings = get_settings()
-    enabled_bindings = [
-        binding
-        for binding in agent_body.get("tools", [])
-        if binding.get("enabled") and binding.get("toolId")
-    ]
-    enabled = {binding["toolId"] for binding in enabled_bindings}
-
     tools = []
-    if "llm" in enabled:
-        tools.append(LlmStubTool())
-
-    if "telegram" in enabled:
-        binding = next(b for b in enabled_bindings if b["toolId"] == "telegram")
-        if settings.telegram_mode == "stub":
-            tools.append(TelegramStubTool())
-        else:
-            token = get_telegram_token_for_binding(session, agent_id, binding)
-            if not token:
-                raise KeyError("Telegram enabled but credential bot_token not found")
-            tools.append(TelegramTool(token))
-
+    for binding in enabled_instances(agent_body):
+        tool = _build_tool_for_binding(
+            binding,
+            agent_body=agent_body,
+            agent_id=agent_id,
+            session=session,
+            settings=settings,
+        )
+        if tool is not None:
+            tools.append(tool)
     return ToolRegistry(tools)
 
 

@@ -15,6 +15,8 @@ class Tool(Protocol):
 
 class BaseTool:
     id: str
+    tool_type: str = ""
+    credential_id: str | None = None
     commands: tuple[str, ...] = ()
 
     def handle(self, command: str, args: dict[str, Any], context: dict[str, Any]) -> ToolResult:
