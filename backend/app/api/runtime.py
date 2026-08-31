@@ -177,20 +177,7 @@ def post_event(payload: EventPayload, session: Session = Depends(_db_session)) -
 @router.post("/runs/{run_id}/cancel")
 def cancel_run(run_id: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
     store = PostgresSkillRunStore(session)
-    existing = store.get_run(run_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="Skill run not found")
-    agent_slug = existing.vars.get("_agent_slug")
-    if not isinstance(agent_slug, str) or not agent_slug:
-        raise HTTPException(status_code=400, detail="Skill run has no agent context")
-
-    service = build_runtime_service(
-        session,
-        agent_slug=agent_slug,
-        skill_id=existing.skill_id,
-        publication_version=existing.skill_version,
-    )
-    cancelled = service.cancel_run(run_id)
+    cancelled = store.cancel_run(run_id)
     if cancelled is None:
         raise HTTPException(status_code=404, detail="Skill run not found")
     return {

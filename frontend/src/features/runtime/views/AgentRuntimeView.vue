@@ -20,6 +20,7 @@ const agent = computed(() => getAgentBySlug(props.agentSlug));
 
 const statusFilter = ref<SkillRunStatusFilter>("active");
 const selectedSkillId = ref("");
+const actionError = ref<string | null>(null);
 
 const agentSlugRef = computed(() => props.agentSlug);
 const skillIdRef = computed(() => selectedSkillId.value || undefined);
@@ -53,8 +54,14 @@ async function openSimulate() {
 
 async function cancelRun(run: SkillRunSummary) {
   if (!confirm(`Отменить run ${run.skillRunId}?`)) return;
-  await cancelSkillRun(run.skillRunId);
-  await Promise.all([reload(), reloadRuns()]);
+  actionError.value = null;
+  try {
+    await cancelSkillRun(run.skillRunId);
+    await Promise.all([reload(), reloadRuns()]);
+  } catch (cancelError) {
+    actionError.value =
+      cancelError instanceof Error ? cancelError.message : "Не удалось отменить run";
+  }
 }
 
 async function restoreAgent() {
@@ -97,6 +104,12 @@ async function restoreAgent() {
 
     <p v-if="error" class="rounded-xl border border-error/40 bg-error/5 px-4 py-3 text-sm text-error">
       {{ error }}
+    </p>
+    <p
+      v-if="actionError"
+      class="rounded-xl border border-error/40 bg-error/5 px-4 py-3 text-sm text-error"
+    >
+      {{ actionError }}
     </p>
 
     <RuntimeHealthStrip

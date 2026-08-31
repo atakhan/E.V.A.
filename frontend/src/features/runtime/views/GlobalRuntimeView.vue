@@ -11,6 +11,7 @@ import { agentRuntimePath, skillRunDetailPath } from "@/router/paths";
 
 const router = useRouter();
 const activeOnly = ref(true);
+const actionError = ref<string | null>(null);
 
 const { summary, metrics, loading, refreshing, error, reload } = useRuntimeSummary();
 const { items, loading: runsLoading, refreshing: runsRefreshing, reload: reloadRuns } = useSkillRunList({
@@ -28,8 +29,14 @@ async function openAgentCockpit(slug: string) {
 
 async function cancelRun(run: SkillRunSummary) {
   if (!confirm(`Отменить run ${run.skillRunId}?`)) return;
-  await cancelSkillRun(run.skillRunId);
-  await Promise.all([reload(), reloadRuns()]);
+  actionError.value = null;
+  try {
+    await cancelSkillRun(run.skillRunId);
+    await Promise.all([reload(), reloadRuns()]);
+  } catch (cancelError) {
+    actionError.value =
+      cancelError instanceof Error ? cancelError.message : "Не удалось отменить run";
+  }
 }
 </script>
 
@@ -50,6 +57,12 @@ async function cancelRun(run: SkillRunSummary) {
 
       <p v-if="error" class="rounded-xl border border-error/40 bg-error/5 px-4 py-3 text-sm text-error">
         {{ error }}
+      </p>
+      <p
+        v-if="actionError"
+        class="rounded-xl border border-error/40 bg-error/5 px-4 py-3 text-sm text-error"
+      >
+        {{ actionError }}
       </p>
 
       <RuntimeHealthStrip

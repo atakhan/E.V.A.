@@ -152,6 +152,30 @@ def test_cancel_run_via_api(client: TestClient):
 
 
 @pytest.mark.integration
+def test_cancel_run_without_agent_slug_in_vars(client: TestClient, db_session):
+    slug = new_ephemeral_agent_slug()
+    client.post("/api/agents", json={"name": "Cockpit", "slug": slug, "description": "test"})
+    try:
+        _seed_and_publish(client, slug, transition_to="waiting")
+        run_id = _start_run(client, slug, f"conv-{uuid.uuid4().hex[:8]}")
+
+        from infrastructure.models.tables import SkillRunRow
+
+        row = db_session.get(SkillRunRow, run_id)
+        assert row is not None
+        vars_data = dict(row.vars or {})
+        vars_data.pop("_agent_slug", None)
+        row.vars = vars_data
+        db_session.commit()
+
+        cancelled = client.post(f"/api/runtime/runs/{run_id}/cancel")
+        assert cancelled.status_code == 200, cancelled.text
+        assert cancelled.json()["status"] == "cancelled"
+    finally:
+        client.delete(f"/api/agents/{slug}")
+
+
+@pytest.mark.integration
 def test_find_run_by_conversation_endpoint(client: TestClient):
     slug = new_ephemeral_agent_slug()
     client.post("/api/agents", json={"name": "Cockpit", "slug": slug, "description": "test"})

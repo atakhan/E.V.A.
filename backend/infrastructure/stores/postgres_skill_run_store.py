@@ -133,24 +133,43 @@ class PostgresSkillRunStore(SkillRunStore):
         )
 
     def cancel_active_runs_for_agent(self, agent_slug: str) -> int:
-        from infrastructure.stores.postgres_action_run_store import PostgresActionRunStore
-
         rows = self.session.scalars(
-            select(SkillRunRow).where(
+            select(SkillRunRow.id).where(
                 SkillRunRow.agent_slug == agent_slug,
                 SkillRunRow.status.in_(ACTIVE_STATUSES),
             )
         ).all()
-        if not rows:
-            return 0
+        cancelled = 0
+        for run_id in rows:
+            if self.cancel_run(run_id) is not None:
+                cancelled += 1
+        return cancelled
 
-        action_store = PostgresActionRunStore(self.session)
-        for row in rows:
-            row.status = SkillRunStatus.cancelled.value
-            row.error = None
-            action_store.cancel_active_for_run(row.id)
-        self.session.flush()
-        return len(rows)
+    def cancel_run(self, run_id: str) -> SkillRun | None:
+        from infrastructure.stores.postgres_action_run_store import PostgresActionRunStore
+
+        for attempt in range(2):
+            run = self.get_run(run_id)
+            if run is None:
+                return None
+            if run.status in (
+                SkillRunStatus.completed,
+                SkillRunStatus.cancelled,
+                SkillRunStatus.error,
+            ):
+                return run
+
+            run.status = SkillRunStatus.cancelled
+            run.error = None
+            PostgresActionRunStore(self.session).cancel_active_for_run(run_id)
+            try:
+                self.save_run(run)
+                return run
+            except ConcurrentUpdateError:
+                if attempt == 0:
+                    continue
+                raise
+        return None
 
     def list_runs(self, filters: SkillRunListFilters) -> tuple[list[SkillRunListItem], int]:
         query = select(SkillRunRow)
@@ -286,6 +305,10 @@ class PostgresSkillRunStore(SkillRunStore):
         params = vars_data.pop("_skill_params", {})
         if not isinstance(params, dict):
             params = {}
+        if row.agent_slug and not vars_data.get("_agent_slug"):
+            vars_data["_agent_slug"] = row.agent_slug
+        if row.agent_id and not vars_data.get("_agent_id"):
+            vars_data["_agent_id"] = row.agent_id
         expires = row.expires_at.isoformat() if row.expires_at else None
         return SkillRun(
             id=row.id,

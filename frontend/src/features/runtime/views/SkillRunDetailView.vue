@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { useAgents } from "@/features/agents/composables/useAgents";
 import SkillRunActions from "@/features/runtime/components/SkillRunActions.vue";
 import SkillRunStatusBadge from "@/features/runtime/components/SkillRunStatusBadge.vue";
 import SkillRunTimeline from "@/features/runtime/components/SkillRunTimeline.vue";
@@ -15,9 +14,6 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const { getAgentBySlug } = useAgents();
-const agent = computed(() => getAgentBySlug(props.agentSlug));
-
 const runIdRef = computed(() => props.runId);
 const { run, history, loading, refreshing, cancelling, error, isTerminal, cancel } = useSkillRunDetail(runIdRef);
 
@@ -32,7 +28,7 @@ async function handleCancel() {
 </script>
 
 <template>
-  <section v-if="agent" class="space-y-6">
+  <section class="space-y-6">
     <button type="button" class="btn btn-xs btn-ghost -ml-2" @click="goBack()">
       ← Runtime
     </button>
