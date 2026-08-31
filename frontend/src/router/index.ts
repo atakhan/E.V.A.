@@ -9,7 +9,10 @@ import ToolLogsView from "@/features/tools/views/ToolLogsView.vue";
 import SkillsListView from "@/features/skills/views/SkillsListView.vue";
 import SkillsSectionLayout from "@/features/skills/views/SkillsSectionLayout.vue";
 import SkillCanvasEditorView from "@/features/skills/views/SkillCanvasEditorView.vue";
-import AgentRunView from "@/features/runtime/views/AgentRunView.vue";
+import AgentRuntimeView from "@/features/runtime/views/AgentRuntimeView.vue";
+import GlobalRuntimeView from "@/features/runtime/views/GlobalRuntimeView.vue";
+import RuntimeSimulateView from "@/features/runtime/views/RuntimeSimulateView.vue";
+import SkillRunDetailView from "@/features/runtime/views/SkillRunDetailView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
 import {
   agentRouteGuard,
@@ -31,6 +34,11 @@ const router = createRouter({
       path: "/agents",
       name: RouteNames.agents,
       component: AgentsListView,
+    },
+    {
+      path: "/runtime",
+      name: RouteNames.globalRuntime,
+      component: GlobalRuntimeView,
     },
     {
       path: "/tools",
@@ -115,10 +123,26 @@ const router = createRouter({
           props: true,
         },
         {
-          path: "run",
-          name: RouteNames.agentRun,
-          component: AgentRunView,
+          path: "runtime",
+          name: RouteNames.agentRuntime,
+          component: AgentRuntimeView,
           props: true,
+        },
+        {
+          path: "runtime/simulate",
+          name: RouteNames.agentRuntimeSimulate,
+          component: RuntimeSimulateView,
+          props: true,
+        },
+        {
+          path: "runtime/runs/:runId",
+          name: RouteNames.skillRunDetail,
+          component: SkillRunDetailView,
+          props: true,
+        },
+        {
+          path: "run",
+          redirect: (to) => `/${String(to.params.agentSlug)}/runtime/simulate`,
         },
       ],
     },

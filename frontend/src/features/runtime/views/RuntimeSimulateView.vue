@@ -10,7 +10,7 @@ import {
 } from "@/features/agents/utils/validateAgent";
 import { useAgentRuntime } from "@/features/runtime/composables/useAgentRuntime";
 import ToolLogFeed from "@/features/tools/components/ToolLogFeed.vue";
-import { agentLogsPath } from "@/router/paths";
+import { agentLogsPath, agentRuntimePath, skillRunDetailPath } from "@/router/paths";
 
 const props = defineProps<{
   agentSlug: string;
@@ -38,7 +38,6 @@ const {
   entryEvents,
   followUpEvents,
   canContinueRun,
-  isTerminalRun,
   loadPublications,
   resetRunForm,
   syncSkillSelection,
@@ -48,11 +47,8 @@ const {
 } = useAgentRuntime(() => agent.value);
 
 const localReport = computed(() => (agent.value ? validateAgent(agent.value) : null));
-
 const report = computed(() => remoteReport.value ?? localReport.value);
-
 const canPublish = computed(() => (report.value?.errors ?? 0) === 0 && !!agent.value?.skills.length);
-
 const eventOptions = computed(() =>
   canContinueRun.value ? followUpEvents.value : entryEvents.value,
 );
@@ -124,15 +120,29 @@ function openRunLogs() {
     agentLogsPath(props.agentSlug, { skillRunId: activeRun.value.skillRunId }),
   );
 }
+
+function openInCockpit() {
+  if (!activeRun.value) return;
+  void router.push(skillRunDetailPath(props.agentSlug, activeRun.value.skillRunId));
+}
+
+function openRuntimeDashboard() {
+  void router.push(agentRuntimePath(props.agentSlug));
+}
 </script>
 
 <template>
   <section v-if="agent" class="space-y-6">
-    <div>
-      <h2 class="text-lg font-semibold">Запуск</h2>
-      <p class="mt-1 text-sm text-base-content/60">
-        Опубликуйте агента и отправьте тестовое событие в runtime.
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Simulate</h2>
+        <p class="mt-1 text-sm text-base-content/60">
+          Dev sandbox: publish агента и отправьте тестовое событие в runtime.
+        </p>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost" @click="openRuntimeDashboard">
+        ← Runtime cockpit
+      </button>
     </div>
 
     <div
@@ -196,9 +206,7 @@ function openRunLogs() {
         {{ canContinueRun ? "Продолжить run" : "Новый run" }}
       </h3>
       <p class="mt-1 text-sm text-base-content/60">
-        Симуляция входящего сообщения через
-        <code class="font-mono text-xs">channel.message.received</code>
-        или другой entry-event skill.
+        Симуляция входящего сообщения через entry-event skill.
       </p>
 
       <div class="mt-4 grid gap-4 lg:grid-cols-2">
@@ -265,18 +273,6 @@ function openRunLogs() {
           Новый диалог
         </button>
       </div>
-
-      <p v-if="canContinueRun" class="mt-3 text-xs text-base-content/55">
-        Run ждёт ответа в состоянии
-        <span class="font-mono">{{ activeRun?.currentState }}</span>.
-      </p>
-    </div>
-
-    <div
-      v-else-if="isPublished && !agent.skills.length"
-      class="rounded-2xl border border-dashed border-base-300 px-6 py-8 text-center text-sm text-base-content/60"
-    >
-      Добавьте skill в конструкторе, затем опубликуйте агента снова.
     </div>
 
     <div
@@ -300,6 +296,9 @@ function openRunLogs() {
         <div class="flex flex-wrap gap-2">
           <span class="badge" :class="statusBadgeClass">{{ activeRun.status }}</span>
           <span class="badge badge-outline font-mono">{{ activeRun.currentState }}</span>
+          <button type="button" class="btn btn-xs btn-ghost" @click="openInCockpit">
+            Открыть в кокпите →
+          </button>
         </div>
       </div>
 
@@ -314,31 +313,8 @@ function openRunLogs() {
           >
             {{ state }}
           </span>
-          <span v-if="!activeRun.history.length" class="text-sm text-base-content/50">—</span>
         </div>
       </div>
-
-      <div v-if="activeRun.toolCalls.length" class="mt-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-          Tool calls ({{ activeRun.toolCalls.length }})
-        </p>
-        <ul class="mt-2 space-y-2">
-          <li
-            v-for="(call, index) in activeRun.toolCalls"
-            :key="index"
-            class="rounded-lg border border-base-300 bg-base-200/30 px-3 py-2 font-mono text-xs"
-          >
-            {{ JSON.stringify(call) }}
-          </li>
-        </ul>
-      </div>
-
-      <p
-        v-if="isTerminalRun"
-        class="mt-4 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm text-success"
-      >
-        Run завершён в состоянии {{ activeRun.currentState }}.
-      </p>
 
       <div class="mt-5 border-t border-base-300/60 pt-4">
         <div class="mb-2 flex items-center justify-between gap-2">

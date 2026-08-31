@@ -23,6 +23,18 @@ EPHEMERAL_AGENT_SLUG_PREFIXES = (
 DEMO_AGENT_SLUGS = frozenset({"foreman", "supplier"})
 
 
+class AgentArchivedError(Exception):
+    def __init__(self, slug: str) -> None:
+        self.slug = slug
+        super().__init__(f"Agent '{slug}' is archived")
+
+
+class AgentProtectedError(Exception):
+    def __init__(self, slug: str) -> None:
+        self.slug = slug
+        super().__init__(f"Agent '{slug}' is protected")
+
+
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -50,9 +62,22 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "description": agent.description,
         "createdAt": agent.created_at.isoformat(),
         "updatedAt": agent.updated_at.isoformat(),
+        "archivedAt": agent.archived_at.isoformat() if agent.archived_at else None,
         "skills": draft_body.get("skills", []),
         "actions": draft_body.get("actions", []),
         "tools": draft_body.get("tools", []),
+    }
+
+
+def _summary_from_row(row: AgentRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "slug": row.slug,
+        "name": row.name,
+        "description": row.description,
+        "createdAt": row.created_at.isoformat(),
+        "updatedAt": row.updated_at.isoformat(),
+        "archivedAt": row.archived_at.isoformat() if row.archived_at else None,
     }
 
 
@@ -68,19 +93,26 @@ class AgentService:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_agents(self) -> list[dict[str, Any]]:
-        rows = self.session.scalars(select(AgentRow).order_by(AgentRow.updated_at.desc())).all()
-        return [
-            {
-                "id": row.id,
-                "slug": row.slug,
-                "name": row.name,
-                "description": row.description,
-                "createdAt": row.created_at.isoformat(),
-                "updatedAt": row.updated_at.isoformat(),
-            }
-            for row in rows
-        ]
+    def list_agents(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        query = select(AgentRow).order_by(AgentRow.updated_at.desc())
+        if not include_archived:
+            query = query.where(AgentRow.archived_at.is_(None))
+        rows = self.session.scalars(query).all()
+        return [_summary_from_row(row) for row in rows]
+
+    def get_agent_row(self, slug: str) -> AgentRow | None:
+        return self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
+
+    def is_archived(self, agent: AgentRow) -> bool:
+        return agent.archived_at is not None
+
+    def ensure_active(self, slug: str) -> AgentRow:
+        agent = self.get_agent_row(slug)
+        if agent is None:
+            raise KeyError(f"Agent '{slug}' not found")
+        if self.is_archived(agent):
+            raise AgentArchivedError(slug)
+        return agent
 
     def get_agent_by_slug(self, slug: str) -> dict[str, Any] | None:
         agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
@@ -103,9 +135,7 @@ class AgentService:
         return _merge_agent(agent, body)
 
     def upsert_draft(self, slug: str, payload: dict[str, Any]) -> dict[str, Any]:
-        agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-        if agent is None:
-            raise KeyError(f"Agent '{slug}' not found")
+        agent = self.ensure_active(slug)
 
         agent.name = str(payload.get("name", agent.name)).strip() or agent.name
         agent.description = str(payload.get("description", agent.description)).strip()
@@ -131,10 +161,40 @@ class AgentService:
         return _merge_agent(agent, body)
 
     def delete_agent(self, slug: str) -> None:
-        agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
+        agent = self.get_agent_row(slug)
         if agent is None:
             raise KeyError(f"Agent '{slug}' not found")
         self.session.delete(agent)
+
+    def archive_agent(self, slug: str) -> dict[str, Any]:
+        if slug.strip().lower() in DEMO_AGENT_SLUGS:
+            raise AgentProtectedError(slug)
+
+        agent = self.get_agent_row(slug)
+        if agent is None:
+            raise KeyError(f"Agent '{slug}' not found")
+
+        if agent.archived_at is None:
+            agent.archived_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(timezone.utc)
+            from infrastructure.stores.postgres_skill_run_store import PostgresSkillRunStore
+
+            PostgresSkillRunStore(self.session).cancel_active_runs_for_agent(slug)
+            self.session.flush()
+
+        return _summary_from_row(agent)
+
+    def unarchive_agent(self, slug: str) -> dict[str, Any]:
+        agent = self.get_agent_row(slug)
+        if agent is None:
+            raise KeyError(f"Agent '{slug}' not found")
+
+        if agent.archived_at is not None:
+            agent.archived_at = None
+            agent.updated_at = datetime.now(timezone.utc)
+            self.session.flush()
+
+        return _summary_from_row(agent)
 
     def is_ephemeral_slug(self, slug: str) -> bool:
         normalized = slug.strip().lower()
@@ -143,14 +203,15 @@ class AgentService:
         return any(normalized.startswith(prefix) for prefix in EPHEMERAL_AGENT_SLUG_PREFIXES)
 
     def validate_draft(self, slug: str) -> dict[str, Any]:
+        self.ensure_active(slug)
         agent_doc = self.get_agent_by_slug(slug)
         if agent_doc is None:
             raise KeyError(f"Agent '{slug}' not found")
         return validate_agent(agent_doc)
 
     def publish(self, slug: str) -> dict[str, Any]:
-        agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-        if agent is None or agent.draft is None:
+        agent = self.ensure_active(slug)
+        if agent.draft is None:
             raise KeyError(f"Agent '{slug}' not found")
 
         report = validate_agent(_merge_agent(agent, agent.draft.body))
@@ -224,7 +285,7 @@ def prune_ephemeral_agents(session: Session) -> list[str]:
     """Remove test agents left over from integration tests."""
     service = AgentService(session)
     removed: list[str] = []
-    for summary in service.list_agents():
+    for summary in service.list_agents(include_archived=True):
         slug = summary["slug"]
         if service.is_ephemeral_slug(slug):
             service.delete_agent(slug)

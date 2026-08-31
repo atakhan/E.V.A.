@@ -1,7 +1,7 @@
 # Skills Spec — v0.1 Cheatsheet
 
-Source: `docs/SKILLS_SPEC_v0.1.md`  
-Canvas notation: `docs/FSM_CANVAS_STYLE.md`
+Source: `E.V.A./docs/SKILLS_SPEC_v0.1.md`  
+Canvas notation: `E.V.A./docs/FSM_CANVAS_STYLE.md`
 
 ## Definition
 

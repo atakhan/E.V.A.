@@ -1,6 +1,6 @@
 ---
 description: E.V.A. frontend feature-based architecture and conventions
-globs: frontend/**/*.{vue,ts,css}
+globs: E.V.A./frontend/**/*.{vue,ts,css}
 alwaysApply: false
 ---
 
@@ -19,5 +19,5 @@ Platform specs: `.cursor/skills/eva-specs/SKILL.md`.
 ## Verify
 
 ```bash
-cd frontend && npm run build
+cd E.V.A./frontend && npm run build
 ```

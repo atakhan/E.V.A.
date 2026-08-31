@@ -2,7 +2,7 @@
 
 > Статус соответствия кода [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md).  
 > Обновлено: 2026-08-31.  
-> Оценка: **~85%** — P0–P2 закрыты; P3 (parallel recipe, full replay UI) частично.
+> Оценка: **~88%** — P0–P2 закрыты; cockpit UI v1; P3 (replay UI, pause) частично.
 
 ## Summary
 
@@ -15,7 +15,8 @@
 | Version pinning per run | **Done** |
 | ActionRun / ToolExecution entities | **Done** |
 | Cancel / retry / timeout | **Partial–Done** |
-| Full execution history + observability | **Partial** |
+| Full execution history + observability | **Partial–Done** |
+| Runtime Cockpit UI | **Done (v1)** |
 
 **Production path:**
 
@@ -65,10 +66,25 @@ Legend: ✅ done · ⚠️ partial · ❌ not implemented
 | ActionRun / ToolExecution | `domain/action_run.py`, `postgres_*_store.py`, `tables.py` |
 | Multi-run routing | `runtime_service.route_all()`, `skill_routing.py` |
 | Cancel / start / execute | `app/api/runtime.py` |
+| List runs + summary (cockpit) | `GET /api/runtime/runs`, `/summary`, `/agents/{slug}/summary` |
 | Retry / timeout / needs_human | `action_executor.py`, `tool_executor.py` |
 | DLQ + correlation lock | `runtime/dlq.py`, `runtime/correlation_lock.py` |
 | Scheduler | `runtime/scheduler.py`, `timer_schedules` table |
 | Replay / history / metrics | `GET /runs/{id}/history`, `POST /runs/{id}/replay`, `GET /metrics` |
+
+---
+
+## Runtime Cockpit (UI v1)
+
+| Route | Назначение |
+|-------|------------|
+| `/runtime` | Глобальный dashboard: агенты, totals, активные runs |
+| `/:slug/runtime` | Per-agent cockpit: фильтры, список runs, cancel |
+| `/:slug/runtime/runs/:runId` | Detail: timeline, tool logs, cancel |
+| `/:slug/runtime/simulate` | Dev sandbox (publish + test events) |
+| `/:slug/run` | Redirect → `/:slug/runtime/simulate` |
+
+Backend: `GET /api/runtime/runs`, `/summary`, `/agents/{slug}/summary`, `/runs/by-conversation`.
 
 ---
 

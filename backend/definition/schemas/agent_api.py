@@ -148,6 +148,7 @@ class AgentApi(BaseModel):
     description: str = ""
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+    archived_at: str | None = Field(default=None, alias="archivedAt")
     skills: list[SkillApi] = Field(default_factory=list)
     actions: list[ActionDefApi] = Field(default_factory=list)
     tools: list[ToolInstanceApi] = Field(default_factory=list)
@@ -162,6 +163,15 @@ class AgentSummaryApi(BaseModel):
     description: str = ""
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+    archived_at: str | None = Field(default=None, alias="archivedAt")
+
+
+class AgentArchiveResponseApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ok: bool = True
+    slug: str
+    archived_at: str | None = Field(default=None, alias="archivedAt")
 
 
 class AgentCreateRequest(BaseModel):

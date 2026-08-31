@@ -13,6 +13,7 @@ export interface Agent {
   description: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
   skills: Skill[];
   actions: ActionDef[];
   tools: ToolBinding[];

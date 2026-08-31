@@ -50,7 +50,7 @@ Platform contracts: `.cursor/skills/eva-specs/SKILL.md` (Actions, Skills, Events
 
 ## Routing
 
-`/agents` · `/:slug/overview|skills|actions|tools` · `/:slug/skills/:id`
+`/agents` · `/runtime` · `/:slug/overview|skills|actions|tools|runtime` · `/:slug/runtime/simulate` · `/:slug/runtime/runs/:runId`
 
 ## Dev
 

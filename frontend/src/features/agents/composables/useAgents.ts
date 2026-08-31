@@ -2,10 +2,13 @@ import type {
   AgentInput,
   AgentMutationResult,
 } from "@/features/agents/types/agent";
+import { computed } from "vue";
 import {
   agents,
   apiAvailable,
+  archiveAgentInStorage,
   createAgentWithStorage,
+  fetchArchivedAgentSummaries,
   getAgentById,
   getAgentBySlug,
   isSlugAvailable,
@@ -13,6 +16,7 @@ import {
   replaceAgent,
   setupTelegramOnAgent,
   touchAgent,
+  unarchiveAgentInStorage,
 } from "@/features/agents/services/agentsStorage";
 import {
   normalizeAgentSlug,
@@ -93,8 +97,47 @@ export function useAgents() {
     void removeAgentFromStorage(agent);
   }
 
+  async function archiveAgent(id: string): Promise<AgentMutationResult> {
+    const agent = getAgentById(id);
+    if (!agent) {
+      return { ok: false, error: "Агент не найден" };
+    }
+    try {
+      await archiveAgentInStorage(agent);
+      return { ok: true, agent: { ...agent, archivedAt: agent.archivedAt ?? new Date().toISOString() } };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Не удалось архивировать агента",
+      };
+    }
+  }
+
+  async function unarchiveAgent(id: string): Promise<AgentMutationResult> {
+    const agent = getAgentById(id);
+    if (!agent) {
+      return { ok: false, error: "Агент не найден" };
+    }
+    try {
+      await unarchiveAgentInStorage(agent);
+      const restored = getAgentById(id);
+      if (!restored) {
+        return { ok: false, error: "Агент не найден после восстановления" };
+      }
+      return { ok: true, agent: restored };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Не удалось восстановить агента",
+      };
+    }
+  }
+
+  const activeAgents = computed(() => agents.value.filter((agent) => !agent.archivedAt));
+
   return {
     agents,
+    activeAgents,
     apiAvailable,
     getAgentById,
     getAgentBySlug,
@@ -104,6 +147,9 @@ export function useAgents() {
     createAgent,
     updateAgent,
     deleteAgent,
+    archiveAgent,
+    unarchiveAgent,
+    fetchArchivedAgentSummaries,
     setupTelegramOnAgent,
   };
 }

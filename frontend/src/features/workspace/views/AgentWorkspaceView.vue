@@ -29,7 +29,10 @@ const activeSectionId = computed(() => {
   if (leaf.includes("actions")) return "actions";
   if (leaf.includes("tools")) return "tools";
   if (leaf.includes("logs")) return "logs";
-  if (leaf.includes("run")) return "run";
+  if (leaf.includes("runtime") || leaf === RouteNames.agentRuntimeSimulate || leaf === RouteNames.skillRunDetail) {
+    return "runtime";
+  }
+  if (leaf.includes("run")) return "runtime";
   if (leaf.includes("overview")) return "overview";
 
   const pathPart = route.path.split("/").filter(Boolean)[1];

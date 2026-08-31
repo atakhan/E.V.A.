@@ -18,10 +18,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function fetchAgentsList(): Promise<
-  Pick<Agent, "id" | "slug" | "name" | "description" | "createdAt" | "updatedAt">[]
+export async function fetchAgentsList(options?: {
+  includeArchived?: boolean;
+}): Promise<
+  Pick<Agent, "id" | "slug" | "name" | "description" | "createdAt" | "updatedAt" | "archivedAt">[]
 > {
-  return request("/agents");
+  const params = new URLSearchParams();
+  if (options?.includeArchived) {
+    params.set("includeArchived", "true");
+  }
+  const query = params.toString();
+  return request(`/agents${query ? `?${query}` : ""}`);
 }
 
 export async function fetchAgent(slug: string): Promise<Agent> {
@@ -48,6 +55,14 @@ export async function saveAgentApi(agent: Agent): Promise<Agent> {
 
 export async function deleteAgentApi(slug: string): Promise<void> {
   await request(`/agents/${encodeURIComponent(slug)}`, { method: "DELETE" });
+}
+
+export async function archiveAgentApi(slug: string): Promise<{ slug: string; archivedAt: string }> {
+  return request(`/agents/${encodeURIComponent(slug)}/archive`, { method: "POST" });
+}
+
+export async function unarchiveAgentApi(slug: string): Promise<{ slug: string; archivedAt: string | null }> {
+  return request(`/agents/${encodeURIComponent(slug)}/unarchive`, { method: "POST" });
 }
 
 export async function validateAgentApi(slug: string): Promise<AgentValidationReport> {

@@ -27,6 +27,18 @@ def _ensure_tool_log_schema(engine) -> None:
             conn.execute(text(statement))
 
 
+def _ensure_agent_schema(engine) -> None:
+    from sqlalchemy import text
+
+    statements = [
+        "ALTER TABLE agents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ",
+        "CREATE INDEX IF NOT EXISTS ix_agents_archived_at ON agents (archived_at)",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
 def _ensure_runtime_schema(engine) -> None:
     from sqlalchemy import text
 
@@ -47,6 +59,7 @@ def init_db() -> None:
     if settings.auto_migrate:
         Base.metadata.create_all(bind=engine)
         _ensure_tool_log_schema(engine)
+        _ensure_agent_schema(engine)
         _ensure_runtime_schema(engine)
     with session_scope() as session:
         seed_tool_catalog(session)

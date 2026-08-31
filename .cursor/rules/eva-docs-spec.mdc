@@ -1,6 +1,6 @@
 ---
 description: E.V.A. platform specs — source of truth in docs/
-globs: docs/**/*.md
+globs: E.V.A./docs/**/*.md
 alwaysApply: false
 ---
 

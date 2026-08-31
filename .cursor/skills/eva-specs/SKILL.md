@@ -2,27 +2,27 @@
 name: eva-specs
 description: >-
   E.V.A. platform specifications (Actions, Skills, Events, Tools). Use when
-  implementing or validating runtime behavior, editing specs in docs,
+  implementing or validating runtime behavior, editing specs in E.V.A./docs,
   or aligning backend/frontend with the v0.1 contracts.
 ---
 
 # E.V.A. Specifications
 
-**Read this skill** when a task touches platform contracts, runtime semantics, or `docs/`.
+**Read this skill** when a task touches platform contracts, runtime semantics, or `E.V.A./docs/`.
 
 Full specs (source of truth):
 
 | Spec | Path |
 |------|------|
-| Actions | `docs/ACTIONS_SPEC_v0.1.md` |
-| Skills | `docs/SKILLS_SPEC_v0.1.md` |
-| Events | `docs/EVENT_SPEC_v0.1.md` |
-| Tools | `docs/TOOLS_SDK_SPEC_v0.1.md` |
-| Runtime | `docs/RUNTIME_SPEC_v0.1.md` |
+| Actions | `E.V.A./docs/ACTIONS_SPEC_v0.1.md` |
+| Skills | `E.V.A./docs/SKILLS_SPEC_v0.1.md` |
+| Events | `E.V.A./docs/EVENT_SPEC_v0.1.md` |
+| Tools | `E.V.A./docs/TOOLS_SDK_SPEC_v0.1.md` |
+| Runtime | `E.V.A./docs/RUNTIME_SPEC_v0.1.md` |
 
-Implementation gap tracker: `docs/RUNTIME_IMPLEMENTATION_STATUS.md`
+Implementation gap tracker: `E.V.A./docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 
-Architecture ↔ docs alignment: `docs/ARCHITECTURE_DOCS_ALIGNMENT.md`
+Architecture ↔ docs alignment: `E.V.A./docs/ARCHITECTURE_DOCS_ALIGNMENT.md`
 
 Condensed references: `.cursor/skills/eva-specs/{actions,skills,events,tools,runtime}.md`
 
@@ -84,5 +84,5 @@ Runtime implementation status: `docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 docker compose run --rm backend pytest tests/ -q
 
 # frontend
-cd frontend && npm run build
+cd E.V.A./frontend && npm run build
 ```

@@ -1,7 +1,7 @@
 # Runtime Spec — v0.1 Cheatsheet
 
-Source: `docs/RUNTIME_SPEC_v0.1.md`  
-Gap tracker: `docs/RUNTIME_IMPLEMENTATION_STATUS.md`
+Source: `E.V.A./docs/RUNTIME_SPEC_v0.1.md`  
+Gap tracker: `E.V.A./docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 
 ## Planes
 

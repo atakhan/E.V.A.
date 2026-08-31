@@ -31,6 +31,7 @@ docker compose up --build
 - **backend** — uvicorn `--reload` (`backend/app`)
 
 - Frontend: http://localhost:5173
+- Runtime Cockpit: http://localhost:5173/runtime (глобально) · `/:slug/runtime` (per-agent)
 - Backend API: http://localhost:8000/api/hello
 - Health: http://localhost:8000/health
 

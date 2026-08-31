@@ -2,20 +2,20 @@
 name: eva-backend
 description: >-
   E.V.A. backend architecture (FastAPI, runtime, tools). Use when editing
-  backend/, adding tools, runtime logic, API routes, or working with
+  E.V.A./backend, adding tools, runtime logic, API routes, or working with
   agents/skills/actions/events/tools execution.
 ---
 
 # E.V.A. Backend
 
-**Read this skill first** when the task touches `backend/`.
+**Read this skill first** when the task touches `E.V.A./backend/`.
 
 Stack: Python 3 + FastAPI + PostgreSQL + Redis + pytest.
 
 ## Directory layout
 
 ```
-backend/
+E.V.A./backend/
 ├── app/              # FastAPI entry, API routes, config
 ├── domain/           # Agent, Skill, Action, Event models
 ├── definition/       # Mappers, validation, catalog, services

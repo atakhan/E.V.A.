@@ -2,12 +2,14 @@ import { ref, watch } from "vue";
 import type { Agent } from "@/features/agents/types/agent";
 import { createEmptyAgentBody } from "@/features/agents/types/agent";
 import {
+  archiveAgentApi,
   checkApiHealth,
   createAgentApi,
   deleteAgentApi,
   fetchAgent,
   fetchAgentsList,
   saveAgentApi,
+  unarchiveAgentApi,
 } from "@/features/agents/services/agentsApi";
 import { normalizeAction } from "@/features/actions/types/normalize";
 import { createToolBinding, normalizeToolBinding } from "@/features/tools/types/normalize";
@@ -138,6 +140,7 @@ async function migrateLocalAgentsToApi() {
 async function syncAgentsToApi(value: Agent[]) {
   if (!apiInitDone || !apiAvailable.value) return;
   for (const agent of value) {
+    if (agent.archivedAt) continue;
     await saveAgentApi(agent);
   }
 }
@@ -161,6 +164,7 @@ function normalizeAgents(rawAgents: unknown[]): Agent[] {
       name,
       slug,
       description: migrated.description ?? "",
+      archivedAt: migrated.archivedAt ?? null,
       skills: migrated.skills.map(normalizeSkill),
       actions: Array.isArray(migrated.actions)
         ? migrated.actions
@@ -196,6 +200,7 @@ function migrateAgentRecord(raw: unknown): Agent {
     slug: record.slug || "",
     name: record.name || "Агент",
     description: record.description ?? "",
+    archivedAt: record.archivedAt ?? null,
     createdAt: record.createdAt || new Date().toISOString(),
     updatedAt: record.updatedAt || new Date().toISOString(),
     skills,
@@ -309,6 +314,61 @@ export async function removeAgentFromStorage(agent: Agent) {
       apiAvailable.value = false;
     }
   }
+}
+
+export async function archiveAgentInStorage(agent: Agent) {
+  if (apiAvailable.value) {
+    const result = await archiveAgentApi(agent.slug);
+    const index = agents.value.findIndex((item) => item.id === agent.id);
+    if (index >= 0) {
+      agents.value[index] = { ...agents.value[index], archivedAt: result.archivedAt };
+    }
+    return;
+  }
+  const index = agents.value.findIndex((item) => item.id === agent.id);
+  if (index >= 0) {
+    agents.value[index] = { ...agents.value[index], archivedAt: new Date().toISOString() };
+  }
+}
+
+export async function unarchiveAgentInStorage(agent: Agent) {
+  if (apiAvailable.value) {
+    await unarchiveAgentApi(agent.slug);
+    const loaded = await fetchAgent(agent.slug);
+    const index = agents.value.findIndex((item) => item.id === agent.id);
+    if (index >= 0) {
+      agents.value[index] = normalizeAgents([loaded])[0];
+    } else {
+      agents.value = normalizeAgents([...agents.value, loaded]);
+    }
+    return;
+  }
+  const index = agents.value.findIndex((item) => item.id === agent.id);
+  if (index >= 0) {
+    agents.value[index] = { ...agents.value[index], archivedAt: null };
+  }
+}
+
+export async function fetchArchivedAgentSummaries(): Promise<Agent[]> {
+  if (!apiAvailable.value) {
+    return agents.value.filter((agent) => Boolean(agent.archivedAt));
+  }
+  const summaries = await fetchAgentsList({ includeArchived: true });
+  const archived = summaries.filter((item) => item.archivedAt);
+  const loaded: Agent[] = [];
+  for (const summary of archived) {
+    loaded.push(await fetchAgent(summary.slug));
+  }
+  const normalized = normalizeAgents(loaded);
+  for (const agent of normalized) {
+    const index = agents.value.findIndex((item) => item.id === agent.id);
+    if (index >= 0) {
+      agents.value[index] = agent;
+    } else {
+      agents.value.push(agent);
+    }
+  }
+  return normalized;
 }
 
 export async function createAgentOnApi(agent: Agent) {

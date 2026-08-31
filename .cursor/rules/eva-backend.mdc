@@ -1,6 +1,6 @@
 ---
 description: E.V.A. backend architecture and conventions
-globs: backend/**/*.py
+globs: E.V.A./backend/**/*.py
 alwaysApply: false
 ---
 

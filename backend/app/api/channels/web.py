@@ -52,6 +52,8 @@ def _verify_inbound_key(session: Session, agent_slug: str, token: str | None) ->
     agent = session.scalar(select(AgentRow).where(AgentRow.slug == agent_slug))
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.archived_at is not None:
+        raise HTTPException(status_code=409, detail="Agent is archived")
 
     rows = session.scalars(
         select(ToolCredentialRow).where(

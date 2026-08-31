@@ -6,13 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from definition.services.agent_service import AgentService
+from app.api.agent_http import raise_agent_service_error
+from definition.services.agent_service import AgentArchivedError, AgentService
 from domain.events import Event
+from infrastructure.models.tables import SkillRunRow
 from infrastructure.stores.postgres_action_run_store import PostgresActionRunStore
 from infrastructure.stores.postgres_skill_run_store import PostgresSkillRunStore
 from infrastructure.stores.postgres_tool_execution_store import PostgresToolExecutionStore
 from runtime.definition_loader import load_runtime_catalog
 from runtime.runtime_factory import build_runtime_service
+from runtime.skill_run_query import SkillRunListFilters, run_detail_from_row
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
 
@@ -84,15 +87,39 @@ def _run_response(result, *, created: bool) -> dict[str, Any]:
         "ok": True,
         "created": created,
         "skillRunId": result.run.id,
+        "agentSlug": result.run.vars.get("_agent_slug"),
+        "skillId": result.run.skill_id,
         "status": result.run.status.value,
         "currentState": result.run.current_state,
+        "publicationVersion": result.run.skill_version,
+        "conversationId": result.run.vars.get("conversation_id"),
+        "error": result.run.error,
         "history": result.run.history,
         "toolCalls": result.trace.tool_calls,
+        "createdAt": None,
+        "updatedAt": None,
     }
+
+
+def _parse_status_filter(status: list[str] | None) -> tuple[str, ...]:
+    if not status:
+        return ()
+    values: list[str] = []
+    for item in status:
+        values.extend(part.strip() for part in item.split(",") if part.strip())
+    return tuple(values)
+
+
+def _ensure_agent_active(session: Session, agent_slug: str) -> None:
+    try:
+        AgentService(session).ensure_active(agent_slug)
+    except AgentArchivedError as exc:
+        raise_agent_service_error(exc)
 
 
 @router.post("/runs", response_model=RunResponse)
 def create_run(payload: CreateRunRequest, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    _ensure_agent_active(session, payload.agent_slug)
     service = build_runtime_service(session, agent_slug=payload.agent_slug, skill_id=payload.skill_id)
     event = Event.model_validate(payload.event.model_dump(by_alias=True, exclude_none=True))
     result = service.route(event)
@@ -101,6 +128,7 @@ def create_run(payload: CreateRunRequest, session: Session = Depends(_db_session
 
 @router.post("/runs/start", response_model=RunResponse)
 def start_skill(payload: StartSkillRequest, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    _ensure_agent_active(session, payload.agent_slug)
     service = build_runtime_service(
         session,
         agent_slug=payload.agent_slug,
@@ -173,21 +201,59 @@ def cancel_run(run_id: str, session: Session = Depends(_db_session)) -> dict[str
     }
 
 
-@router.get("/runs/{run_id}", response_model=RunResponse)
-def get_run(run_id: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+@router.get("/runs/by-conversation")
+def find_run_by_conversation(
+    conversation_id: str = Query(alias="conversationId"),
+    session: Session = Depends(_db_session),
+) -> dict[str, Any]:
     store = PostgresSkillRunStore(session)
-    run = store.get_run(run_id)
+    run = store.find_waiting_by_conversation(conversation_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="Skill run not found")
+        raise HTTPException(status_code=404, detail="Waiting run not found")
     return {
         "ok": True,
-        "created": False,
         "skillRunId": run.id,
         "status": run.status.value,
         "currentState": run.current_state,
-        "history": run.history,
-        "toolCalls": [],
     }
+
+
+@router.get("/runs")
+def list_runs(
+    agent_slug: str | None = Query(default=None, alias="agentSlug"),
+    skill_id: str | None = Query(default=None, alias="skillId"),
+    status: list[str] | None = Query(default=None),
+    active_only: bool = Query(default=False, alias="activeOnly"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(_db_session),
+) -> dict[str, Any]:
+    store = PostgresSkillRunStore(session)
+    items, total = store.list_runs(
+        SkillRunListFilters(
+            agent_slug=agent_slug,
+            skill_id=skill_id,
+            statuses=_parse_status_filter(status),
+            active_only=active_only,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return {
+        "ok": True,
+        "items": [item.to_api() for item in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    row = session.get(SkillRunRow, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Skill run not found")
+    return run_detail_from_row(row)
 
 
 @router.get("/runs/{run_id}/history")
@@ -273,6 +339,7 @@ def replay_run(run_id: str, session: Session = Depends(_db_session), offset: int
 
 @router.post("/actions/execute")
 def execute_action(payload: ExecuteActionRequest, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    _ensure_agent_active(session, payload.agent_slug)
     service = build_runtime_service(
         session,
         agent_slug=payload.agent_slug,
@@ -301,18 +368,21 @@ def runtime_metrics() -> dict[str, Any]:
     return {"ok": True, **snapshot()}
 
 
-@router.get("/runs")
-def find_run(
-    conversation_id: str = Query(alias="conversationId"),
-    session: Session = Depends(_db_session),
-) -> dict[str, Any]:
+@router.get("/summary")
+def runtime_summary(session: Session = Depends(_db_session)) -> dict[str, Any]:
     store = PostgresSkillRunStore(session)
-    run = store.find_waiting_by_conversation(conversation_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Waiting run not found")
+    agents, totals = store.summarize_runtime()
     return {
         "ok": True,
-        "skillRunId": run.id,
-        "status": run.status.value,
-        "currentState": run.current_state,
+        "agents": [agent.to_api() for agent in agents],
+        "totals": totals.to_api(),
     }
+
+
+@router.get("/agents/{slug}/summary")
+def agent_runtime_summary(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    store = PostgresSkillRunStore(session)
+    summary = store.summarize_agent(slug)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"ok": True, **summary.to_api()}

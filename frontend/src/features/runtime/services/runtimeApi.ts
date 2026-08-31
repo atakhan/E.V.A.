@@ -1,6 +1,12 @@
 import type {
   AgentPublicationSummary,
+  AgentRuntimeSummary,
+  RuntimeMetrics,
   RuntimeRunResponse,
+  RuntimeSummary,
+  SkillRunHistory,
+  SkillRunListResponse,
+  SkillRunStatusFilter,
 } from "@/features/runtime/types/runtime";
 
 const API_BASE = "/api";
@@ -25,6 +31,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function statusQueryParam(filter: SkillRunStatusFilter): string | undefined {
+  switch (filter) {
+    case "active":
+      return "running,waiting";
+    case "waiting":
+      return "waiting";
+    case "completed":
+      return "completed";
+    case "error":
+      return "error";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return undefined;
+  }
+}
+
 export async function listPublicationsApi(slug: string): Promise<AgentPublicationSummary[]> {
   const rows = await request<
     Array<{ id: string; version: string; publishedAt: string; body?: unknown }>
@@ -34,6 +57,38 @@ export async function listPublicationsApi(slug: string): Promise<AgentPublicatio
     version: row.version,
     publishedAt: row.publishedAt,
   }));
+}
+
+export async function listSkillRuns(input: {
+  agentSlug?: string;
+  skillId?: string;
+  statusFilter?: SkillRunStatusFilter;
+  activeOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<SkillRunListResponse> {
+  const params = new URLSearchParams();
+  if (input.agentSlug) params.set("agentSlug", input.agentSlug);
+  if (input.skillId) params.set("skillId", input.skillId);
+  if (input.activeOnly) params.set("activeOnly", "true");
+  const status = input.statusFilter ? statusQueryParam(input.statusFilter) : undefined;
+  if (status) params.set("status", status);
+  if (input.limit !== undefined) params.set("limit", String(input.limit));
+  if (input.offset !== undefined) params.set("offset", String(input.offset));
+  const suffix = params.toString();
+  return request(`/runtime/runs${suffix ? `?${suffix}` : ""}`);
+}
+
+export async function getRuntimeSummary(): Promise<RuntimeSummary> {
+  return request("/runtime/summary");
+}
+
+export async function getAgentRuntimeSummary(slug: string): Promise<AgentRuntimeSummary> {
+  return request(`/runtime/agents/${encodeURIComponent(slug)}/summary`);
+}
+
+export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
+  return request("/runtime/metrics");
 }
 
 export async function createRuntimeRun(input: {
@@ -72,4 +127,19 @@ export async function postRuntimeEvent(input: {
 
 export async function getRuntimeRun(runId: string): Promise<RuntimeRunResponse> {
   return request(`/runtime/runs/${encodeURIComponent(runId)}`);
+}
+
+export async function getSkillRunHistory(runId: string): Promise<SkillRunHistory> {
+  return request(`/runtime/runs/${encodeURIComponent(runId)}/history`);
+}
+
+export async function cancelSkillRun(runId: string): Promise<{
+  ok: boolean;
+  skillRunId: string;
+  status: string;
+  currentState: string;
+}> {
+  return request(`/runtime/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+  });
 }

@@ -1,12 +1,12 @@
 ---
 description: E.V.A. Actions spec v0.1 — recipe, templates, action results
-globs: **/actions/**,backend/**/action*.py,backend/runtime/action_executor.py,backend/runtime/expression_resolver.py
+globs: E.V.A./**/actions/**,E.V.A./backend/**/action*.py,E.V.A./backend/runtime/action_executor.py,E.V.A./backend/runtime/expression_resolver.py
 alwaysApply: false
 ---
 
 # Actions Spec
 
-Read `.cursor/skills/eva-specs/actions.md` (full: `docs/ACTIONS_SPEC_v0.1.md`).
+Read `.cursor/skills/eva-specs/actions.md` (full: `E.V.A./docs/ACTIONS_SPEC_v0.1.md`).
 
 - Action hides tool recipe from FSM; FSM uses action ids only
 - Recipe steps: `id`, `tool`, `command`, `input`, optional `when` — not `args`

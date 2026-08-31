@@ -10,6 +10,7 @@ import {
 import { findWorkspaceSection } from "@/features/workspace/config/nav";
 import {
   agentHomePath,
+  agentRuntimePath,
   agentSectionPath,
   agentSkillsPath,
   legacyModuleSlugToSection,
@@ -39,6 +40,11 @@ export function agentRouteGuard(
   const agent = getAgentBySlug(agentSlug);
   if (!agent) {
     next({ name: RouteNames.agents });
+    return;
+  }
+
+  if (agent.archivedAt) {
+    next(agentRuntimePath(agent.slug));
     return;
   }
 

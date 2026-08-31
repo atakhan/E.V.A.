@@ -38,10 +38,10 @@ export const workspaceSections: WorkspaceSection[] = [
     description: "История вызовов Tools: команды, запросы, ответы и ошибки.",
   },
   {
-    id: "run",
-    slug: "run",
-    title: "Run",
-    description: "Публикация и тестовый запуск skill через runtime API.",
+    id: "runtime",
+    slug: "runtime",
+    title: "Runtime",
+    description: "Операционный кокпит: активные runs, cancel, timeline и simulate.",
   },
 ];
 

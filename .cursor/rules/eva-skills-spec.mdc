@@ -1,12 +1,12 @@
 ---
 description: E.V.A. Skills spec v0.1 — FSM, guards, skill runs
-globs: **/skills/**,backend/**/skill*.py,backend/runtime/fsm_engine.py,backend/runtime/skill_runner.py,backend/runtime/guards.py
+globs: E.V.A./**/skills/**,E.V.A./backend/**/skill*.py,E.V.A./backend/runtime/fsm_engine.py,E.V.A./backend/runtime/skill_runner.py,E.V.A./backend/runtime/guards.py
 alwaysApply: false
 ---
 
 # Skills Spec
 
-Read `.cursor/skills/eva-specs/skills.md` (full: `docs/SKILLS_SPEC_v0.1.md`).
+Read `.cursor/skills/eva-specs/skills.md` (full: `E.V.A./docs/SKILLS_SPEC_v0.1.md`).
 
 - Skill → FSM → Action id → Tool command (never call tools from FSM)
 - Handlers: `on.<event>` with optional `guard`, `actions`, `to`

@@ -3,6 +3,7 @@ import { defaultWorkspaceSectionSlug } from "@/features/workspace/config/nav";
 export const RouteNames = {
   agents: "agents",
   toolsLibrary: "tools-library",
+  globalRuntime: "global-runtime",
   agentWorkspace: "agent-workspace",
   agentOverview: "agent-overview",
   agentSkills: "agent-skills",
@@ -10,12 +11,19 @@ export const RouteNames = {
   agentTools: "agent-tools",
   agentToolInstance: "agent-tool-instance",
   agentLogs: "agent-logs",
+  agentRuntime: "agent-runtime",
+  agentRuntimeSimulate: "agent-runtime-simulate",
+  skillRunDetail: "skill-run-detail",
   agentRun: "agent-run",
   skillCanvas: "skill-canvas",
 } as const;
 
 export function agentsPath(): string {
   return "/agents";
+}
+
+export function globalRuntimePath(): string {
+  return "/runtime";
 }
 
 export function toolsLibraryPath(): string {
@@ -73,8 +81,21 @@ export function agentLogsPath(
   return suffix ? `${base}?${suffix}` : base;
 }
 
+export function agentRuntimePath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "runtime");
+}
+
+export function agentRuntimeSimulatePath(agentSlug: string): string {
+  return `${agentRuntimePath(agentSlug)}/simulate`;
+}
+
+export function skillRunDetailPath(agentSlug: string, runId: string): string {
+  return `${agentRuntimePath(agentSlug)}/runs/${encodeURIComponent(runId)}`;
+}
+
+/** @deprecated Use agentRuntimeSimulatePath */
 export function agentRunPath(agentSlug: string): string {
-  return agentSectionPath(agentSlug, "run");
+  return agentRuntimeSimulatePath(agentSlug);
 }
 
 export function skillPath(agentSlug: string, skillId: string): string {
@@ -90,13 +111,14 @@ export function agentHomePath(agentSlug: string): string {
 export function legacyModuleSlugToSection(moduleSlug: string): string {
   if (moduleSlug === "fsm") return "skills";
   if (moduleSlug === "tools-and-actions") return "tools";
+  if (moduleSlug === "run") return "runtime/simulate";
   if (
     moduleSlug === "overview" ||
     moduleSlug === "skills" ||
     moduleSlug === "actions" ||
     moduleSlug === "tools" ||
     moduleSlug === "logs" ||
-    moduleSlug === "run"
+    moduleSlug === "runtime"
   ) {
     return moduleSlug;
   }

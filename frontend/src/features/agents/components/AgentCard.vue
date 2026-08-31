@@ -4,11 +4,14 @@ import type { Agent } from "@/features/agents/types/agent";
 
 defineProps<{
   agent: Agent;
+  archived?: boolean;
 }>();
 
 const emit = defineEmits<{
   open: [];
   edit: [];
+  archive: [];
+  unarchive: [];
   remove: [];
 }>();
 </script>
@@ -33,12 +36,25 @@ const emit = defineEmits<{
       </p>
 
       <div class="card-actions justify-end">
-        <button type="button" class="btn btn-xs btn-ghost" @click="emit('edit')">
-          Редактировать
-        </button>
-        <button type="button" class="btn btn-xs btn-ghost text-error" @click="emit('remove')">
-          Удалить
-        </button>
+        <template v-if="archived">
+          <button type="button" class="btn btn-xs btn-ghost" @click="emit('unarchive')">
+            Восстановить
+          </button>
+          <button type="button" class="btn btn-xs btn-ghost text-error" @click="emit('remove')">
+            Удалить
+          </button>
+        </template>
+        <template v-else>
+          <button type="button" class="btn btn-xs btn-ghost" @click="emit('edit')">
+            Редактировать
+          </button>
+          <button type="button" class="btn btn-xs btn-ghost" @click="emit('archive')">
+            Архивировать
+          </button>
+          <button type="button" class="btn btn-xs btn-ghost text-error" @click="emit('remove')">
+            Удалить
+          </button>
+        </template>
       </div>
     </div>
   </article>
