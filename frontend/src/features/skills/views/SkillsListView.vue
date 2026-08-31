@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useSkills } from "@/features/skills/composables/useSkills";
+import SkillsImportDialog from "@/features/skills/components/SkillsImportDialog.vue";
 import { skillPath } from "@/router/paths";
 import { formatDateTime } from "@/shared/utils/formatDate";
 
@@ -14,6 +15,7 @@ const { getSkills, createSkill, renameSkill, deleteSkill } = useSkills();
 
 const renamingId = ref<string | null>(null);
 const renameValue = ref("");
+const importOpen = ref(false);
 
 const skills = computed(() => getSkills(props.agentSlug));
 
@@ -47,6 +49,9 @@ async function createAndOpenSkill() {
           Процессы агента. Каждый Skill — FSM на холсте
         </p>
       </div>
+      <button type="button" class="btn btn-sm btn-ghost" @click="importOpen = true">
+        Import pack
+      </button>
       <button type="button" class="btn btn-sm" @click="createAndOpenSkill()">
         Новый Skill
       </button>
@@ -124,4 +129,10 @@ async function createAndOpenSkill() {
       </article>
     </div>
   </section>
+
+  <SkillsImportDialog
+    v-if="importOpen"
+    :agent-slug="agentSlug"
+    @close="importOpen = false"
+  />
 </template>

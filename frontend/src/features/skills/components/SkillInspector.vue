@@ -2,10 +2,24 @@
 import { computed } from "vue";
 import { useActions } from "@/features/actions/composables/useActions";
 import type { ActionDef } from "@/features/actions/types/action";
+import type { AgentIssue } from "@/features/agents/utils/validateAgent";
+import SkillValidationPanel from "@/features/skills/components/SkillValidationPanel.vue";
 import type { FsmEditorState, FsmSelection, FsmState } from "@/features/skills/types/fsm";
+import { suggestedSkillEvents } from "@/features/skills/utils/skillEvents";
 
 const props = defineProps<{
   agentSlug: string;
+  skillVersion?: string;
+  skillDescription?: string;
+  validationIssues?: AgentIssue[];
+  validationOpen?: boolean;
+}>();
+
+const emit = defineEmits<{
+  "update:skillVersion": [value: string];
+  "update:skillDescription": [value: string];
+  "update:validationOpen": [value: boolean];
+  selectIssue: [issue: AgentIssue];
 }>();
 
 const model = defineModel<FsmEditorState>({ required: true });
@@ -13,6 +27,17 @@ const selection = defineModel<FsmSelection>("selection", { required: true });
 
 const { getActions } = useActions();
 const catalog = computed(() => getActions(props.agentSlug));
+const eventSuggestions = computed(() =>
+  suggestedSkillEvents(catalog.value.map((action) => action.id)),
+);
+
+function addParam() {
+  model.value.params.push({ name: "", type: "string", required: false });
+}
+
+function removeParam(index: number) {
+  model.value.params.splice(index, 1);
+}
 
 const selectedState = computed(() => {
   if (selection.value?.kind !== "state") return null;
@@ -99,6 +124,18 @@ function availableToAdd(list: string[]): ActionDef[] {
 
     <div class="flex-1 space-y-4 overflow-y-auto p-4">
       <template v-if="selectedState">
+        <label class="form-control w-full">
+          <span class="label-text">Название</span>
+          <input
+            v-model="selectedState.name"
+            class="input input-bordered input-sm w-full"
+            placeholder="Например: Ожидание сообщения"
+          />
+          <span class="label-text-alt text-base-content/50">
+            Отображается на холсте; технический id — ниже
+          </span>
+        </label>
+
         <label class="form-control w-full">
           <span class="label-text">State id</span>
           <input
@@ -200,6 +237,7 @@ function availableToAdd(list: string[]): ActionDef[] {
             v-model="selectedTransition.transition.event"
             class="input input-bordered input-sm w-full font-mono"
             placeholder="channel.message.received"
+            list="skill-event-suggestions"
           />
         </label>
 
@@ -300,12 +338,100 @@ function availableToAdd(list: string[]): ActionDef[] {
         <p class="text-sm text-base-content/60">
           Выберите state или transition. Actions берутся из каталога агента (раздел Actions).
         </p>
+
+        <label class="form-control w-full">
+          <span class="label-text">Version (SemVer)</span>
+          <input
+            class="input input-bordered input-sm w-full font-mono"
+            :value="skillVersion ?? '0.1.0'"
+            placeholder="1.0.0"
+            @input="emit('update:skillVersion', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+
+        <label class="form-control w-full">
+          <span class="label-text">Description</span>
+          <textarea
+            class="textarea textarea-bordered textarea-sm w-full"
+            rows="2"
+            :value="skillDescription ?? ''"
+            @input="emit('update:skillDescription', ($event.target as HTMLTextAreaElement).value)"
+          />
+        </label>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p class="label-text">Params</p>
+            <button type="button" class="btn btn-xs" @click="addParam">Добавить</button>
+          </div>
+          <div
+            v-if="model.params.length === 0"
+            class="rounded-lg border border-dashed border-base-300 px-3 py-4 text-xs text-base-content/50"
+          >
+            Нет параметров Skill
+          </div>
+          <div
+            v-for="(param, index) in model.params"
+            :key="`${param.name}-${index}`"
+            class="rounded-lg border border-base-300 bg-base-200/40 p-2 space-y-2"
+          >
+            <div class="flex gap-2">
+              <input
+                v-model="param.name"
+                class="input input-bordered input-xs flex-1 font-mono"
+                placeholder="request_id"
+              />
+              <select v-model="param.type" class="select select-bordered select-xs">
+                <option value="string">string</option>
+                <option value="number">number</option>
+                <option value="boolean">boolean</option>
+                <option value="object">object</option>
+                <option value="array">array</option>
+              </select>
+              <button type="button" class="btn btn-xs btn-ghost text-error" @click="removeParam(index)">
+                ×
+              </button>
+            </div>
+            <label class="label cursor-pointer justify-start gap-2 py-0">
+              <input v-model="param.required" type="checkbox" class="checkbox checkbox-xs" />
+              <span class="label-text text-xs">required</span>
+            </label>
+          </div>
+        </div>
+
         <div class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-3 text-xs text-base-content/60">
           <p>initial: <span class="font-mono">{{ model.initial ?? "—" }}</span></p>
           <p class="mt-1">states: {{ model.states.length }}</p>
           <p class="mt-1">actions in catalog: {{ catalog.length }}</p>
         </div>
       </template>
+    </div>
+
+    <datalist id="skill-event-suggestions">
+      <option v-for="eventName in eventSuggestions" :key="eventName" :value="eventName" />
+    </datalist>
+
+    <div class="border-t border-base-300 p-3">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between text-left text-xs font-semibold uppercase tracking-wide text-base-content/50"
+        @click="emit('update:validationOpen', !validationOpen)"
+      >
+        <span>Validation</span>
+        <span class="font-mono normal-case">
+          {{ validationIssues?.length ?? 0 }}
+          <span class="text-base-content/40">{{ validationOpen ? "▾" : "▸" }}</span>
+        </span>
+      </button>
+      <div v-if="validationOpen !== false" class="mt-2 max-h-48 overflow-y-auto">
+        <SkillValidationPanel
+          :agent-slug="agentSlug"
+          :issues="validationIssues ?? []"
+          :selection="selection"
+          compact
+          @select-issue="emit('selectIssue', $event)"
+        />
+      </div>
     </div>
   </aside>
 </template>

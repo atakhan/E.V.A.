@@ -9,7 +9,7 @@ import {
   findWorkspaceSection,
   workspaceSections,
 } from "@/features/workspace/config/nav";
-import { agentSectionPath, agentsPath } from "@/router/paths";
+import { agentSectionPath, agentsPath, RouteNames } from "@/router/paths";
 
 const props = defineProps<{
   agentSlug: string;
@@ -24,15 +24,18 @@ const agent = computed(() => getAgentBySlug(props.agentSlug));
 
 const activeSectionId = computed(() => {
   const leaf = String(route.name ?? "");
-  if (leaf.includes("skills")) return "skills";
+  if (leaf === RouteNames.skillCanvas || leaf.includes("skills")) return "skills";
   if (leaf.includes("actions")) return "actions";
   if (leaf.includes("tools")) return "tools";
+  if (leaf.includes("logs")) return "logs";
   if (leaf.includes("run")) return "run";
   if (leaf.includes("overview")) return "overview";
 
   const pathPart = route.path.split("/").filter(Boolean)[1];
   return findWorkspaceSection(pathPart ?? "")?.id ?? defaultWorkspaceSectionId;
 });
+
+const isSkillCanvas = computed(() => route.name === RouteNames.skillCanvas);
 
 async function selectSection(id: string) {
   if (!agent.value) return;
@@ -47,7 +50,7 @@ async function goToAgents() {
 </script>
 
 <template>
-  <div v-if="agent" class="flex min-h-screen bg-base-200">
+  <div v-if="agent" class="flex h-screen min-h-0 bg-base-200">
     <aside class="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-100">
       <div class="border-b border-base-300 px-4 py-4">
         <button
@@ -88,7 +91,10 @@ async function goToAgents() {
       />
     </aside>
 
-    <main class="min-w-0 flex-1 overflow-y-auto p-6 lg:p-8">
+    <main
+      class="flex min-h-0 min-w-0 flex-1 flex-col"
+      :class="isSkillCanvas ? 'overflow-hidden' : 'overflow-y-auto p-6 lg:p-8'"
+    >
       <RouterView />
     </main>
 

@@ -93,6 +93,10 @@ export function useActions() {
       id: nextId,
       name: patch.name?.trim() || current.name,
       description: patch.description !== undefined ? patch.description.trim() : current.description,
+      version: patch.version?.trim() || current.version,
+      policy: patch.policy ?? current.policy,
+      inputSchema: patch.inputSchema ?? current.inputSchema,
+      outputSchema: patch.outputSchema ?? current.outputSchema,
       recipe: patch.recipe
         ? patch.recipe.map((step) => createRecipeStep(step))
         : current.recipe,

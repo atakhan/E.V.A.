@@ -25,8 +25,24 @@ export interface DraftRect {
 
 export interface SkillParam {
   name: string;
+  type: string;
   required: boolean;
 }
+
+export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+export const RESIZE_HANDLES: ResizeHandle[] = [
+  "nw",
+  "n",
+  "ne",
+  "e",
+  "se",
+  "s",
+  "sw",
+  "w",
+];
+
+export type RectSide = "top" | "right" | "bottom" | "left";
 
 export interface FsmTransition {
   id: string;
@@ -34,10 +50,20 @@ export interface FsmTransition {
   guard: string;
   actions: string[];
   to: string;
+  /** Optional anchor side on the source state border. */
+  fromSide?: RectSide;
+  /** Optional anchor side on the target state border. */
+  toSide?: RectSide;
+  /** Position along the source edge (0–1). */
+  fromAnchor?: number;
+  /** Position along the target edge (0–1). */
+  toAnchor?: number;
 }
 
 export interface FsmState {
   id: string;
+  /** Human-readable label on the canvas; runtime uses `id`. */
+  name?: string;
   onEnter: string[];
   final: boolean;
   transitions: FsmTransition[];

@@ -27,9 +27,13 @@ const LEGACY_FSM_MODULE_ID = "core.fsm";
 export const agents = ref<Agent[]>(loadAgentsLocal());
 export const apiAvailable = ref(false);
 export const storageReady = ref(false);
+export type AgentSaveStatus = "idle" | "saving" | "saved" | "error" | "offline";
+export const agentSaveStatus = ref<AgentSaveStatus>("idle");
 
 let syncQueue: Promise<void> = Promise.resolve();
 let apiInitDone = false;
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_DEBOUNCE_MS = 400;
 
 void bootstrapStorage();
 
@@ -37,12 +41,44 @@ watch(
   agents,
   (value) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    if (apiAvailable.value) {
-      syncQueue = syncQueue.then(() => syncAgentsToApi(value)).catch(() => undefined);
+    if (!apiAvailable.value) {
+      agentSaveStatus.value = "offline";
+      return;
     }
+    agentSaveStatus.value = "saving";
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => {
+      syncQueue = syncQueue
+        .then(async () => {
+          await syncAgentsToApi(value);
+          agentSaveStatus.value = "saved";
+        })
+        .catch(() => {
+          agentSaveStatus.value = "error";
+        });
+    }, SAVE_DEBOUNCE_MS);
   },
   { deep: true },
 );
+
+export async function flushAgentsToApi(): Promise<void> {
+  if (!apiAvailable.value) {
+    agentSaveStatus.value = "offline";
+    return;
+  }
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
+  agentSaveStatus.value = "saving";
+  try {
+    await syncAgentsToApi(agents.value);
+    agentSaveStatus.value = "saved";
+  } catch {
+    agentSaveStatus.value = "error";
+    throw new Error("Не удалось сохранить агента в API");
+  }
+}
 
 async function bootstrapStorage() {
   apiAvailable.value = await checkApiHealth();
@@ -310,10 +346,12 @@ export async function setupTelegramOnAgent(
   });
 
   const binding = createToolBinding("telegram", {
+    id: `telegram_${Date.now()}`,
+    name: credentialName?.trim() || "Telegram bot",
     enabled: true,
     credentialId: credential.id,
   });
-  const tools = [...agent.tools.filter((item) => item.toolId !== "telegram"), binding];
+  const tools = [...agent.tools, binding];
   const next = touchAgent({ ...agent, tools });
 
   const saved = await saveAgentApi(next);

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import { validateAgentApi } from "@/features/agents/services/agentsApi";
 import { apiAvailable } from "@/features/agents/services/agentsStorage";
@@ -8,11 +9,14 @@ import {
   type AgentValidationReport,
 } from "@/features/agents/utils/validateAgent";
 import { useAgentRuntime } from "@/features/runtime/composables/useAgentRuntime";
+import ToolLogFeed from "@/features/tools/components/ToolLogFeed.vue";
+import { agentLogsPath } from "@/router/paths";
 
 const props = defineProps<{
   agentSlug: string;
 }>();
 
+const router = useRouter();
 const { getAgentBySlug } = useAgents();
 const agent = computed(() => getAgentBySlug(props.agentSlug));
 
@@ -112,6 +116,13 @@ async function handleSend() {
 
 function handleNewConversation() {
   newConversation(props.agentSlug);
+}
+
+function openRunLogs() {
+  if (!activeRun.value) return;
+  void router.push(
+    agentLogsPath(props.agentSlug, { skillRunId: activeRun.value.skillRunId }),
+  );
 }
 </script>
 
@@ -328,6 +339,26 @@ function handleNewConversation() {
       >
         Run завершён в состоянии {{ activeRun.currentState }}.
       </p>
+
+      <div class="mt-5 border-t border-base-300/60 pt-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+            Tool logs этого run
+          </p>
+          <button type="button" class="btn btn-ghost btn-xs" @click="openRunLogs">
+            Все логи run →
+          </button>
+        </div>
+        <ToolLogFeed
+          :agent-slug="agentSlug"
+          :skill-run-id="activeRun.skillRunId"
+          :limit="20"
+          compact
+          :show-header="true"
+          :auto-refresh-ms="5000"
+          auto-refresh-default
+        />
+      </div>
     </div>
   </section>
 </template>

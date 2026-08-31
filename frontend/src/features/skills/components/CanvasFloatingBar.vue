@@ -1,24 +1,82 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { useRouter } from "vue-router";
+import type { AgentSaveStatus } from "@/features/agents/services/agentsStorage";
+import { agentSaveStatus, flushAgentsToApi } from "@/features/agents/services/agentsStorage";
+import { useSkills } from "@/features/skills/composables/useSkills";
+import { skillPath } from "@/router/paths";
 
-defineProps<{
-  title?: string;
+const props = defineProps<{
+  agentSlug: string;
+  skillId: string;
+  errorCount?: number;
+  warningCount?: number;
 }>();
 
 const emit = defineEmits<{
   home: [];
   exportYaml: [];
   importYaml: [];
+  showValidation: [];
 }>();
+
+const router = useRouter();
+const { getSkills } = useSkills();
 
 const helpOpen = ref(false);
 const rootEl = useTemplateRef<HTMLElement>("root");
+const saving = ref(false);
+
+const skills = computed(() => getSkills(props.agentSlug));
+
+const currentSkill = computed(
+  () => skills.value.find((skill) => skill.id === props.skillId) ?? null,
+);
+
+const saveLabel = computed(() => {
+  const labels: Record<AgentSaveStatus, string> = {
+    idle: "Черновик",
+    saving: "Сохранение…",
+    saved: "В БД",
+    error: "Ошибка",
+    offline: "Локально",
+  };
+  return labels[agentSaveStatus.value];
+});
+
+const saveClass = computed(() => {
+  switch (agentSaveStatus.value) {
+    case "saved":
+      return "badge-success";
+    case "saving":
+      return "badge-ghost";
+    case "error":
+      return "badge-error";
+    case "offline":
+      return "badge-warning";
+    default:
+      return "badge-ghost";
+  }
+});
+
+async function saveNow() {
+  saving.value = true;
+  try {
+    await flushAgentsToApi();
+  } catch {
+    // status badge shows error
+  } finally {
+    saving.value = false;
+  }
+}
 
 const shortcuts = [
   { keys: "Колёсико", action: "Масштаб холста" },
   { keys: "Перетаскивание фона", action: "Панорама" },
   { keys: "State", action: "Нарисовать состояние FSM" },
-  { keys: "Transition", action: "Клик источник → клик цель" },
+  { keys: "Transition", action: "Клик на стороне источника → клик на стороне цели" },
+  { keys: "Выбранная стрелка", action: "Тяните кружки на концах, чтобы переподключить" },
+  { keys: "Выбранный state", action: "Тяните углы и стороны, чтобы изменить размер" },
   { keys: "Delete / Backspace", action: "Удалить state или transition" },
 ];
 
@@ -27,6 +85,12 @@ function onDocumentPointerDown(event: PointerEvent) {
   const target = event.target;
   if (target instanceof Node && rootEl.value?.contains(target)) return;
   helpOpen.value = false;
+}
+
+async function onSkillChange(event: Event) {
+  const nextId = (event.target as HTMLSelectElement).value;
+  if (!nextId || nextId === props.skillId) return;
+  await router.push(skillPath(props.agentSlug, nextId));
 }
 
 onMounted(() => {
@@ -51,14 +115,46 @@ onUnmounted(() => {
       @click="emit('home')"
     >
       <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z" />
+        <path d="M15 18 9 12l6-6" />
       </svg>
     </button>
 
-    <span class="text-sm font-semibold tracking-wide" title="Engine for Versatile Agents">E.V.A.</span>
-    <span v-if="title" class="max-w-40 truncate text-xs text-base-content/60">
-      / {{ title }}
+    <select
+      v-if="skills.length"
+      class="select select-xs h-7 min-h-0 max-w-44 border-base-300/60 bg-base-100/80 py-0 pl-2 pr-7 text-xs font-medium"
+      :value="skillId"
+      :title="currentSkill?.name ?? 'Skill'"
+      aria-label="Переключить Skill"
+      @change="onSkillChange"
+    >
+      <option v-for="item in skills" :key="item.id" :value="item.id">
+        {{ item.name }}
+      </option>
+    </select>
+    <span v-else class="max-w-40 truncate text-xs text-base-content/60">
+      {{ currentSkill?.name ?? "Skill" }}
     </span>
+
+    <button
+      type="button"
+      class="btn btn-xs btn-ghost gap-1"
+      :disabled="saving || agentSaveStatus === 'offline'"
+      title="Сохранить черновик агента в PostgreSQL"
+      @click="saveNow"
+    >
+      <span class="badge badge-xs" :class="saveClass">{{ saveLabel }}</span>
+    </button>
+
+    <button
+      v-if="(errorCount ?? 0) > 0 || (warningCount ?? 0) > 0"
+      type="button"
+      class="btn btn-xs btn-ghost gap-1 font-mono"
+      title="Показать validation issues"
+      @click="emit('showValidation')"
+    >
+      <span v-if="(errorCount ?? 0) > 0" class="badge badge-xs badge-error">{{ errorCount }} err</span>
+      <span v-if="(warningCount ?? 0) > 0" class="badge badge-xs badge-warning">{{ warningCount }} warn</span>
+    </button>
 
     <button
       type="button"

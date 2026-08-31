@@ -1,0 +1,39 @@
+id: skill.parse_foreman_request
+version: "0.3.0"
+description: Parse foreman request
+
+initial: ingest
+
+params:
+  - name: message_ref
+    required: true
+
+states:
+  ingest:
+    on_enter:
+      - ingest_channel_message
+    on:
+      crm.request.created:
+        to: parse
+
+  parse:
+    on_enter:
+      - parse_request
+    on:
+      agent.parse.confidence_low:
+        to: clarify
+
+  clarify:
+    on_enter:
+      - clarify_with_foreman
+    on:
+      channel.message.received:
+        guard: "event.peer_id == params.peer_id"
+        actions: [parse_request]
+        to: parse
+
+  done:
+    final: true
+
+guards:
+  same_thread: "event.peer_id == params.peer_id"

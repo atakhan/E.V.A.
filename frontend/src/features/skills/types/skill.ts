@@ -88,13 +88,20 @@ export function createFsmState(
   };
 }
 
-export function createFsmTransition(to: string, event = "event"): FsmTransition {
+export function createFsmTransition(
+  to: string,
+  partial?: Partial<Pick<FsmTransition, "event" | "fromSide" | "toSide" | "fromAnchor" | "toAnchor">>,
+): FsmTransition {
   return {
     id: createId(),
-    event,
+    event: partial?.event ?? "event",
     guard: "",
     actions: [],
     to,
+    fromSide: partial?.fromSide,
+    toSide: partial?.toSide,
+    fromAnchor: partial?.fromAnchor,
+    toAnchor: partial?.toAnchor,
   };
 }
 
@@ -112,6 +119,18 @@ function migrateRectanglesToStates(raw: LegacyCanvasSkill): FsmState[] {
   }));
 }
 
+function normalizeRectSide(raw: unknown): FsmTransition["fromSide"] {
+  if (raw === "top" || raw === "right" || raw === "bottom" || raw === "left") {
+    return raw;
+  }
+  return undefined;
+}
+
+function normalizeAnchor(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || Number.isNaN(raw)) return undefined;
+  return Math.min(1, Math.max(0, raw));
+}
+
 function normalizeTransition(raw: Partial<FsmTransition>): FsmTransition {
   return {
     id: raw.id || createId(),
@@ -121,12 +140,18 @@ function normalizeTransition(raw: Partial<FsmTransition>): FsmTransition {
       ? raw.actions.map((item) => String(item).trim()).filter(Boolean)
       : [],
     to: raw.to || "",
+    fromSide: normalizeRectSide(raw.fromSide),
+    toSide: normalizeRectSide(raw.toSide),
+    fromAnchor: normalizeAnchor(raw.fromAnchor),
+    toAnchor: normalizeAnchor(raw.toAnchor),
   };
 }
 
 function normalizeState(raw: Partial<FsmState>, fallbackId: string): FsmState {
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
   return {
     id: (raw.id || fallbackId).trim() || fallbackId,
+    name: name || undefined,
     onEnter: Array.isArray(raw.onEnter)
       ? raw.onEnter.map((item) => String(item).trim()).filter(Boolean)
       : [],
@@ -174,10 +199,13 @@ export function normalizeSkill(raw: LegacyCanvasSkill | Skill): Skill {
     updatedAt: raw.updatedAt || new Date().toISOString(),
     initial,
     params: Array.isArray(raw.params)
-      ? raw.params.map((param) => ({
-          name: String(param.name || "").trim(),
-          required: Boolean(param.required),
-        })).filter((param) => param.name)
+      ? raw.params
+          .map((param) => ({
+            name: String(param.name || "").trim(),
+            type: String(param.type || "string").trim() || "string",
+            required: Boolean(param.required),
+          }))
+          .filter((param) => param.name)
       : [],
     states,
     viewport: raw.viewport ?? { panX: 0, panY: 0, zoom: 1 },

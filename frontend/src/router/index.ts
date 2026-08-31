@@ -3,7 +3,11 @@ import AgentsListView from "@/features/agents/views/AgentsListView.vue";
 import AgentOverviewView from "@/features/agents/views/AgentOverviewView.vue";
 import ActionsListView from "@/features/actions/views/ActionsListView.vue";
 import ToolsListView from "@/features/tools/views/ToolsListView.vue";
+import ToolLibraryView from "@/features/tools/views/ToolLibraryView.vue";
+import ToolInstanceEditorView from "@/features/tools/views/ToolInstanceEditorView.vue";
+import ToolLogsView from "@/features/tools/views/ToolLogsView.vue";
 import SkillsListView from "@/features/skills/views/SkillsListView.vue";
+import SkillsSectionLayout from "@/features/skills/views/SkillsSectionLayout.vue";
 import SkillCanvasEditorView from "@/features/skills/views/SkillCanvasEditorView.vue";
 import AgentRunView from "@/features/runtime/views/AgentRunView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
@@ -29,6 +33,11 @@ const router = createRouter({
       component: AgentsListView,
     },
     {
+      path: "/tools",
+      name: RouteNames.toolsLibrary,
+      component: ToolLibraryView,
+    },
+    {
       path: "/applications",
       redirect: "/agents",
     },
@@ -49,12 +58,6 @@ const router = createRouter({
       redirect: legacyFsmCanvasRedirect,
     },
     {
-      path: "/:agentSlug/skills/:skillId",
-      name: RouteNames.skillCanvas,
-      component: SkillCanvasEditorView,
-      props: true,
-    },
-    {
       path: "/:agentSlug",
       component: AgentWorkspaceView,
       props: true,
@@ -71,9 +74,21 @@ const router = createRouter({
         },
         {
           path: "skills",
-          name: RouteNames.agentSkills,
-          component: SkillsListView,
-          props: true,
+          component: SkillsSectionLayout,
+          children: [
+            {
+              path: "",
+              name: RouteNames.agentSkills,
+              component: SkillsListView,
+              props: true,
+            },
+            {
+              path: ":skillId",
+              name: RouteNames.skillCanvas,
+              component: SkillCanvasEditorView,
+              props: true,
+            },
+          ],
         },
         {
           path: "actions",
@@ -85,6 +100,18 @@ const router = createRouter({
           path: "tools",
           name: RouteNames.agentTools,
           component: ToolsListView,
+          props: true,
+        },
+        {
+          path: "tools/:instanceId",
+          name: RouteNames.agentToolInstance,
+          component: ToolInstanceEditorView,
+          props: true,
+        },
+        {
+          path: "logs",
+          name: RouteNames.agentLogs,
+          component: ToolLogsView,
           props: true,
         },
         {

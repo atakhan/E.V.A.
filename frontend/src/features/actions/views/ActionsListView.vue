@@ -1,17 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useAgents } from "@/features/agents/composables/useAgents";
+import { actionUsageCount } from "@/features/agents/utils/validateAgent";
 import { useActions } from "@/features/actions/composables/useActions";
 import { normalizeActionId } from "@/features/actions/types/normalize";
+import { getActionRecipeStatus } from "@/features/actions/utils/actionSidebarMeta";
 import ActionEditor from "@/features/actions/components/ActionEditor.vue";
+import { agentActionPath } from "@/router/paths";
 import { formatDateTime } from "@/shared/utils/formatDate";
 
 const props = defineProps<{
   agentSlug: string;
 }>();
 
+const route = useRoute();
+const router = useRouter();
+const { getAgentBySlug } = useAgents();
 const { getActions, createAction, isActionIdAvailable } = useActions();
 
 const selectedId = ref<string | null>(null);
+const searchQuery = ref("");
 const createOpen = ref(false);
 const formName = ref("");
 const formId = ref("");
@@ -19,10 +28,37 @@ const formDescription = ref("");
 const formError = ref<string | null>(null);
 const idTouched = ref(false);
 
+const agent = computed(() => getAgentBySlug(props.agentSlug));
 const actions = computed(() => getActions(props.agentSlug));
+
+const filteredActions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return actions.value;
+  return actions.value.filter(
+    (action) =>
+      action.name.toLowerCase().includes(q) || action.id.toLowerCase().includes(q),
+  );
+});
+
 const selected = computed(
   () => actions.value.find((action) => action.id === selectedId.value) ?? null,
 );
+
+function actionBadges(action: (typeof actions.value)[number]) {
+  const badges: Array<{ label: string; class: string }> = [];
+  if (!agent.value) return badges;
+  const status = getActionRecipeStatus(agent.value, action);
+  if (status === "empty") badges.push({ label: "0 steps", class: "badge-warning badge-xs" });
+  else if (action.recipe.length) {
+    badges.push({ label: `${action.recipe.length} steps`, class: "badge-ghost badge-xs" });
+  }
+  if (status === "tool_off") badges.push({ label: "tool off", class: "badge-warning badge-xs" });
+  if (status === "unknown") badges.push({ label: "?", class: "badge-warning badge-xs" });
+  if (agent.value && actionUsageCount(agent.value, action.id) === 0) {
+    badges.push({ label: "unused", class: "badge-ghost badge-xs opacity-60" });
+  }
+  return badges;
+}
 
 watch(
   actions,
@@ -36,6 +72,43 @@ watch(
   },
   { immediate: true },
 );
+
+function applyRouteQuery() {
+  const action = route.query.action;
+  if (typeof action === "string" && action && actions.value.some((item) => item.id === action)) {
+    selectedId.value = action;
+  }
+  const create = route.query.create;
+  if (typeof create === "string" && create) {
+    formName.value = create.replace(/_/g, " ");
+    formId.value = suggestId(create);
+    formDescription.value = "";
+    formError.value = null;
+    idTouched.value = true;
+    createOpen.value = true;
+  }
+}
+
+watch(
+  () => [route.query.action, route.query.create, actions.value.length] as const,
+  () => applyRouteQuery(),
+  { immediate: true },
+);
+
+watch(selectedId, (id) => {
+  if (!id) return;
+  const current = route.query.action;
+  if (current === id) return;
+  void router.replace(agentActionPath(props.agentSlug, id));
+});
+
+function selectAction(id: string) {
+  selectedId.value = id;
+}
+
+function onActionIdChanged(newId: string) {
+  selectedId.value = newId;
+}
 
 function openCreate() {
   formName.value = "";
@@ -105,23 +178,47 @@ function saveCreate() {
       </button>
     </div>
 
-    <div v-else class="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div v-else class="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside class="rounded-2xl border border-base-300 bg-base-100 p-2 shadow-sm">
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="input input-bordered input-sm mb-2 w-full"
+          placeholder="Поиск по name или id…"
+        />
+
+        <p
+          v-if="filteredActions.length === 0"
+          class="px-2 py-4 text-center text-xs text-base-content/50"
+        >
+          Ничего не найдено
+        </p>
+
         <button
-          v-for="action in actions"
+          v-for="action in filteredActions"
           :key="action.id"
           type="button"
-          class="btn btn-sm mb-1 w-full justify-start font-normal"
+          class="btn btn-sm mb-1 h-auto min-h-0 w-full justify-start py-2 font-normal"
           :class="{ 'btn-active': selectedId === action.id }"
-          @click="selectedId = action.id"
+          @click="selectAction(action.id)"
         >
-          <span class="min-w-0 truncate text-left">
+          <span class="min-w-0 flex-1 truncate text-left">
             <span class="block truncate">{{ action.name }}</span>
             <span class="block truncate font-mono text-[10px] opacity-60">{{ action.id }}</span>
+            <span class="mt-1 flex flex-wrap gap-1">
+              <span
+                v-for="badge in actionBadges(action)"
+                :key="badge.label"
+                class="badge"
+                :class="badge.class"
+              >
+                {{ badge.label }}
+              </span>
+            </span>
           </span>
         </button>
         <p class="mt-2 px-2 text-[10px] text-base-content/40">
-          {{ actions.length }} ·
+          {{ filteredActions.length }}/{{ actions.length }} ·
           {{ selected ? formatDateTime(selected.updatedAt) : "—" }}
         </p>
       </aside>
@@ -132,6 +229,7 @@ function saveCreate() {
         :agent-slug="agentSlug"
         :action="selected"
         @deleted="selectedId = actions[0]?.id ?? null"
+        @action-id-changed="onActionIdChanged"
       />
     </div>
 

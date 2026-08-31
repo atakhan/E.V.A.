@@ -32,6 +32,12 @@ export const workspaceSections: WorkspaceSection[] = [
     description: "Capabilities агента: LLM, Memory, каналы, внешние системы.",
   },
   {
+    id: "logs",
+    slug: "logs",
+    title: "Logs",
+    description: "История вызовов Tools: команды, запросы, ответы и ошибки.",
+  },
+  {
     id: "run",
     slug: "run",
     title: "Run",

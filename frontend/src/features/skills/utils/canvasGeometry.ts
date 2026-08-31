@@ -3,6 +3,7 @@ import {
   MIN_STATE_SIZE,
   type DraftRect,
   type Point,
+  type ResizeHandle,
 } from "@/features/skills/types/fsm";
 
 export function snap(value: number, grid = GRID_SIZE): number {
@@ -56,6 +57,84 @@ export function snapRect(rect: DraftRect, grid = GRID_SIZE): DraftRect {
 
 export function isValidRect(rect: DraftRect): boolean {
   return rect.width >= MIN_STATE_SIZE && rect.height >= MIN_STATE_SIZE;
+}
+
+export function resizeHandlePosition(
+  rect: DraftRect,
+  handle: ResizeHandle,
+): Point {
+  const { x, y, width, height } = rect;
+  const cx = x + width / 2;
+  const cy = y + height / 2;
+  switch (handle) {
+    case "nw":
+      return { x, y };
+    case "n":
+      return { x: cx, y };
+    case "ne":
+      return { x: x + width, y };
+    case "e":
+      return { x: x + width, y: cy };
+    case "se":
+      return { x: x + width, y: y + height };
+    case "s":
+      return { x: cx, y: y + height };
+    case "sw":
+      return { x, y: y + height };
+    case "w":
+      return { x, y: cy };
+  }
+}
+
+export function findResizeHandleAt(
+  rect: DraftRect,
+  point: Point,
+  threshold: number,
+): ResizeHandle | null {
+  for (const handle of ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as ResizeHandle[]) {
+    const pos = resizeHandlePosition(rect, handle);
+    if (Math.hypot(point.x - pos.x, point.y - pos.y) <= threshold) {
+      return handle;
+    }
+  }
+  return null;
+}
+
+export function resizeRectFromHandle(
+  start: DraftRect,
+  handle: ResizeHandle,
+  pointer: Point,
+  minSize = MIN_STATE_SIZE,
+): DraftRect {
+  let { x, y, width, height } = start;
+  const right = x + width;
+  const bottom = y + height;
+  const px = snap(pointer.x);
+  const py = snap(pointer.y);
+
+  if (handle.includes("e")) {
+    width = Math.max(minSize, px - x);
+  }
+  if (handle.includes("w")) {
+    const nextX = Math.min(px, right - minSize);
+    width = right - nextX;
+    x = nextX;
+  }
+  if (handle.includes("s")) {
+    height = Math.max(minSize, py - y);
+  }
+  if (handle.includes("n")) {
+    const nextY = Math.min(py, bottom - minSize);
+    height = bottom - nextY;
+    y = nextY;
+  }
+
+  return snapRect({ x, y, width, height });
+}
+
+export function stateDisplayName(state: { id: string; name?: string }): string {
+  const trimmed = state.name?.trim();
+  return trimmed || state.id;
 }
 
 export function stateCenter(state: { x: number; y: number; width: number; height: number }): Point {

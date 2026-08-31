@@ -5,7 +5,7 @@ import AgentCard from "@/features/agents/components/AgentCard.vue";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import type { Agent } from "@/features/agents/types/agent";
-import { agentHomePath } from "@/router/paths";
+import { agentHomePath, toolsLibraryPath } from "@/router/paths";
 
 const router = useRouter();
 const { agents, deleteAgent } = useAgents();
@@ -27,6 +27,10 @@ async function openAgent(agent: Agent) {
   await router.push(agentHomePath(agent.slug));
 }
 
+async function openToolsLibrary() {
+  await router.push(toolsLibraryPath());
+}
+
 function removeAgent(agent: Agent) {
   if (!confirm(`Удалить агента «${agent.name}»?`)) return;
   deleteAgent(agent.id);
@@ -43,9 +47,14 @@ function removeAgent(agent: Agent) {
           <p class="mt-1 text-sm text-base-content/60">Engine for Versatile Agents</p>
           <p class="mt-3 text-base text-base-content/70">Агенты</p>
         </div>
-        <button type="button" class="btn" @click="openCreateForm()">
-          Новый агент
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn btn-ghost" @click="openToolsLibrary()">
+            Библиотека Tools
+          </button>
+          <button type="button" class="btn" @click="openCreateForm()">
+            Новый агент
+          </button>
+        </div>
       </header>
 
       <div

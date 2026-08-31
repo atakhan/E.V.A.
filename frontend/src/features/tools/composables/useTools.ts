@@ -1,5 +1,5 @@
-import type { ToolBinding, ToolMutationResult } from "@/features/tools/types/tool";
-import { createToolBinding } from "@/features/tools/types/normalize";
+import type { ToolInstance, ToolMutationResult } from "@/features/tools/types/tool";
+import { createToolInstance } from "@/features/tools/types/normalize";
 import {
   builtinTools,
   getToolDefinition,
@@ -12,119 +12,161 @@ import {
 } from "@/features/agents/services/agentsStorage";
 
 export function useTools() {
-  function getBindings(agentSlug: string): ToolBinding[] {
+  function getInstances(agentSlug: string): ToolInstance[] {
     const agent = getAgentBySlug(agentSlug);
     if (!agent) return [];
     return agent.tools;
   }
 
-  function getBinding(agentSlug: string, toolId: string): ToolBinding | undefined {
-    return getBindings(agentSlug).find((binding) => binding.toolId === toolId);
+  function getInstance(agentSlug: string, instanceId: string): ToolInstance | undefined {
+    return getInstances(agentSlug).find((item) => item.id === instanceId);
   }
 
+  function getInstancesByType(agentSlug: string, typeId: string): ToolInstance[] {
+    return getInstances(agentSlug).filter((item) => item.toolId === typeId);
+  }
+
+  /** @deprecated use getInstance */
+  function getBinding(agentSlug: string, toolId: string): ToolInstance | undefined {
+    return getInstances(agentSlug).find((item) => item.toolId === toolId);
+  }
+
+  function isInstanceEnabled(agentSlug: string, instanceId: string): boolean {
+    return getInstance(agentSlug, instanceId)?.enabled === true;
+  }
+
+  /** @deprecated */
   function isToolEnabled(agentSlug: string, toolId: string): boolean {
-    return getBinding(agentSlug, toolId)?.enabled === true;
+    return getInstancesByType(agentSlug, toolId).some((item) => item.enabled);
   }
 
+  function getEnabledInstances(agentSlug: string): ToolInstance[] {
+    return getInstances(agentSlug).filter((item) => item.enabled);
+  }
+
+  /** @deprecated use getEnabledInstances — returns instance ids */
   function getEnabledToolIds(agentSlug: string): string[] {
-    return getBindings(agentSlug)
-      .filter((binding) => binding.enabled)
-      .map((binding) => binding.toolId);
+    return getEnabledInstances(agentSlug).map((item) => item.id);
   }
 
-  function getEnabledCommands(agentSlug: string): Array<{ toolId: string; commandId: string }> {
-    return getEnabledToolIds(agentSlug).flatMap((toolId) =>
-      getToolCommandIds(toolId).map((commandId) => ({ toolId, commandId })),
+  function getEnabledCommands(agentSlug: string): Array<{ instanceId: string; toolId: string; commandId: string }> {
+    return getEnabledInstances(agentSlug).flatMap((instance) =>
+      getToolCommandIds(instance.toolId).map((commandId) => ({
+        instanceId: instance.id,
+        toolId: instance.toolId,
+        commandId,
+      })),
     );
   }
 
-  function enableTool(agentSlug: string, toolId: string): ToolMutationResult {
+  function addInstance(agentSlug: string, typeId: string, partial?: Partial<ToolInstance>): ToolMutationResult {
     const agent = getAgentBySlug(agentSlug);
     if (!agent) return { ok: false, error: "Агент не найден" };
-    if (!getToolDefinition(toolId)) return { ok: false, error: "Неизвестный Tool" };
+    if (!getToolDefinition(typeId)) return { ok: false, error: "Неизвестный Tool" };
 
-    const existing = agent.tools.find((binding) => binding.toolId === toolId);
-    let binding: ToolBinding;
+    const existing = partial?.id ? getInstance(agentSlug, partial.id) : undefined;
+    if (existing) return { ok: false, error: "Instance с таким id уже есть" };
 
-    if (existing) {
-      binding = { ...existing, enabled: true };
-      const tools = agent.tools.map((item) =>
-        item.toolId === toolId ? binding : item,
-      );
-      replaceAgent(touchAgent({ ...agent, tools }));
-    } else {
-      binding = createToolBinding(toolId);
-      replaceAgent(touchAgent({ ...agent, tools: [...agent.tools, binding] }));
-    }
-
-    return { ok: true, binding };
+    const instance = createToolInstance(typeId, partial);
+    replaceAgent(touchAgent({ ...agent, tools: [...agent.tools, instance] }));
+    return { ok: true, instance };
   }
 
-  function disableTool(agentSlug: string, toolId: string): ToolMutationResult {
+  function updateInstance(
+    agentSlug: string,
+    instanceId: string,
+    patch: Partial<ToolInstance>,
+  ): ToolMutationResult {
     const agent = getAgentBySlug(agentSlug);
     if (!agent) return { ok: false, error: "Агент не найден" };
+    const existing = getInstance(agentSlug, instanceId);
+    if (!existing) return { ok: false, error: "Instance не найден" };
 
-    const existing = agent.tools.find((binding) => binding.toolId === toolId);
-    if (!existing) {
-      return { ok: false, error: "Tool не подключён" };
-    }
-
-    const binding = { ...existing, enabled: false };
-    const tools = agent.tools.map((item) =>
-      item.toolId === toolId ? binding : item,
-    );
+    const instance: ToolInstance = {
+      ...existing,
+      ...patch,
+      id: existing.id,
+      toolId: existing.toolId,
+      config: patch.config ?? existing.config,
+    };
+    const tools = agent.tools.map((item) => (item.id === instanceId ? instance : item));
     replaceAgent(touchAgent({ ...agent, tools }));
-    return { ok: true, binding };
+    return { ok: true, instance };
+  }
+
+  function removeInstance(agentSlug: string, instanceId: string): ToolMutationResult {
+    const agent = getAgentBySlug(agentSlug);
+    if (!agent) return { ok: false, error: "Агент не найден" };
+    const existing = getInstance(agentSlug, instanceId);
+    if (!existing) return { ok: false, error: "Instance не найден" };
+    replaceAgent(touchAgent({ ...agent, tools: agent.tools.filter((item) => item.id !== instanceId) }));
+    return { ok: true, instance: existing };
+  }
+
+  function setInstanceEnabled(agentSlug: string, instanceId: string, enabled: boolean): ToolMutationResult {
+    return updateInstance(agentSlug, instanceId, { enabled });
+  }
+
+  /** @deprecated use addInstance */
+  function enableTool(agentSlug: string, toolId: string): ToolMutationResult {
+    const existing = getBinding(agentSlug, toolId);
+    if (existing) return setInstanceEnabled(agentSlug, existing.id, true);
+    return addInstance(agentSlug, toolId, { id: toolId });
+  }
+
+  /** @deprecated */
+  function disableTool(agentSlug: string, toolId: string): ToolMutationResult {
+    const existing = getBinding(agentSlug, toolId);
+    if (!existing) return { ok: false, error: "Tool не подключён" };
+    return setInstanceEnabled(agentSlug, existing.id, false);
   }
 
   function setToolEnabled(agentSlug: string, toolId: string, enabled: boolean) {
     return enabled ? enableTool(agentSlug, toolId) : disableTool(agentSlug, toolId);
   }
 
-  function updateConfigNote(agentSlug: string, toolId: string, configNote: string) {
-    const agent = getAgentBySlug(agentSlug);
-    if (!agent) return;
-
-    const existing = agent.tools.find((binding) => binding.toolId === toolId);
-    if (!existing) {
-      const binding = createToolBinding(toolId, { enabled: false, configNote });
-      replaceAgent(touchAgent({ ...agent, tools: [...agent.tools, binding] }));
-      return;
-    }
-
-    const tools = agent.tools.map((item) =>
-      item.toolId === toolId ? { ...item, configNote } : item,
-    );
-    replaceAgent(touchAgent({ ...agent, tools }));
+  function updateConfig(agentSlug: string, instanceId: string, config: Record<string, unknown>) {
+    return updateInstance(agentSlug, instanceId, { config });
   }
 
-  function updateCredentialId(agentSlug: string, toolId: string, credentialId: string | undefined) {
-    const agent = getAgentBySlug(agentSlug);
-    if (!agent) return;
-
-    const existing = agent.tools.find((binding) => binding.toolId === toolId);
+  /** @deprecated */
+  function updateConfigNote(agentSlug: string, toolId: string, configNote: string) {
+    const existing = getBinding(agentSlug, toolId);
     if (!existing) {
-      const binding = createToolBinding(toolId, { enabled: false, credentialId });
-      replaceAgent(touchAgent({ ...agent, tools: [...agent.tools, binding] }));
-      return;
+      return addInstance(agentSlug, toolId, { enabled: false, configNote });
     }
+    try {
+      const config = configNote.trim().startsWith("{") ? JSON.parse(configNote) : { note: configNote };
+      return updateInstance(agentSlug, existing.id, { config });
+    } catch {
+      return updateInstance(agentSlug, existing.id, { config: { note: configNote } });
+    }
+  }
 
-    const tools = agent.tools.map((item) =>
-      item.toolId === toolId ? { ...item, credentialId } : item,
-    );
-    replaceAgent(touchAgent({ ...agent, tools }));
+  function updateCredentialId(agentSlug: string, instanceId: string, credentialId: string | undefined) {
+    return updateInstance(agentSlug, instanceId, { credentialId });
   }
 
   return {
     catalog: builtinTools,
-    getBindings,
+    getInstances,
+    getInstance,
+    getInstancesByType,
+    getBindings: getInstances,
     getBinding,
+    isInstanceEnabled,
     isToolEnabled,
+    getEnabledInstances,
     getEnabledToolIds,
     getEnabledCommands,
+    addInstance,
+    updateInstance,
+    removeInstance,
+    setInstanceEnabled,
     enableTool,
     disableTool,
     setToolEnabled,
+    updateConfig,
     updateConfigNote,
     updateCredentialId,
     getToolDefinition,

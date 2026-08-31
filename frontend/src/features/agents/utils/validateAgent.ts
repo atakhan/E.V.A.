@@ -1,5 +1,8 @@
 import type { Agent } from "@/features/agents/types/agent";
+import { isValidActionVersion } from "@/features/actions/types/normalize";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { resolveRecipeTool } from "@/features/tools/utils/resolveToolInstance";
+import { validateSkill } from "@/features/skills/utils/validateSkill";
 import {
   agentActionsPath,
   agentSkillsPath,
@@ -9,12 +12,20 @@ import {
 
 export type AgentIssueSeverity = "error" | "warning" | "info";
 
+export type SkillIssueLocator =
+  | { kind: "skill" }
+  | { kind: "state"; stateId: string }
+  | { kind: "transition"; stateId: string; transitionId: string }
+  | { kind: "param"; index: number };
+
 export interface AgentIssue {
   id: string;
   severity: AgentIssueSeverity;
   code: string;
   message: string;
   href?: string;
+  locator?: SkillIssueLocator;
+  actionId?: string;
 }
 
 export interface AgentValidationReport {
@@ -40,8 +51,8 @@ function collectReferencedActionIds(agent: Agent): Set<string> {
 export function validateAgent(agent: Agent): AgentValidationReport {
   const issues: AgentIssue[] = [];
   const actionIds = new Set(agent.actions.map((action) => action.id));
-  const enabledTools = new Set(
-    agent.tools.filter((tool) => tool.enabled).map((tool) => tool.toolId),
+  const enabledInstanceIds = new Set(
+    agent.tools.filter((tool) => tool.enabled).map((tool) => tool.id),
   );
   const referencedActions = collectReferencedActionIds(agent);
 
@@ -56,89 +67,31 @@ export function validateAgent(agent: Agent): AgentValidationReport {
   }
 
   for (const skill of agent.skills) {
-    const skillHref = skillPath(agent.slug, skill.id);
-    const stateIds = new Set(skill.states.map((state) => state.id));
-
-    if (skill.states.length === 0) {
-      issues.push({
-        id: `skill.${skill.id}.empty`,
-        severity: "warning",
-        code: "skill_empty",
-        message: `Skill «${skill.name}» без states`,
-        href: skillHref,
-      });
-      continue;
-    }
-
-    if (!skill.initial) {
-      issues.push({
-        id: `skill.${skill.id}.no-initial`,
-        severity: "error",
-        code: "missing_initial",
-        message: `Skill «${skill.name}»: не задан initial state`,
-        href: skillHref,
-      });
-    } else if (!stateIds.has(skill.initial)) {
-      issues.push({
-        id: `skill.${skill.id}.bad-initial`,
-        severity: "error",
-        code: "invalid_initial",
-        message: `Skill «${skill.name}»: initial «${skill.initial}» отсутствует среди states`,
-        href: skillHref,
-      });
-    }
-
-    for (const state of skill.states) {
-      for (const actionId of state.onEnter) {
-        if (!actionIds.has(actionId)) {
-          issues.push({
-            id: `skill.${skill.id}.state.${state.id}.on_enter.${actionId}`,
-            severity: "error",
-            code: "unknown_action",
-            message: `Skill «${skill.name}» / ${state.id}: on_enter ссылается на неизвестный Action «${actionId}»`,
-            href: skillHref,
-          });
-        }
-      }
-
-      for (const transition of state.transitions) {
-        if (!transition.event.trim()) {
-          issues.push({
-            id: `skill.${skill.id}.transition.${transition.id}.event`,
-            severity: "warning",
-            code: "empty_event",
-            message: `Skill «${skill.name}» / ${state.id}→${transition.to || "?"}: пустой event`,
-            href: skillHref,
-          });
-        }
-
-        if (!transition.to || !stateIds.has(transition.to)) {
-          issues.push({
-            id: `skill.${skill.id}.transition.${transition.id}.to`,
-            severity: "error",
-            code: "invalid_transition_target",
-            message: `Skill «${skill.name}» / ${state.id}: переход ведёт в неизвестный state «${transition.to || "—"}»`,
-            href: skillHref,
-          });
-        }
-
-        for (const actionId of transition.actions) {
-          if (!actionIds.has(actionId)) {
-            issues.push({
-              id: `skill.${skill.id}.transition.${transition.id}.action.${actionId}`,
-              severity: "error",
-              code: "unknown_action",
-              message: `Skill «${skill.name}» / ${state.id}: transition ссылается на неизвестный Action «${actionId}»`,
-              href: skillHref,
-            });
-          }
-        }
-      }
-    }
+    issues.push(...validateSkill(skill, actionIds, skillPath(agent.slug, skill.id)));
   }
 
   for (const action of agent.actions) {
     const actionHref = agentActionsPath(agent.slug);
+
+    if (!isValidActionVersion(action.version)) {
+      issues.push({
+        id: `action.${action.id}.bad-version`,
+        severity: "warning",
+        code: "invalid_action_version",
+        message: `Action «${action.name}»: version «${action.version}» не SemVer (ожидается X.Y.Z)`,
+        href: actionHref,
+      });
+    }
+
+    if (action.policy !== "auto" && action.policy !== "needs_human") {
+      issues.push({
+        id: `action.${action.id}.bad-policy`,
+        severity: "error",
+        code: "invalid_action_policy",
+        message: `Action «${action.name}»: policy «${action.policy}» недопустим`,
+        href: actionHref,
+      });
+    }
 
     if (action.recipe.length === 0) {
       issues.push({
@@ -150,40 +103,75 @@ export function validateAgent(agent: Agent): AgentValidationReport {
       });
     }
 
+    const stepIds = new Set<string>();
     for (const step of action.recipe) {
-      const label = step.tool && step.command ? `${step.tool}.${step.command}` : step.tool || step.command || "шаг";
-      const def = step.tool ? getToolDefinition(step.tool) : undefined;
+      if (step.id) {
+        if (stepIds.has(step.id)) {
+          issues.push({
+            id: `action.${action.id}.step.${step.id}.duplicate`,
+            severity: "error",
+            code: "duplicate_step_id",
+            message: `Action «${action.name}»: дублирующийся step id «${step.id}»`,
+            href: actionHref,
+          });
+        }
+        stepIds.add(step.id);
+      }
 
-      if (!step.tool || !def) {
+      const resolved = step.tool ? resolveRecipeTool(agent, step.tool) : null;
+      const typeId = resolved?.typeId ?? step.tool;
+      const label = step.tool && step.command ? `${step.tool}.${step.command}` : step.tool || step.command || "шаг";
+      const def = typeId ? getToolDefinition(typeId) : undefined;
+
+      if (!step.tool || !resolved || resolved.status === "unknown") {
         issues.push({
           id: `action.${action.id}.step.${step.id}.unknown-tool`,
           severity: "error",
-          code: "unknown_tool",
-          message: `Action «${action.name}»: неизвестный Tool в шаге «${label}»`,
+          code: "unknown_tool_instance",
+          message: `Action «${action.name}»: неизвестный Tool instance в шаге «${label}»`,
           href: actionHref,
         });
         continue;
       }
 
-      if (!enabledTools.has(step.tool)) {
+      if (resolved.status === "ambiguous") {
+        issues.push({
+          id: `action.${action.id}.step.${step.id}.ambiguous-tool`,
+          severity: "error",
+          code: "ambiguous_tool_reference",
+          message: `Action «${action.name}»: «${step.tool}» неоднозначен — укажите instance id`,
+          href: actionHref,
+        });
+        continue;
+      }
+
+      if (resolved.status === "disabled" || !enabledInstanceIds.has(resolved.instanceId)) {
         issues.push({
           id: `action.${action.id}.step.${step.id}.tool-off`,
           severity: "error",
-          code: "disabled_tool",
-          message: `Action «${action.name}»: Tool «${step.tool}» не подключён у агента`,
+          code: "disabled_tool_instance",
+          message: `Action «${action.name}»: instance «${resolved.instanceId}» не подключён`,
           href: agentToolsPath(agent.slug),
         });
       }
 
-      if (
-        step.command &&
-        !def.commands.some((command) => command.id === step.command)
-      ) {
+      if (!def) {
+        issues.push({
+          id: `action.${action.id}.step.${step.id}.unknown-type`,
+          severity: "error",
+          code: "unknown_tool",
+          message: `Action «${action.name}»: неизвестный тип Tool «${typeId}»`,
+          href: actionHref,
+        });
+        continue;
+      }
+
+      if (step.command && !def.commands.some((command) => command.id === step.command)) {
         issues.push({
           id: `action.${action.id}.step.${step.id}.unknown-command`,
           severity: "error",
           code: "unknown_command",
-          message: `Action «${action.name}»: нет команды «${step.tool}.${step.command}» в каталоге`,
+          message: `Action «${action.name}»: нет команды «${typeId}.${step.command}» в каталоге`,
           href: actionHref,
         });
       }
@@ -200,12 +188,12 @@ export function validateAgent(agent: Agent): AgentValidationReport {
     }
   }
 
-  if (enabledTools.size === 0 && agent.actions.some((action) => action.recipe.length > 0)) {
+  if (enabledInstanceIds.size === 0 && agent.actions.some((action) => action.recipe.length > 0)) {
     issues.push({
       id: "agent.no-enabled-tools",
       severity: "warning",
       code: "no_enabled_tools",
-      message: "Есть Actions с recipe, но ни один Tool не подключён",
+      message: "Есть Actions с recipe, но ни один Tool instance не подключён",
       href: agentToolsPath(agent.slug),
     });
   }

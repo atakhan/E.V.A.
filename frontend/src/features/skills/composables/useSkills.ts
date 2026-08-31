@@ -10,6 +10,8 @@ import {
   replaceAgent,
   touchAgent,
 } from "@/features/agents/services/agentsStorage";
+import type { SkillPackApplyOptions, SkillPackEntry } from "@/features/skills/utils/skillPackImport";
+import { applySkillPack } from "@/features/skills/utils/skillPackImport";
 
 function nextSkillName(agentSlug: string): string {
   const agent = getAgentBySlug(agentSlug);
@@ -106,6 +108,18 @@ export function useSkills() {
     return skillToEditorState(skill);
   }
 
+  function importSkillPack(
+    agentSlug: string,
+    entries: SkillPackEntry[],
+    options: SkillPackApplyOptions,
+  ): Skill[] {
+    const agent = getAgentBySlug(agentSlug);
+    if (!agent) return [];
+    const skills = applySkillPack(agent, entries, options);
+    replaceAgent(touchAgent({ ...agent, skills }));
+    return skills;
+  }
+
   return {
     getSkills,
     getSkill,
@@ -115,5 +129,6 @@ export function useSkills() {
     renameSkill,
     deleteSkill,
     loadEditorState,
+    importSkillPack,
   };
 }

@@ -8,28 +8,48 @@ export interface ToolEventDef {
   description: string;
 }
 
-/** Static tool capability available in the constructor catalog. */
+export type ToolConfigFieldType = "string" | "integer" | "boolean" | "enum";
+
+export interface ToolConfigFieldDef {
+  id: string;
+  type: ToolConfigFieldType;
+  required?: boolean;
+  default?: unknown;
+  scope?: "instance" | "call";
+  enum?: string[];
+  ui?: { label?: string; group?: string };
+}
+
+export type CredentialPolicy = "unique_per_instance" | "shared_allowed";
+
+/** Static tool type in the global library catalog. */
 export interface ToolDefinition {
   id: string;
   name: string;
   description: string;
   commands: ToolCommandDef[];
   events: ToolEventDef[];
-  /** Optional lifecycle states — not every tool has them. */
   states: string[];
+  configSchema?: ToolConfigFieldDef[];
+  credentialKind?: string;
+  credentialPolicy?: CredentialPolicy;
 }
 
-/** Per-agent binding to a catalog tool. */
-export interface ToolBinding {
+/** Per-agent instance of a catalog tool type. */
+export interface ToolInstance {
   id: string;
   toolId: string;
+  name: string;
   enabled: boolean;
-  /** Reference to backend tool_credentials.id */
   credentialId?: string;
-  /** Free-form non-secret config notes. */
-  configNote: string;
+  config: Record<string, unknown>;
+  /** @deprecated use config */
+  configNote?: string;
 }
 
+/** @deprecated use ToolInstance */
+export type ToolBinding = ToolInstance;
+
 export type ToolMutationResult =
-  | { ok: true; binding: ToolBinding }
+  | { ok: true; instance: ToolInstance }
   | { ok: false; error: string };
