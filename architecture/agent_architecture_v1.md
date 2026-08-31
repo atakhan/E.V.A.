@@ -1,7 +1,11 @@
 # Архитектура конструктора ИИ-агентов
 ## Рабочая версия архитектурной концепции
 
-> Документ фиксирует текущие выводы и наработки по архитектуре конструктора ИИ-агентов, возникшие при проектировании ИИ-агента для снабжения. Это рабочая архитектурная модель, а не окончательная спецификация.
+> **Статус:** conceptual / non-normative — мотивация и модель, не контракт реализации.  
+> **Нормативные спеки:** [`docs/ACTIONS_SPEC_v0.1.md`](../docs/ACTIONS_SPEC_v0.1.md), [`SKILLS_SPEC_v0.1.md`](../docs/SKILLS_SPEC_v0.1.md), [`EVENT_SPEC_v0.1.md`](../docs/EVENT_SPEC_v0.1.md), [`TOOLS_SDK_SPEC_v0.1.md`](../docs/TOOLS_SDK_SPEC_v0.1.md), [`RUNTIME_SPEC_v0.1.md`](../docs/RUNTIME_SPEC_v0.1.md)  
+> **Согласование:** [`docs/ARCHITECTURE_DOCS_ALIGNMENT.md`](../docs/ARCHITECTURE_DOCS_ALIGNMENT.md)
+
+Документ фиксирует текущие выводы и наработки по архитектуре конструктора ИИ-агентов, возникшие при проектировании ИИ-агента для снабжения. При расхождении с `docs/*_SPEC` приоритет у спеков.
 
 ---
 
@@ -297,6 +301,17 @@ disconnected
 
 Поэтому состояние Tool — опциональная часть интерфейса.
 
+## Tool Type и Tool Instance
+
+В платформе Tool существует на двух уровнях (см. [`TOOLS_SDK_SPEC` §39](../docs/TOOLS_SDK_SPEC_v0.1.md#39-instance-based-tools-v02)):
+
+| Уровень | Что это | Пример |
+|---------|---------|--------|
+| **Tool Type** | Запись в глобальной библиотеке: commands, events, `configSchema` | `telegram`, `polza_ai_llm` |
+| **Tool Instance** | Экземпляр у конкретного агента: credentials, config, enabled | `foreman_telegram` |
+
+Action Recipe ссылается на **instance id**, не на type id напрямую. Type определяет контракт plugin; Instance — конкретное подключение агента к внешнему миру.
+
 ---
 
 # 6. Action как рецепт
@@ -304,6 +319,8 @@ disconnected
 Action не должен напрямую становиться FSM.
 
 Action — исполняемая операция.
+
+> Иллюстрация ниже — shorthand. Нормативный формат recipe: [`ACTIONS_SPEC_v0.1`](../docs/ACTIONS_SPEC_v0.1.md) (`steps[]` с `tool`, `input`, `when`).
 
 Пример:
 
@@ -576,14 +593,15 @@ Guard является частью описания поведения FSM, а 
 ```text
 channel.message.received
 supplier.reply.received
-human.approved
+human.request.approved
+human.request.rejected
 invoice.received
 request.confirmed
 ```
 
-Они могут влиять на FSM.
+Они могут влиять на FSM. Канон human-in-the-loop: [`EVENT_SPEC` §34](../docs/EVENT_SPEC_v0.1.md#34-human-events).
 
-## Runtime Events
+## Runtime / System Events
 
 Технические события:
 
@@ -591,7 +609,12 @@ request.confirmed
 tool.execution.started
 tool.execution.completed
 action.execution.failed
+skill.run.started
+skill.run.completed
+action.<action_id>.completed
 ```
+
+`action.<action_id>.completed` — синтезируется Runtime после Action и может использоваться FSM. Generic `action.completed` — только observability (см. [`EVENT_SPEC` §32](../docs/EVENT_SPEC_v0.1.md#32-system-events)).
 
 Они нужны для:
 
@@ -1262,27 +1285,29 @@ Event
 
 ---
 
-# 29. Что пока НЕ зафиксировано
+# 29. Что зафиксировано и что остаётся открытым
 
-Это рабочая архитектура. Остаются открытыми несколько важных вопросов:
+Большинство вопросов из предыдущей версии §29 решены в нормативных спеках. Полный decision log: [`ARCHITECTURE_DOCS_ALIGNMENT.md`](../docs/ARCHITECTURE_DOCS_ALIGNMENT.md).
 
-1. Как первоначально выбирается Skill для нового Event?
-2. Может ли один Event запускать несколько Skills?
-3. Может ли Action быть условным/ветвящимся?
-4. Как формально описывается Action Recipe?
-5. Где именно находится LLM-driven decision making?
-6. Может ли LLM выбирать Action?
-7. Как устроены permissions и human approval?
-8. Как Skill Run хранит локальные переменные и контекст?
-9. Как версионируются Skills, Actions и Tools?
-10. Как устроены ошибки и retry?
-11. Как Planner создаёт и приоритизирует Skill Runs?
-12. Как Memory интегрируется с Context?
-13. Как визуально представить FSM и Action Recipe на Canvas?
-14. Как сделать Tool Plugin API?
-15. Какие части системы должны быть доступны пользователю конструктора, а какие скрыты runtime?
+## Решено в спеках
 
-Эти вопросы лучше решать после проверки модели на нескольких реальных Skills.
+| Тема | Где |
+|------|-----|
+| Event routing, multi-skill | EVENT §21, RUNTIME §15 |
+| Action Recipe format | ACTIONS_SPEC |
+| Human approval events | EVENT §34 (`human.request.*`) |
+| Action completion in FSM | RUNTIME §14 (`action.<id>.completed`) |
+| Tool Type / Instance | TOOLS_SDK §39 |
+| Version pinning (контракт) | RUNTIME §4 |
+| FSM Canvas | FSM_CANVAS_STYLE.md |
+
+## Остаётся открытым
+
+1. **Planner** — приоритизация и планирование Skill Runs (вне scope v0.1).
+2. **Multi-tenant** — изоляция агентов, credentials, quotas на уровне платформы.
+3. **Advanced observability** — distributed tracing, execution replay, audit UI.
+
+Эти темы лучше решать после стабилизации runtime v0.1.
 
 ---
 

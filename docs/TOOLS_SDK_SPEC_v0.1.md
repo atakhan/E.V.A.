@@ -780,6 +780,41 @@ MCP adapter
 
 ---
 
+# 26.1 Текущая реализация в E.V.A.
+
+В репозитории каждый built-in Tool — отдельный Python-пакет:
+
+```text
+backend/tools/
+├── base.py
+├── registry.py
+├── credential_resolver.py
+├── llm/
+│   └── stub.py
+├── telegram/
+│   ├── tool.py
+│   └── stub.py
+├── polza/
+│   ├── client.py
+│   └── llm.py
+└── web_client/
+    ├── config.py
+    ├── http.py
+    └── tool.py
+```
+
+Публичный API экспортируется из `tools/<name>/__init__.py`. Внешний код импортирует пакет, а не внутренние модули:
+
+```python
+from tools.telegram import TelegramTool
+from tools.polza import PolzaAiLlmTool, PolzaClient
+from tools.web_client import WebClientTool, parse_web_client_binding_config
+```
+
+Регистрация в runtime: `runtime/definition_loader.py`, каталог: `definition/catalog/builtin_tools.py`.
+
+---
+
 # 27. Python SDK — предварительный интерфейс
 
 Минимальный интерфейс:
@@ -1139,3 +1174,28 @@ RUNTIME
 ```
 
 Это позволит постепенно превратить архитектурную концепцию в реализуемую платформу.
+
+---
+
+# 39. Instance-based Tools (v0.2)
+
+## Tool Type vs Tool Instance
+
+- **Tool Type** — запись в глобальной библиотеке: commands, events, `configSchema`, `credentialPolicy`.
+- **Tool Instance** — экземпляр у агента: `id`, `toolId`, `name`, `enabled`, `credentialId`, `config`.
+
+Recipe step `tool` ссылается на **instance id**. Fallback: если `tool` = type id и ровно один enabled instance — используется он.
+
+## Inbound events
+
+```json
+"metadata": {
+  "tool_instance_id": "foreman_telegram",
+  "tool_type_id": "telegram"
+}
+```
+
+## Credentials
+
+- `unique_per_instance` — telegram, web_client
+- `shared_allowed` — polza_ai_llm

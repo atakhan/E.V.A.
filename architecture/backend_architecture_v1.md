@@ -1,3 +1,12 @@
+# Backend Architecture
+## Agent Runtime Platform: Definition → Execution → World
+
+> **Статус:** conceptual / non-normative.  
+> **Нормативные спеки:** [`docs/`](../docs/) (`*_SPEC_v0.1.md`)  
+> **Согласование:** [`ARCHITECTURE_DOCS_ALIGNMENT.md`](../docs/ARCHITECTURE_DOCS_ALIGNMENT.md) · **Код:** [`RUNTIME_IMPLEMENTATION_STATUS.md`](../docs/RUNTIME_IMPLEMENTATION_STATUS.md)
+
+---
+
 Да. И здесь я бы **не начинал с микросервисов**. У нас появилась достаточно чёткая модель домена, и сейчас важнее построить backend так, чтобы она естественно отражалась в коде.
 
 Я бы предложил архитектуру, которую условно назвал бы:
@@ -317,12 +326,17 @@ steps:
 
 Tool — это не просто запись в БД.
 
-Это **plugin с контрактом**.
+Это **plugin с контрактом** на двух уровнях (см. [`TOOLS_SDK_SPEC` §39](../docs/TOOLS_SDK_SPEC_v0.1.md#39-instance-based-tools-v02)):
 
-Например:
+| Уровень | Хранение | Содержимое |
+|---------|----------|------------|
+| **Tool Type** | Глобальная библиотека | commands, events, `configSchema`, `credentialPolicy` |
+| **Tool Instance** | Per-agent | `id`, `toolId`, `name`, `enabled`, `credentialId`, `config` |
+
+Например Tool Type:
 
 ```text
-Telegram Tool
+Telegram Tool (type: telegram)
     commands:
         send_message
         get_thread
@@ -334,6 +348,8 @@ Telegram Tool
         connected
         disconnected
 ```
+
+Tool Instance `foreman_telegram` — конкретный бот с credentials и config у агента снабженца. Recipe step `tool` ссылается на instance id.
 
 ---
 
@@ -713,13 +729,16 @@ Skill Run #101
 
 # 16. Execution Store
 
-Я бы отдельно сделал execution persistence:
+Целевая схема persistence по [`RUNTIME_SPEC` §5, §12, §13](../docs/RUNTIME_SPEC_v0.1.md):
 
 ```text
 skill_runs
 action_runs
 tool_executions
+events (execution history)
 ```
+
+> **Фактическое состояние кода:** реализованы `skill_runs`, `skill_run_events`, `tool_api_logs`. `action_runs` и `tool_executions` как first-class entities — gap. См. [`RUNTIME_IMPLEMENTATION_STATUS.md`](../docs/RUNTIME_IMPLEMENTATION_STATUS.md).
 
 Например:
 
