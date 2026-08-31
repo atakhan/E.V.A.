@@ -5,6 +5,7 @@ import AgentCard from "@/features/agents/components/AgentCard.vue";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import type { Agent } from "@/features/agents/types/agent";
+import EvaBrand from "@/shared/components/EvaBrand.vue";
 import { agentHomePath, toolsLibraryPath } from "@/router/paths";
 
 const router = useRouter();
@@ -43,8 +44,7 @@ function removeAgent(agent: Agent) {
     <div class="mx-auto max-w-5xl">
       <header class="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-semibold tracking-wide">E.V.A.</h1>
-          <p class="mt-1 text-sm text-base-content/60">Engine for Versatile Agents</p>
+          <EvaBrand />
           <p class="mt-3 text-base text-base-content/70">Агенты</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

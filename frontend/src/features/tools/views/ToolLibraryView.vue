@@ -7,6 +7,7 @@ import {
 } from "@/features/tools/composables/useToolLibrary";
 import type { ToolLibraryUsageRow } from "@/features/tools/utils/buildToolLibraryIndex";
 import { instanceStatusBadge } from "@/features/tools/utils/toolInstanceCardMeta";
+import EvaBrand from "@/shared/components/EvaBrand.vue";
 import {
   agentToolInstancePath,
   agentToolsPath,
@@ -45,8 +46,12 @@ async function openInstance(row: ToolLibraryUsageRow) {
     <div class="mx-auto max-w-5xl space-y-6">
       <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <button type="button" class="btn btn-xs btn-ghost -ml-2 mb-2" @click="goToAgents()">
-            ← Агенты
+          <button
+            type="button"
+            class="mb-3 block rounded-lg text-left transition-colors hover:bg-base-100"
+            @click="goToAgents()"
+          >
+            <EvaBrand size="sm" :show-tagline="false" title-class="text-base" />
           </button>
           <h1 class="text-2xl font-semibold tracking-wide">Библиотека Tools</h1>
           <p class="mt-1 text-sm text-base-content/60">

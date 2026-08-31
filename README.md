@@ -1,5 +1,9 @@
 # E.V.A.
 
+<p align="center">
+  <img src="frontend/public/eva-logo.png" alt="E.V.A. logo" width="120" />
+</p>
+
 Engine for Versatile Agents.
 
 Стек: **FastAPI** (backend) + **Vue 3 / TypeScript** (frontend) + **Docker Compose**.

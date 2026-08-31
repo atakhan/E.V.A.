@@ -3,6 +3,7 @@ import { computed, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
+import EvaBrand from "@/shared/components/EvaBrand.vue";
 import WorkspaceSidebar from "@/features/workspace/components/WorkspaceSidebar.vue";
 import {
   defaultWorkspaceSectionId,
@@ -55,10 +56,10 @@ async function goToAgents() {
       <div class="border-b border-base-300 px-4 py-4">
         <button
           type="button"
-          class="btn btn-xs btn-ghost mb-3 -ml-2"
+          class="mb-3 block w-full rounded-lg text-left transition-colors hover:bg-base-200"
           @click="goToAgents()"
         >
-          ← Агенты
+          <EvaBrand size="sm" :show-tagline="false" title-class="text-base" />
         </button>
 
         <div class="flex items-start justify-between gap-2">
