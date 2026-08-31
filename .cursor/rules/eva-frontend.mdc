@@ -1,0 +1,23 @@
+---
+description: E.V.A. frontend feature-based architecture and conventions
+globs: frontend/**/*.{vue,ts,css}
+alwaysApply: false
+---
+
+# E.V.A. Frontend
+
+Before editing, read `.cursor/skills/eva-frontend/SKILL.md`.
+Platform specs: `.cursor/skills/eva-specs/SKILL.md`.
+
+## Quick rules
+
+- Features: `agents`, `skills`, `actions`, `tools`, `workspace`
+- Overview validations: `agents/utils/validateAgent.ts`
+- Action recipes use enabled Tools; FSM picks Action ids
+- Paths from `router/paths.ts`
+
+## Verify
+
+```bash
+cd frontend && npm run build
+```

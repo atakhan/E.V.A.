@@ -1,0 +1,15 @@
+---
+description: E.V.A. Events spec v0.1 — envelope, correlation, routing
+globs: **/events/**,backend/**/event*.py,backend/infrastructure/redis/event_bus.py,backend/app/api/channels/**
+alwaysApply: false
+---
+
+# Events Spec
+
+Read `.cursor/skills/eva-specs/events.md` (full: `docs/EVENT_SPEC_v0.1.md`).
+
+- Event = fact, not command; FSM decides response
+- Envelope: `id`, `type`, `version`, `source`, `timestamp`, `correlation`, `payload`, `metadata`, `causation_id`
+- Naming: `<domain>.<entity>.<past_tense_verb>` (e.g. `channel.message.received`)
+- `correlation` links context; `causation_id` chains direct cause
+- Dedup on stable `id`; at-least-once delivery

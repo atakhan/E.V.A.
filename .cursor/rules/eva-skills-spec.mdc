@@ -1,0 +1,15 @@
+---
+description: E.V.A. Skills spec v0.1 — FSM, guards, skill runs
+globs: **/skills/**,backend/**/skill*.py,backend/runtime/fsm_engine.py,backend/runtime/skill_runner.py,backend/runtime/guards.py
+alwaysApply: false
+---
+
+# Skills Spec
+
+Read `.cursor/skills/eva-specs/skills.md` (full: `docs/SKILLS_SPEC_v0.1.md`).
+
+- Skill → FSM → Action id → Tool command (never call tools from FSM)
+- Handlers: `on.<event>` with optional `guard`, `actions`, `to`
+- Guards: `result.*`, `event.*`, `payload.*`, `vars.*`; comparisons + `.length`
+- Domain events (`channel.message.received`) ≠ action results (`action.<id>.completed`)
+- `params` (inputs) vs `vars` (runtime state); waiting = Skill Run lifecycle

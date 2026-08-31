@@ -1,0 +1,24 @@
+---
+description: E.V.A. backend architecture and conventions
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# E.V.A. Backend
+
+Before editing, read `.cursor/skills/eva-backend/SKILL.md`.
+Platform specs: `.cursor/skills/eva-specs/SKILL.md`.
+
+## Quick rules
+
+- Layers: `domain` → `definition` → `runtime` → `app` / `workers`
+- Tools: one package per tool under `tools/<name>/`
+- Import tools via package: `from tools.telegram import TelegramTool`
+- Do not import from removed flat modules (`telegram_tool.py`, `polza_client.py`, etc.)
+- New tool: package + `__init__.py` exports + catalog + loader registration
+
+## Verify
+
+```bash
+docker compose run --rm backend pytest tests/ -q
+```

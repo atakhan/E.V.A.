@@ -1,0 +1,15 @@
+---
+description: E.V.A. Actions spec v0.1 — recipe, templates, action results
+globs: **/actions/**,backend/**/action*.py,backend/runtime/action_executor.py,backend/runtime/expression_resolver.py
+alwaysApply: false
+---
+
+# Actions Spec
+
+Read `.cursor/skills/eva-specs/actions.md` (full: `docs/ACTIONS_SPEC_v0.1.md`).
+
+- Action hides tool recipe from FSM; FSM uses action ids only
+- Recipe steps: `id`, `tool`, `command`, `input`, optional `when` — not `args`
+- Templates: `{{input.*}}`, `{{vars.*}}`, `{{steps.<id>.result}}`
+- Completion event: `action.{id}.completed`
+- Step `when` = local logic; FSM `guard` = process logic

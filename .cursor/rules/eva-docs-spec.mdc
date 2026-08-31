@@ -1,0 +1,23 @@
+---
+description: E.V.A. platform specs — source of truth in docs/
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# E.V.A. Docs
+
+Read `.cursor/skills/eva-specs/SKILL.md` before editing specs.
+
+Specs must stay consistent with each other and implementation:
+
+| Spec | Implementation areas |
+|------|---------------------|
+| `ACTIONS_SPEC_v0.1.md` | `backend/domain/action.py`, `runtime/action_executor.py`, `frontend/features/actions/` |
+| `SKILLS_SPEC_v0.1.md` | `backend/runtime/fsm_engine.py`, `skill_runner.py`, `frontend/features/skills/` |
+| `EVENT_SPEC_v0.1.md` | `backend/domain/events.py`, `infrastructure/redis/event_bus.py` |
+| `TOOLS_SDK_SPEC_v0.1.md` | `backend/tools/`, `frontend/features/tools/` |
+| `RUNTIME_SPEC_v0.1.md` | `backend/runtime/`, `workers/`, `infrastructure/stores/` — gap tracker: `RUNTIME_IMPLEMENTATION_STATUS.md` |
+
+Conceptual architecture (`architecture/`) must align with specs — tracker: `ARCHITECTURE_DOCS_ALIGNMENT.md`.
+
+When changing a spec, check cross-references and update cheatsheets in `.cursor/skills/eva-specs/` if needed.

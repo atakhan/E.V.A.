@@ -1,0 +1,15 @@
+---
+description: E.V.A. Tools SDK spec v0.1 — commands, credentials, packages
+globs: backend/tools/**,frontend/src/features/tools/**
+alwaysApply: false
+---
+
+# Tools Spec
+
+Read `.cursor/skills/eva-specs/tools.md` (full: `docs/TOOLS_SDK_SPEC_v0.1.md`).
+
+- Tool = capability; no business logic, no FSM control
+- One package per tool under `backend/tools/<name>/`
+- Import via package: `from tools.telegram import TelegramTool`
+- Commands in Action recipe; events published by runtime
+- New tool: package + catalog + loader + frontend registry
