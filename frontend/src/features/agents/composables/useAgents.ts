@@ -14,7 +14,6 @@ import {
   isSlugAvailable,
   removeAgentFromStorage,
   replaceAgent,
-  setupTelegramOnAgent,
   touchAgent,
   unarchiveAgentInStorage,
 } from "@/features/agents/services/agentsStorage";
@@ -36,24 +35,11 @@ export function useAgents() {
       return { ok: false, error: slugError };
     }
 
-    if (input.telegram) {
-      if (!input.telegram.botToken.trim()) {
-        return { ok: false, error: "Укажите bot token или отключите Telegram" };
-      }
-      if (!apiAvailable.value) {
-        return {
-          ok: false,
-          error: "Для подключения Telegram нужен backend (docker compose up)",
-        };
-      }
-    }
-
     try {
       const agent = await createAgentWithStorage({
         name,
         slug: input.slug,
         description: input.description,
-        telegram: input.telegram,
       });
       return { ok: true, agent };
     } catch (error) {
@@ -150,6 +136,5 @@ export function useAgents() {
     archiveAgent,
     unarchiveAgent,
     fetchArchivedAgentSummaries,
-    setupTelegramOnAgent,
   };
 }

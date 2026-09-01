@@ -11,7 +11,7 @@ export const workspaceSections: WorkspaceSection[] = [
     id: "overview",
     slug: "overview",
     title: "Overview",
-    description: "Кто этот агент и какими Skills, Actions и Tools он обладает.",
+    description: "Кто этот агент, готовность к публикации и операционный статус.",
   },
   {
     id: "skills",

@@ -12,8 +12,7 @@ import {
   unarchiveAgentApi,
 } from "@/features/agents/services/agentsApi";
 import { normalizeAction } from "@/features/actions/types/normalize";
-import { createToolBinding, normalizeToolBinding } from "@/features/tools/types/normalize";
-import { createCredential } from "@/features/tools/services/credentialsApi";
+import { normalizeToolBinding } from "@/features/tools/types/normalize";
 import type { CanvasDocument } from "@/features/skills/types/canvas";
 import { normalizeSkill, skillFromLegacyCanvas } from "@/features/skills/types/skill";
 import { createId } from "@/shared/utils/id";
@@ -385,62 +384,14 @@ export async function createAgentOnApi(agent: Agent) {
   }
 }
 
-export async function setupTelegramOnAgent(
-  slug: string,
-  botToken: string,
-  credentialName?: string,
-): Promise<Agent> {
-  const agent = getAgentBySlug(slug);
-  if (!agent) {
-    throw new Error("Агент не найден");
-  }
-
-  if (!apiAvailable.value) {
-    throw new Error("Для подключения Telegram нужен backend API");
-  }
-
-  const credential = await createCredential(slug, {
-    toolId: "telegram",
-    name: credentialName?.trim() || "Telegram bot",
-    botToken: botToken.trim(),
-  });
-
-  const binding = createToolBinding("telegram", {
-    id: `telegram_${Date.now()}`,
-    name: credentialName?.trim() || "Telegram bot",
-    enabled: true,
-    credentialId: credential.id,
-  });
-  const tools = [...agent.tools, binding];
-  const next = touchAgent({ ...agent, tools });
-
-  const saved = await saveAgentApi(next);
-  replaceAgent(saved);
-  return saved;
-}
-
-/** API-first create when Telegram token is provided. Falls back to local-only create. */
 export async function createAgentWithStorage(input: {
   name: string;
   slug: string;
   description?: string;
-  telegram?: { botToken: string; credentialName?: string };
 }): Promise<Agent> {
   const name = input.name.trim();
   const slug = normalizeAgentSlug(input.slug);
   const description = input.description?.trim() ?? "";
-
-  if (input.telegram && apiAvailable.value) {
-    let agent = await createAgentApi({ name, slug, description });
-    agent = await setupTelegramOnAgent(
-      agent.slug,
-      input.telegram.botToken,
-      input.telegram.credentialName,
-    );
-    agents.value = [agent, ...agents.value.filter((item) => item.slug !== agent.slug)];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(agents.value));
-    return agent;
-  }
 
   const now = new Date().toISOString();
   const agent: Agent = {

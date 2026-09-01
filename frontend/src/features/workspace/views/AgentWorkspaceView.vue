@@ -3,14 +3,14 @@ import { computed, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
-import EvaBrand from "@/shared/components/EvaBrand.vue";
+import AppSidebar from "@/shared/layout/AppSidebar.vue";
 import WorkspaceSidebar from "@/features/workspace/components/WorkspaceSidebar.vue";
 import {
   defaultWorkspaceSectionId,
   findWorkspaceSection,
   workspaceSections,
 } from "@/features/workspace/config/nav";
-import { agentSectionPath, agentsPath, RouteNames } from "@/router/paths";
+import { agentSectionPath, RouteNames } from "@/router/paths";
 
 const props = defineProps<{
   agentSlug: string;
@@ -47,24 +47,14 @@ async function selectSection(id: string) {
   if (!section) return;
   await router.push(agentSectionPath(agent.value.slug, section.slug));
 }
-
-async function goToAgents() {
-  await router.push(agentsPath());
-}
 </script>
 
 <template>
   <div v-if="agent" class="flex h-screen min-h-0 bg-base-200">
     <aside class="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-100">
-      <div class="border-b border-base-300 px-4 py-4">
-        <button
-          type="button"
-          class="mb-3 block w-full rounded-lg text-left transition-colors hover:bg-base-200"
-          @click="goToAgents()"
-        >
-          <EvaBrand size="sm" :show-tagline="false" title-class="text-base" />
-        </button>
+      <AppSidebar />
 
+      <div class="border-b border-base-300 px-4 py-4">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <h1 class="truncate text-lg font-semibold">{{ agent.name }}</h1>
@@ -89,6 +79,7 @@ async function goToAgents() {
       </div>
 
       <WorkspaceSidebar
+        class="min-h-0 flex-1 overflow-y-auto"
         :sections="workspaceSections"
         :active-id="activeSectionId"
         @select="selectSection"

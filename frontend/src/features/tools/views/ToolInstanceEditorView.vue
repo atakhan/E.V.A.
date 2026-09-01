@@ -201,7 +201,7 @@ function removeAndGoBack() {
         />
       </label>
 
-      <div class="mt-4">
+      <div v-if="instance.toolId !== 'web_client'" class="mt-4">
         <p class="label-text mb-2">Config</p>
         <ToolInstanceConfigForm
           :tool-type-id="instance.toolId"

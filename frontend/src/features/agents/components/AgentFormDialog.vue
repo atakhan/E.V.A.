@@ -27,9 +27,6 @@ const formSlug = ref("");
 const formDescription = ref("");
 const formError = ref<string | null>(null);
 const slugTouched = ref(false);
-const connectTelegram = ref(false);
-const telegramToken = ref("");
-const telegramCredentialName = ref("Telegram bot");
 const saving = ref(false);
 
 const title = computed(() =>
@@ -44,9 +41,6 @@ function resetFromAgent(agent: Agent | null | undefined) {
   formDescription.value = agent?.description ?? "";
   formError.value = null;
   slugTouched.value = false;
-  connectTelegram.value = false;
-  telegramToken.value = "";
-  telegramCredentialName.value = "Telegram bot";
   saving.value = false;
 }
 
@@ -88,12 +82,6 @@ async function save() {
         name: formName.value,
         slug: formSlug.value,
         description: formDescription.value,
-        telegram: connectTelegram.value
-          ? {
-              botToken: telegramToken.value,
-              credentialName: telegramCredentialName.value,
-            }
-          : undefined,
       });
 
       if (!result.ok) {
@@ -151,40 +139,6 @@ defineExpose({ open, close });
           :error="formError"
           @slug-input="slugTouched = true"
         />
-
-        <div
-          v-if="mode === 'create'"
-          class="mt-4 space-y-3 rounded-xl border border-base-300 bg-base-200/20 p-4"
-        >
-          <label class="label cursor-pointer justify-start gap-3 p-0">
-            <input v-model="connectTelegram" type="checkbox" class="checkbox checkbox-sm" />
-            <span class="label-text font-medium">Подключить Telegram</span>
-          </label>
-
-          <template v-if="connectTelegram">
-            <label class="form-control w-full">
-              <span class="label-text">Bot token</span>
-              <input
-                v-model="telegramToken"
-                type="password"
-                class="input input-bordered input-sm w-full font-mono"
-                placeholder="123456:ABC..."
-                autocomplete="off"
-              />
-            </label>
-            <label class="form-control w-full">
-              <span class="label-text">Название credential</span>
-              <input
-                v-model="telegramCredentialName"
-                class="input input-bordered input-sm w-full"
-                placeholder="Production bot"
-              />
-            </label>
-            <p class="text-xs text-base-content/55">
-              Token сохраняется на backend в credentials, не в draft агента.
-            </p>
-          </template>
-        </div>
       </div>
 
       <div class="modal-action">

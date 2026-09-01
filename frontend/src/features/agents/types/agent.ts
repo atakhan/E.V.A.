@@ -23,10 +23,6 @@ export type AgentInput = {
   name: string;
   slug: string;
   description?: string;
-  telegram?: {
-    botToken: string;
-    credentialName?: string;
-  };
 };
 
 export type AgentMutationResult =

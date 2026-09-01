@@ -14,6 +14,7 @@ import GlobalRuntimeView from "@/features/runtime/views/GlobalRuntimeView.vue";
 import RuntimeSimulateView from "@/features/runtime/views/RuntimeSimulateView.vue";
 import SkillRunDetailView from "@/features/runtime/views/SkillRunDetailView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
+import AppShellLayout from "@/shared/layout/AppShellLayout.vue";
 import {
   agentRouteGuard,
   legacyAgentModuleRedirect,
@@ -28,22 +29,28 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "/agents",
-    },
-    {
-      path: "/agents",
-      name: RouteNames.agents,
-      component: AgentsListView,
-    },
-    {
-      path: "/runtime",
-      name: RouteNames.globalRuntime,
-      component: GlobalRuntimeView,
-    },
-    {
-      path: "/tools",
-      name: RouteNames.toolsLibrary,
-      component: ToolLibraryView,
+      component: AppShellLayout,
+      children: [
+        {
+          path: "",
+          redirect: "/agents",
+        },
+        {
+          path: "agents",
+          name: RouteNames.agents,
+          component: AgentsListView,
+        },
+        {
+          path: "runtime",
+          name: RouteNames.globalRuntime,
+          component: GlobalRuntimeView,
+        },
+        {
+          path: "tools",
+          name: RouteNames.toolsLibrary,
+          component: ToolLibraryView,
+        },
+      ],
     },
     {
       path: "/applications",

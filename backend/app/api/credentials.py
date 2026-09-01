@@ -30,6 +30,16 @@ class CredentialPublicApi(BaseModel):
     updated_at: str = Field(alias="updatedAt")
 
 
+class CredentialOneTimeSecretsApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    inbound_api_key: str | None = Field(default=None, alias="inboundApiKey")
+
+
+class CredentialCreateApi(CredentialPublicApi):
+    one_time_secrets: CredentialOneTimeSecretsApi | None = Field(default=None, alias="oneTimeSecrets")
+
+
 def _db_session():
     from app.deps import session_scope
 
@@ -50,7 +60,7 @@ def list_credentials(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{slug}/credentials", response_model=CredentialPublicApi, status_code=201)
+@router.post("/{slug}/credentials", response_model=CredentialCreateApi, status_code=201)
 def create_credential(
     slug: str,
     payload: CredentialCreateRequest,

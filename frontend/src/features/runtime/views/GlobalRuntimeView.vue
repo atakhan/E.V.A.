@@ -41,18 +41,13 @@ async function cancelRun(run: SkillRunSummary) {
 </script>
 
 <template>
-  <main class="min-h-screen bg-base-200 px-6 py-10">
+  <div class="px-6 py-8 lg:px-8">
     <div class="mx-auto max-w-6xl space-y-6">
-      <header class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-wide">Runtime Cockpit</h1>
-          <p class="mt-1 text-sm text-base-content/60">
-            Все агенты, активные skill runs и операционный срез runtime.
-          </p>
-        </div>
-        <button type="button" class="btn btn-sm btn-ghost" @click="router.push('/agents')">
-          ← Агенты
-        </button>
+      <header>
+        <h1 class="text-2xl font-semibold tracking-wide">Runtime Cockpit</h1>
+        <p class="mt-1 text-sm text-base-content/60">
+          Все агенты, активные skill runs и операционный срез runtime.
+        </p>
       </header>
 
       <p v-if="error" class="rounded-xl border border-error/40 bg-error/5 px-4 py-3 text-sm text-error">
@@ -138,5 +133,5 @@ async function cancelRun(run: SkillRunSummary) {
         />
       </section>
     </div>
-  </main>
+  </div>
 </template>

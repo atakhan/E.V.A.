@@ -5,8 +5,7 @@ import AgentCard from "@/features/agents/components/AgentCard.vue";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import type { Agent } from "@/features/agents/types/agent";
-import EvaBrand from "@/shared/components/EvaBrand.vue";
-import { agentHomePath, agentRuntimePath, globalRuntimePath, toolsLibraryPath } from "@/router/paths";
+import { agentHomePath, agentRuntimePath } from "@/router/paths";
 
 const router = useRouter();
 const {
@@ -65,10 +64,6 @@ async function openAgent(agent: Agent) {
   await router.push(agentHomePath(agent.slug));
 }
 
-async function openGlobalRuntime() {
-  await router.push(globalRuntimePath());
-}
-
 function removeAgent(agent: Agent) {
   if (!confirm(`Удалить агента «${agent.name}»? История runs останется в базе.`)) return;
   deleteAgent(agent.id);
@@ -105,24 +100,13 @@ async function unarchiveAgentAction(agent: Agent) {
 </script>
 
 <template>
-  <main class="min-h-screen bg-base-200 px-6 py-10">
+  <div class="px-6 py-8 pb-24 lg:px-8">
     <div class="mx-auto max-w-5xl">
-      <header class="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <EvaBrand />
-          <p class="mt-3 text-base text-base-content/70">Агенты</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-ghost" @click="openGlobalRuntime()">
-            Runtime
-          </button>
-          <button type="button" class="btn btn-ghost" @click="router.push(toolsLibraryPath())">
-            Библиотека Tools
-          </button>
-          <button type="button" class="btn" @click="openCreateForm()">
-            Новый агент
-          </button>
-        </div>
+      <header class="mb-8">
+        <h1 class="text-2xl font-semibold tracking-wide">Агенты</h1>
+        <p class="mt-1 text-sm text-base-content/60">
+          Конструктор Skills, Actions и Tools
+        </p>
       </header>
 
       <div role="tablist" class="tabs tabs-boxed mb-6 w-fit">
@@ -163,18 +147,10 @@ async function unarchiveAgentAction(agent: Agent) {
         <p class="mt-2 text-sm text-base-content/60">
           {{
             tab === "active"
-              ? "Агент объединяет Skills, Actions и Tools конструктора"
+              ? "Агент объединяет Skills, Actions и Tools конструктора. Нажмите + внизу справа, чтобы создать."
               : "Архивированные агенты скрыты из runtime, но история runs сохраняется"
           }}
         </p>
-        <button
-          v-if="tab === 'active'"
-          type="button"
-          class="btn mt-6"
-          @click="openCreateForm()"
-        >
-          Создать агента
-        </button>
       </div>
 
       <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -198,5 +174,27 @@ async function unarchiveAgentAction(agent: Agent) {
       mode="edit"
       :agent="editingAgent"
     />
-  </main>
+
+    <div v-if="tab === 'active'" class="fab">
+      <div class="tooltip tooltip-left" data-tip="Новый агент">
+        <button
+          type="button"
+          class="btn btn-lg btn-circle btn-primary shadow-lg"
+          aria-label="Новый агент"
+          @click="openCreateForm()"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            class="size-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
 </template>

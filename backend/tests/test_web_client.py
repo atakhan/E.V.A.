@@ -29,7 +29,9 @@ def test_web_client_credential_and_ingress(client: TestClient, ephemeral_agent_s
         },
     )
     assert create.status_code == 201
-    credential_id = create.json()["id"]
+    create_body = create.json()
+    credential_id = create_body["id"]
+    assert create_body.get("oneTimeSecrets", {}).get("inboundApiKey") == inbound_key
 
     mock_health = {"ok": True, "_status_code": 200, "_duration_ms": 12}
     with patch.object(WebClientHttp, "health", return_value=mock_health):
