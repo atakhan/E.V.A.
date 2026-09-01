@@ -1,6 +1,8 @@
 export interface ToolCommandDef {
   id: string;
   description: string;
+  inputSchema?: ToolFieldDef[];
+  outputSchema?: ToolFieldDef[];
 }
 
 export interface ToolEventDef {
@@ -8,17 +10,31 @@ export interface ToolEventDef {
   description: string;
 }
 
-export type ToolConfigFieldType = "string" | "integer" | "boolean" | "enum";
+export type ToolFieldType =
+  | "string"
+  | "template"
+  | "text"
+  | "integer"
+  | "boolean"
+  | "enum"
+  | "json"
+  | "string_array";
 
-export interface ToolConfigFieldDef {
+/** @deprecated use ToolFieldType */
+export type ToolConfigFieldType = ToolFieldType;
+
+export interface ToolFieldDef {
   id: string;
-  type: ToolConfigFieldType;
+  type: ToolFieldType;
   required?: boolean;
   default?: unknown;
   scope?: "instance" | "call";
   enum?: string[];
-  ui?: { label?: string; group?: string };
+  ui?: { label?: string; group?: string; placeholder?: string };
 }
+
+/** @deprecated use ToolFieldDef */
+export type ToolConfigFieldDef = ToolFieldDef;
 
 export type CredentialPolicy = "unique_per_instance" | "shared_allowed";
 

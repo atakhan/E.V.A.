@@ -3,13 +3,7 @@ import { computed, ref, watch } from "vue";
 import type { ActionRecipeStep } from "@/features/actions/types/action";
 import { formatStepInput, parseStepInput } from "@/features/actions/types/normalize";
 import TemplateChipBar from "@/features/actions/components/TemplateChipBar.vue";
-import {
-  genericFieldsFromInput,
-  getRecipeInputFields,
-  objectToPresetValues,
-  presetInputToObject,
-  type RecipeInputField,
-} from "@/features/actions/utils/recipeInputPresets";
+import { getCommandInputFields } from "@/features/actions/utils/commandInputSchema";
 import {
   getRecipeStepStatus,
   recipeStepSummary,
@@ -18,6 +12,9 @@ import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
 import { useTools } from "@/features/tools/composables/useTools";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
 import { resolveRecipeTool, instanceLabel } from "@/features/tools/utils/resolveToolInstance";
+import SchemaDrivenForm from "@/shared/schema/SchemaDrivenForm.vue";
+import { genericFieldsFromInput } from "@/shared/schema/fieldSchema";
+import type { ToolFieldDef } from "@/features/tools/types/tool";
 
 const props = defineProps<{
   agentSlug: string;
@@ -38,7 +35,6 @@ const emit = defineEmits<{
 const { getEnabledInstances, getToolCommandIds } = useTools();
 
 const rawJsonMode = ref(false);
-const fieldValues = ref<Record<string, string>>({});
 const rawJson = ref(formatStepInput(props.step));
 const whenOpen = ref(Boolean(props.step.when?.trim()));
 
@@ -64,16 +60,18 @@ const commandDescription = computed(() => {
   return def?.commands.find((command) => command.id === props.step.command)?.description ?? "";
 });
 
-const presetFields = computed<RecipeInputField[] | null>(() => {
+const schemaFields = computed<ToolFieldDef[]>(() => {
   const typeId = resolvedStep.value?.typeId ?? props.step.tool;
-  if (!typeId || !props.step.command) return null;
-  return getRecipeInputFields(typeId, props.step.command);
-});
-
-const activeFields = computed(() => {
-  if (presetFields.value) return presetFields.value;
+  if (!typeId || !props.step.command) return [];
+  const fields = getCommandInputFields(typeId, props.step.command);
+  if (fields.length) return fields;
   return genericFieldsFromInput(props.step.input);
 });
+
+function syncFieldsFromStep() {
+  rawJson.value = formatStepInput(props.step);
+  whenOpen.value = Boolean(props.step.when?.trim());
+}
 
 function statusBadgeClass(): string {
   if (stepStatus.value === "disabled") return "badge-warning";
@@ -95,41 +93,18 @@ function patchTool(instanceId: string) {
   });
 }
 
-function syncFieldsFromStep() {
-  if (presetFields.value) {
-    fieldValues.value = objectToPresetValues(presetFields.value, props.step.input);
-  } else {
-    fieldValues.value = Object.fromEntries(
-      Object.entries(props.step.input).map(([key, value]) => [
-        key,
-        typeof value === "object" ? JSON.stringify(value) : String(value ?? ""),
-      ]),
-    );
-  }
-  rawJson.value = formatStepInput(props.step);
-  whenOpen.value = Boolean(props.step.when?.trim());
-}
-
 watch(
   () => props.step,
   () => syncFieldsFromStep(),
   { deep: true, immediate: true },
 );
 
-function applyPresetFields() {
-  const nextInput = presetFields.value
-    ? presetInputToObject(presetFields.value, fieldValues.value)
-    : presetInputToObject(activeFields.value, fieldValues.value);
-  emit("patch", { input: nextInput });
-}
-
 function applyRawJson() {
   emit("patch", { input: parseStepInput(rawJson.value) });
 }
 
-function setFieldValue(key: string, value: string) {
-  fieldValues.value = { ...fieldValues.value, [key]: value };
-  applyPresetFields();
+function patchInput(input: Record<string, unknown>) {
+  emit("patch", { input });
 }
 
 function openWhen() {
@@ -248,29 +223,12 @@ function clearWhen() {
       </template>
       <template v-else>
         <TemplateChipBar :step-ids="stepIds" />
-        <div class="mt-2 space-y-2">
-          <label
-            v-for="field in activeFields"
-            :key="field.key"
-            class="form-control w-full"
-          >
-            <span class="label-text text-xs">{{ field.label }}</span>
-            <textarea
-              v-if="field.kind === 'json'"
-              class="textarea textarea-bordered textarea-sm w-full font-mono text-xs"
-              rows="2"
-              :value="fieldValues[field.key] ?? ''"
-              :placeholder="field.placeholder"
-              @input="setFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)"
-            />
-            <input
-              v-else
-              class="input input-bordered input-sm w-full font-mono text-xs"
-              :value="fieldValues[field.key] ?? ''"
-              :placeholder="field.placeholder"
-              @input="setFieldValue(field.key, ($event.target as HTMLInputElement).value)"
-            />
-          </label>
+        <div class="mt-2">
+          <SchemaDrivenForm
+            :fields="schemaFields"
+            :model-value="step.input"
+            @update:model-value="patchInput"
+          />
         </div>
       </template>
 

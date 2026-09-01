@@ -1,9 +1,9 @@
 import type { ToolInstance, ToolMutationResult } from "@/features/tools/types/tool";
 import { createToolInstance } from "@/features/tools/types/normalize";
 import {
-  builtinTools,
-  getToolDefinition,
+  getBuiltinTools,
   getToolCommandIds,
+  getToolDefinition,
 } from "@/features/tools/registry/builtinTools";
 import {
   getAgentBySlug,
@@ -148,7 +148,7 @@ export function useTools() {
   }
 
   return {
-    catalog: builtinTools,
+    catalog: getBuiltinTools(),
     getInstances,
     getInstance,
     getInstancesByType,

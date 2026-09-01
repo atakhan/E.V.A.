@@ -1,5 +1,7 @@
 import type { Agent } from "@/features/agents/types/agent";
 import { isValidActionVersion } from "@/features/actions/types/normalize";
+import { getCommandInputFields } from "@/features/actions/utils/commandInputSchema";
+import { validateFields } from "@/shared/schema/fieldSchema";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
 import { resolveRecipeTool } from "@/features/tools/utils/resolveToolInstance";
 import { validateSkill } from "@/features/skills/utils/validateSkill";
@@ -174,6 +176,30 @@ export function validateAgent(agent: Agent): AgentValidationReport {
           message: `Action «${action.name}»: нет команды «${typeId}.${step.command}» в каталоге`,
           href: actionHref,
         });
+        continue;
+      }
+
+      const inputSchema = getCommandInputFields(typeId ?? "", step.command);
+      if (inputSchema.length) {
+        const { errors, warnings } = validateFields(inputSchema, step.input, `${typeId}.${step.command}.`);
+        for (const err of errors) {
+          issues.push({
+            id: `action.${action.id}.step.${step.id}.input-error`,
+            severity: "error",
+            code: "invalid_step_input",
+            message: `Action «${action.name}», шаг «${label}»: ${err}`,
+            href: actionHref,
+          });
+        }
+        for (const warn of warnings) {
+          issues.push({
+            id: `action.${action.id}.step.${step.id}.input-warning`,
+            severity: "warning",
+            code: "invalid_step_input",
+            message: `Action «${action.name}», шаг «${label}»: ${warn}`,
+            href: actionHref,
+          });
+        }
       }
     }
 

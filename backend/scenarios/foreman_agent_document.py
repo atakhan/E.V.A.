@@ -26,6 +26,12 @@ def build_foreman_agent_document() -> dict:
             },
             {
                 "id": str(uuid.uuid4()),
+                "toolId": "text",
+                "enabled": True,
+                "configNote": "",
+            },
+            {
+                "id": str(uuid.uuid4()),
                 "toolId": "telegram",
                 "enabled": True,
                 "configNote": "",
@@ -42,11 +48,21 @@ def build_foreman_agent_document() -> dict:
                 "outputSchema": {},
                 "recipe": [
                     {
+                        "id": "clean",
+                        "tool": "text",
+                        "command": "normalize",
+                        "input": {
+                            "text": "{{vars.last_message}}",
+                            "collapse_whitespace": True,
+                            "strip_empty_lines": True,
+                        },
+                    },
+                    {
                         "id": str(uuid.uuid4()),
                         "tool": "llm",
                         "command": "parse_request",
-                        "input": {"text": "{{vars.last_message}}"},
-                    }
+                        "input": {"text": "{{steps.clean.result.text}}"},
+                    },
                 ],
                 "createdAt": now,
                 "updatedAt": now,

@@ -19,6 +19,7 @@ from tools.llm import LlmStubTool
 from tools.polza import PolzaAiLlmTool
 from tools.registry import ToolRegistry
 from tools.telegram import TelegramStubTool, TelegramTool
+from tools.text import TextTool
 from tools.web_client import (
     WebClientHttp,
     WebClientTool,
@@ -101,6 +102,9 @@ def _build_tool_for_binding(
         if not token:
             raise KeyError(f"Telegram instance '{instance_id}' enabled but credential bot_token not found")
         return _stamp_instance(TelegramTool(token), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+
+    if tool_type == "text":
+        return _stamp_instance(TextTool(), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
 
     if tool_type == "web_client":
         secret = get_web_client_secret_for_binding(session, agent_id, item)

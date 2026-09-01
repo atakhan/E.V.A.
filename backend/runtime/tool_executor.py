@@ -4,6 +4,10 @@ import logging
 import time
 from typing import Any
 
+from app.config import get_settings
+from definition.catalog.builtin_tools import get_command_input_schema
+from definition.catalog.field_schema import apply_defaults
+from definition.validation.validate_tool_command_input import validate_command_input_errors_only
 from domain.action_run import ToolExecution, ToolExecutionStatus
 from domain.events import ToolResult
 from infrastructure.stores.postgres_tool_execution_store import PostgresToolExecutionStore
@@ -51,7 +55,33 @@ class ToolExecutor:
             started = time.perf_counter()
             try:
                 tool = self.registry.require(tool_id)
-                result = tool.handle(command, args, context)
+                prepared_args = dict(args)
+                tool_type = str(getattr(tool, "tool_type", "") or tool.id)
+                schema = get_command_input_schema(tool_type, command)
+                if schema:
+                    prepared_args = apply_defaults(schema, prepared_args)
+                    validation_errors = validate_command_input_errors_only(
+                        tool_type, command, prepared_args
+                    )
+                    mode = get_settings().tool_input_validation.lower()
+                    if validation_errors:
+                        message = validation_errors[0]
+                        if mode == "strict":
+                            result = ToolResult(ok=False, error=message)
+                        elif mode == "off":
+                            result = tool.handle(command, prepared_args, context)
+                        else:
+                            logger.warning(
+                                "tool input validation warning for %s.%s: %s",
+                                tool_type,
+                                command,
+                                message,
+                            )
+                            result = tool.handle(command, prepared_args, context)
+                    else:
+                        result = tool.handle(command, prepared_args, context)
+                else:
+                    result = tool.handle(command, prepared_args, context)
             except Exception as exc:  # noqa: BLE001
                 result = ToolResult(ok=False, error=str(exc))
             duration_ms = int((time.perf_counter() - started) * 1000)

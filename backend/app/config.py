@@ -34,6 +34,7 @@ class Settings:
         "yes",
     )
     seed_demo_agents: bool = os.getenv("EVA_SEED_DEMO_AGENTS", "true").lower() in ("1", "true", "yes")
+    tool_input_validation: str = os.getenv("EVA_TOOL_INPUT_VALIDATION", "warn")
     event_max_attempts: int = int(os.getenv("EVA_EVENT_MAX_ATTEMPTS", "5"))
     prune_ephemeral_agents: bool = os.getenv("EVA_PRUNE_EPHEMERAL_AGENTS", "true").lower() in (
         "1",

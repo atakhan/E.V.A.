@@ -1,6 +1,6 @@
 import type { Agent } from "@/features/agents/types/agent";
 import type { ToolDefinition, ToolInstance } from "@/features/tools/types/tool";
-import { builtinTools } from "@/features/tools/registry/builtinTools";
+import { getBuiltinTools } from "@/features/tools/registry/builtinTools";
 
 export interface ToolLibraryUsageRow {
   agentId: string;
@@ -39,7 +39,7 @@ function compareTypeEntries(a: ToolLibraryTypeEntry, b: ToolLibraryTypeEntry): n
 
 export function buildToolLibraryIndex(
   agents: Agent[],
-  catalog: ToolDefinition[] = builtinTools,
+  catalog: ToolDefinition[] = getBuiltinTools(),
 ): ToolLibraryIndex {
   const catalogIds = new Set(catalog.map((item) => item.id));
   const rowsByType = new Map<string, ToolLibraryUsageRow[]>();

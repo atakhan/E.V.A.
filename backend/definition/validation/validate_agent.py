@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from definition.catalog.builtin_tools import get_tool_definition
 from definition.validation.validate_skill import validate_skill
+from definition.validation.validate_tool_command_input import validate_command_input
 from runtime.tool_instance_resolver import list_tool_instances, resolve_recipe_tool
 
 AgentIssueSeverity = Literal["error", "warning", "info"]
@@ -198,6 +199,29 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
                         actions_href,
                     )
                 )
+                continue
+
+            for err in validate_command_input(type_id, command, step.get("input") or {}):
+                if err.startswith("warning: "):
+                    issues.append(
+                        _issue(
+                            f"action.{action_id}.step.{step_id}.input-warning",
+                            "warning",
+                            "invalid_step_input",
+                            f"Action «{action_name}», шаг «{label}»: {err[9:]}",
+                            actions_href,
+                        )
+                    )
+                else:
+                    issues.append(
+                        _issue(
+                            f"action.{action_id}.step.{step_id}.input-error",
+                            "error",
+                            "invalid_step_input",
+                            f"Action «{action_name}», шаг «{label}»: {err}",
+                            actions_href,
+                        )
+                    )
 
         if action_id not in referenced_actions:
             issues.append(

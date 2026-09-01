@@ -6,7 +6,7 @@ import ToolLogStats from "@/features/tools/components/ToolLogStats.vue";
 import {
   fetchAllAgentToolLogs,
 } from "@/features/tools/services/toolLogsApi";
-import { builtinTools } from "@/features/tools/registry/builtinTools";
+import { getBuiltinTools } from "@/features/tools/registry/builtinTools";
 import {
   downloadToolLogsCsv,
   downloadToolLogsJson,
@@ -28,7 +28,9 @@ const feedKey = ref(0);
 const autoRefreshEnabled = ref(true);
 const exporting = ref(false);
 
-const toolOptions = builtinTools.map((tool) => ({ id: tool.id, name: tool.name }));
+const toolOptions = computed(() =>
+  getBuiltinTools().map((tool) => ({ id: tool.id, name: tool.name })),
+);
 
 const statsHours = computed(() => (hoursFilter.value > 0 ? hoursFilter.value : undefined));
 

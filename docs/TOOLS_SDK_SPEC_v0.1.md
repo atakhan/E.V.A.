@@ -247,8 +247,8 @@ Command имеет:
 ```text
 id
 description
-input schema
-output schema
+inputSchema   # list[ToolFieldDef] — см. TOOL_FIELD_SCHEMA_v0.1.md
+outputSchema  # list[ToolFieldDef]
 errors
 execution mode
 permissions
@@ -811,7 +811,19 @@ from tools.polza import PolzaAiLlmTool, PolzaClient
 from tools.web_client import WebClientTool, parse_web_client_binding_config
 ```
 
-Регистрация в runtime: `runtime/definition_loader.py`, каталог: `definition/catalog/builtin_tools.py`.
+Регистрация в runtime: `runtime/definition_loader.py`, каталог: `definition/catalog/builtin_tools.py` (агрегатор `tools/*/manifest.py`).
+
+### 26.2 Adding a built-in tool
+
+1. `tools/<name>/manifest.py` — `inputSchema` / `outputSchema` per command
+2. `tools/<name>/tool.py` — `cmd_*` handlers
+3. Register in `runtime/definition_loader.py`
+4. Import manifest in `definition/catalog/builtin_tools.py`
+5. `pytest tests/test_<name>_tool.py tests/test_catalog_completeness.py`
+
+Scaffold: `python -m tools.scaffold create <name> --commands "foo,bar"`
+
+Field schema: [TOOL_FIELD_SCHEMA_v0.1.md](./TOOL_FIELD_SCHEMA_v0.1.md)
 
 ---
 
@@ -976,6 +988,52 @@ CRM Tool предоставляет интерфейс доступа к CRM.
 ```
 
 остаётся в Skill FSM.
+
+---
+
+# 31.1. Пример Text Tool
+
+```yaml
+id: text
+version: "1.0.0"
+
+commands:
+
+  - id: trim
+  - id: normalize
+  - id: truncate
+  - id: match
+  - id: extract
+  - id: find_all
+  - id: contains
+  - id: replace
+  - id: remove_lines
+  - id: split
+  - id: join
+```
+
+Text Tool — детерминированные операции со строками. Без credentials, без side effects, idempotent.
+
+Пример recipe:
+
+```yaml
+recipe:
+  - id: clean
+    tool: text
+    command: normalize
+    input:
+      text: "{{input.message}}"
+      collapse_whitespace: true
+      strip_empty_lines: true
+
+  - id: invoice_no
+    tool: text
+    command: extract
+    input:
+      text: "{{steps.clean.result.text}}"
+      pattern: "№\\s*(\\d+)"
+      group: 1
+```
 
 ---
 

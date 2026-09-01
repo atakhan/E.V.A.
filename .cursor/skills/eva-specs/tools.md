@@ -46,6 +46,7 @@ backend/tools/
 ├── llm/stub.py
 ├── telegram/tool.py, stub.py
 ├── polza/client.py, llm.py
+├── text/tool.py, regex_utils.py, validators.py
 └── web_client/config.py, http.py, tool.py
 ```
 
@@ -59,20 +60,23 @@ Import via package: `from tools.telegram import TelegramTool`
 
 ## Adding a new tool
 
-1. Create `backend/tools/<name>/` package
-2. Export public API from `__init__.py`
-3. Register in `definition/catalog/builtin_tools.py`
+1. `tools/<name>/manifest.py` — inputSchema per command
+2. `tools/<name>/tool.py` + `__init__.py`
+3. Register manifest in `definition/catalog/builtin_tools.py`
 4. Wire in `runtime/definition_loader.py`
-5. Add frontend entry in `features/tools/registry/builtinTools.ts`
+5. Frontend loads catalog from `GET /api/tools/catalog` (no manual TS duplicate)
+
+Field schema: `E.V.A./docs/TOOL_FIELD_SCHEMA_v0.1.md`
+Scaffold: `python -m tools.scaffold create <name> --commands "foo,bar"`
 
 ## Backend
 
 - Protocol: `backend/tools/base.py`
-- Registry: `backend/tools/registry.py`
-- Loader: `backend/runtime/definition_loader.py`
-- Catalog: `backend/definition/catalog/builtin_tools.py`
+- Field schema: `definition/catalog/field_schema.py`
+- Catalog: `definition/catalog/builtin_tools.py` (manifest aggregator)
 
 ## Frontend
 
-- Registry: `frontend/src/features/tools/registry/builtinTools.ts`
-- Bindings UI: `frontend/src/features/tools/views/ToolsListView.vue`
+- Catalog store: `features/tools/services/toolCatalogStore.ts`
+- Schema form: `shared/schema/SchemaDrivenForm.vue`
+- Recipe fields: `features/actions/utils/commandInputSchema.ts`

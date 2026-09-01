@@ -44,6 +44,10 @@ tools/
 ├── polza/
 │   ├── client.py           # PolzaClient, PolzaApiError
 │   └── llm.py              # PolzaAiLlmTool
+├── text/
+│   ├── tool.py             # TextTool
+│   ├── regex_utils.py
+│   └── validators.py
 └── web_client/
     ├── config.py
     ├── http.py
@@ -56,10 +60,11 @@ Import via package `__init__.py` — not from internal modules:
 from tools.llm import LlmStubTool
 from tools.telegram import TelegramTool, TelegramStubTool
 from tools.polza import PolzaClient, PolzaApiError, PolzaAiLlmTool
+from tools.text import TextTool
 from tools.web_client import WebClientTool, WebClientHttp, parse_web_client_binding_config
 ```
 
-When adding a new tool: create `tools/<name>/`, export public API from `__init__.py`, register in `definition_loader.py` and `definition/catalog/builtin_tools.py`.
+When adding a new tool: create `tools/<name>/manifest.py` + `tool.py`, register in `builtin_tools.py` aggregator and `definition_loader.py`. Frontend catalog loads from `GET /api/tools/catalog`.
 
 ## Runtime model
 

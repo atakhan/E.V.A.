@@ -55,6 +55,7 @@ architecture/  ──references──►  docs/*_SPEC  ──implemented by─�
 | System vs FSM action events | `action.completed` без уточнения (EVENT §32) | Generic = observability; FSM = `action.<id>.completed` | ✅ fixed |
 | Action Recipe format | Shorthand YAML в architecture §6 | Иллюстрация; норма = ACTIONS_SPEC `steps[]` | ✅ fixed |
 | Tool model | Только «plugin» в architecture | Tool Type (library) + Tool Instance (per agent) | ✅ fixed |
+| Command input schemas | Только description в каталоге | `inputSchema` / `outputSchema` per command — [TOOL_FIELD_SCHEMA_v0.1.md](./TOOL_FIELD_SCHEMA_v0.1.md) | ✅ in progress |
 | §29 open questions | 15 нерешённых вопросов | Перенесены в Decision log; остались Planner, multi-tenant, observability | ✅ fixed |
 | Multi-skill per event | Spec: да; code: один resolve | `route_all` + `find_waiting_runs` | ✅ fixed |
 | Execution store | architecture/backend: `action_runs`, `tool_executions` | Tables + stores wired | ✅ fixed |

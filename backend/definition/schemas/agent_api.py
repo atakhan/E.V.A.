@@ -5,21 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ToolCommandDefApi(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    description: str = ""
-
-
-class ToolEventDefApi(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    description: str = ""
-
-
-class ToolConfigFieldApi(BaseModel):
+class ToolFieldDefApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
@@ -31,6 +17,26 @@ class ToolConfigFieldApi(BaseModel):
     ui: dict[str, Any] = Field(default_factory=dict)
 
 
+# Backward-compatible alias
+ToolConfigFieldApi = ToolFieldDefApi
+
+
+class ToolCommandDefApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    description: str = ""
+    input_schema: list[ToolFieldDefApi] = Field(default_factory=list, alias="inputSchema")
+    output_schema: list[ToolFieldDefApi] = Field(default_factory=list, alias="outputSchema")
+
+
+class ToolEventDefApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    description: str = ""
+
+
 class ToolDefinitionApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -40,7 +46,7 @@ class ToolDefinitionApi(BaseModel):
     commands: list[ToolCommandDefApi] = Field(default_factory=list)
     events: list[ToolEventDefApi] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)
-    config_schema: list[ToolConfigFieldApi] = Field(default_factory=list, alias="configSchema")
+    config_schema: list[ToolFieldDefApi] = Field(default_factory=list, alias="configSchema")
     credential_kind: str | None = Field(default=None, alias="credentialKind")
     credential_policy: str = Field(default="shared_allowed", alias="credentialPolicy")
 
