@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.channels.event_ingress import enqueue_channel_event
-from app.api.channels.telegram_utils import default_skill_id
 from definition.services.credential_service import CredentialService
 from definition.services.agent_service import AgentService
 from runtime.tool_instance_resolver import find_instance_by_credential
+from runtime.skill_resolver import resolve_skill_for_agent_slug
 from infrastructure.stores.web_client_store import WebClientSessionStore
 from infrastructure.models.tables import AgentRow, ToolCredentialRow
 from tools.web_client import parse_web_client_binding_config
@@ -74,6 +74,7 @@ def _verify_inbound_key(session: Session, agent_slug: str, token: str | None) ->
 
 def _enqueue_inbound(
     *,
+    session: Session,
     agent_slug: str,
     payload: dict[str, Any],
     event_type: str = "channel.message.received",
@@ -81,12 +82,19 @@ def _enqueue_inbound(
     source: str = "web_client",
     tool_instance_id: str | None = None,
 ) -> dict[str, Any]:
-    resolved_skill = skill_id or default_skill_id(agent_slug)
+    resolution = resolve_skill_for_agent_slug(
+        session,
+        agent_slug=agent_slug,
+        event_type=event_type,
+        explicit_skill_id=skill_id,
+    )
+    if not resolution.ok:
+        raise HTTPException(status_code=422, detail=resolution.error)
     return enqueue_channel_event(
         agent_slug=agent_slug,
         payload=payload,
         event_type=event_type,
-        skill_id=resolved_skill,
+        skill_id=resolution.skill_id,
         source=source,
         tool_instance_id=tool_instance_id,
         tool_type_id="web_client" if tool_instance_id else None,
@@ -124,6 +132,7 @@ async def web_events(
     )
 
     return _enqueue_inbound(
+        session=session,
         agent_slug=agent_slug,
         payload=payload,
         event_type=body.type,

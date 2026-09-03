@@ -35,7 +35,7 @@ def new_ephemeral_agent_slug() -> str:
 def _test_env():
     os.environ.setdefault("EVA_TELEGRAM_MODE", "stub")
     os.environ.setdefault("EVA_CREDENTIALS_KEY", Fernet.generate_key().decode())
-    os.environ.setdefault("EVA_DEFAULT_SKILL_IDS", "foreman=process_foreman_request")
+    os.environ.setdefault("EVA_DEFAULT_SKILL_IDS", "")
     yield
 
 
@@ -58,6 +58,17 @@ def ephemeral_agent_slug(client):
     assert response.status_code == 201, response.text
     yield slug
     client.delete(f"/api/agents/{slug}")
+
+
+@pytest.fixture
+def foreman_agent(client):
+    from infrastructure.db.session import session_scope
+    from tests.scenario_fixtures import publish_foreman_agent
+
+    with session_scope() as session:
+        publish_foreman_agent(session)
+        session.commit()
+    return "foreman"
 
 
 def pytest_configure(config):

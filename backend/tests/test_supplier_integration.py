@@ -1,12 +1,11 @@
-from unittest.mock import patch
-
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from definition.services.agent_service import seed_supplier_agent
 from infrastructure.db.session import session_scope
+from tests.scenario_fixtures import publish_supplier_agent
 from tools.web_client import WebClientHttp
+from unittest.mock import patch
 
 
 @pytest.fixture
@@ -18,7 +17,7 @@ def client():
 @pytest.mark.integration
 def test_supplier_agent_seeded_with_web_client(client: TestClient):
     with session_scope() as session:
-        seed_supplier_agent(session)
+        publish_supplier_agent(session)
         session.commit()
 
     agents = client.get("/api/agents")
@@ -41,7 +40,7 @@ def test_supplier_agent_seeded_with_web_client(client: TestClient):
 @pytest.mark.integration
 def test_supplier_ingress_accepts_dev_inbound_key(client: TestClient):
     with session_scope() as session:
-        seed_supplier_agent(session)
+        publish_supplier_agent(session)
         session.commit()
 
     response = client.post(

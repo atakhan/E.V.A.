@@ -53,24 +53,35 @@ def _resolve_runtime_for_event(
         if existing is None:
             return None
         agent_slug = agent_slug or existing.vars.get("_agent_slug")
-        skill_id = skill_id or existing.skill_id
+        skill_id = existing.skill_id
     elif isinstance(event.payload.get("conversation_id"), str):
         existing = store.find_waiting_by_conversation(event.payload["conversation_id"])
         if existing is not None:
             agent_slug = agent_slug or existing.vars.get("_agent_slug")
-            skill_id = skill_id or existing.skill_id
+            skill_id = existing.skill_id
 
     if not agent_slug:
         logger.warning("Skipping event — agentSlug missing: %s", event.type)
         return None
 
     if not skill_id:
-        from app.api.channels.telegram_utils import default_skill_id
+        from runtime.skill_resolver import resolve_skill_for_agent_slug
 
-        skill_id = default_skill_id(str(agent_slug))
-    if not skill_id:
-        logger.warning("Skipping event — skillId missing for agent %s", agent_slug)
-        return None
+        resolution = resolve_skill_for_agent_slug(
+            session,
+            agent_slug=str(agent_slug),
+            event_type=event.type,
+            explicit_skill_id=transport.get("skillId"),
+        )
+        if not resolution.ok:
+            logger.warning(
+                "Skipping event — skill routing failed for agent %s event %s: %s",
+                agent_slug,
+                event.type,
+                resolution.error,
+            )
+            return None
+        skill_id = resolution.skill_id
 
     pinned = _pinned_version_for_event(session, event, transport)
     try:
@@ -80,8 +91,14 @@ def _resolve_runtime_for_event(
             skill_id=str(skill_id),
             publication_version=pinned,
         )
-    except KeyError:
-        logger.warning("No publication for agent %s version=%s", agent_slug, pinned)
+    except KeyError as exc:
+        logger.warning(
+            "Skipping event — runtime not resolved for agent %s skill=%s version=%s: %s",
+            agent_slug,
+            skill_id,
+            pinned,
+            exc,
+        )
         return None
     return service, str(agent_slug), str(skill_id)
 

@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
 from app.main import app
+from infrastructure.db.session import session_scope
+from tests.scenario_fixtures import publish_minimal_web_chat_agent
 from tools.web_client import WebClientHttp
 
 
@@ -38,6 +40,10 @@ def test_web_client_credential_and_ingress(client: TestClient, ephemeral_agent_s
         verify = client.post(f"/api/agents/{slug}/credentials/{credential_id}/verify")
     assert verify.status_code == 200
     assert verify.json()["meta"].get("verified") is True
+
+    with session_scope() as session:
+        publish_minimal_web_chat_agent(session, slug, credential_id)
+        session.commit()
 
     ingress = client.post(
         f"/api/channels/web/{slug}/events",
@@ -81,8 +87,23 @@ def test_web_client_http_auth_header():
 
 
 @pytest.mark.integration
-def test_web_ingress_rejects_bad_key(client: TestClient):
-    slug = "foreman"
+def test_web_ingress_rejects_bad_key(client: TestClient, ephemeral_agent_slug: str):
+    slug = ephemeral_agent_slug
+    inbound_key = "test-inbound-key"
+    create = client.post(
+        f"/api/agents/{slug}/credentials",
+        json={
+            "toolId": "web_client",
+            "name": "Local backend",
+            "secret": {
+                "backend_base_url": "http://localhost:8765",
+                "outbound_api_key": "dev-outbound-key",
+                "inbound_api_key": inbound_key,
+            },
+        },
+    )
+    assert create.status_code == 201
+
     resp = client.post(
         f"/api/channels/web/{slug}/events",
         headers={"Authorization": "Bearer wrong"},

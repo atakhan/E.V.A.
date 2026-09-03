@@ -27,6 +27,24 @@ def _messages_from_args(args: dict[str, Any], context: dict[str, Any]) -> list[d
     return messages
 
 
+def _as_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def _extract_text(response: dict[str, Any]) -> str:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -151,8 +169,8 @@ class PolzaAiLlmTool(BaseTool):
                 model=model,
                 messages=messages,
                 response_format=response_format,
-                max_tokens=args.get("max_tokens"),
-                temperature=args.get("temperature"),
+                max_tokens=_as_int(args.get("max_tokens")),
+                temperature=_as_float(args.get("temperature")),
             )
         except PolzaApiError as exc:
             return ToolResult(ok=False, error=str(exc))

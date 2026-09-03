@@ -54,12 +54,12 @@ def test_tools_catalog(client: TestClient):
 
 
 @pytest.mark.integration
-def test_runtime_foreman_happy_path(client: TestClient):
+def test_runtime_foreman_happy_path(client: TestClient, foreman_agent: str):
     conversation_id = f"tg:chat:test-{uuid.uuid4().hex[:8]}"
     first = client.post(
         "/api/runtime/runs",
         json={
-            "agentSlug": "foreman",
+            "agentSlug": foreman_agent,
             "skillId": "process_foreman_request",
             "event": {
                 "type": "channel.message.received",
@@ -94,9 +94,9 @@ def test_runtime_foreman_happy_path(client: TestClient):
 
 
 @pytest.mark.integration
-def test_telegram_webhook_queues_event(client: TestClient):
+def test_telegram_webhook_queues_event(client: TestClient, foreman_agent: str):
     resp = client.post(
-        "/api/channels/telegram/foreman",
+        f"/api/channels/telegram/{foreman_agent}",
         json={
             "update_id": 1,
             "message": {

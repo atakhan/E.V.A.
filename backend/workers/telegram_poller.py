@@ -6,10 +6,11 @@ import time
 import httpx
 from sqlalchemy import select
 
-from app.api.channels.telegram_utils import default_skill_id, normalize_telegram_update
+from app.api.channels.telegram_utils import normalize_telegram_update
 from definition.catalog.builtin_events import channel_message_received
 from definition.services.agent_service import AgentService
 from runtime.tool_instance_resolver import find_instance_by_credential
+from runtime.skill_resolver import resolve_skill_for_agent_slug
 from app.config import get_settings
 from app.deps import session_scope
 from infrastructure.crypto.secrets import decrypt_secret
@@ -98,10 +99,24 @@ def _poll_credential(credential: ToolCredentialRow, agent_slug: str, token: str)
             continue
 
         instance_id: str | None = None
+        skill_id: str | None = None
         with session_scope() as lookup_session:
             agent_doc = AgentService(lookup_session).get_agent_by_slug(agent_slug)
             if agent_doc:
                 instance_id = find_instance_by_credential(agent_doc, str(credential.id))
+            resolution = resolve_skill_for_agent_slug(
+                lookup_session,
+                agent_slug=agent_slug,
+                event_type="channel.message.received",
+            )
+            if not resolution.ok:
+                logger.warning(
+                    "Skipping telegram update for agent %s: %s",
+                    agent_slug,
+                    resolution.error,
+                )
+                continue
+            skill_id = resolution.skill_id
 
         event = channel_message_received(
             conversation_id=str(payload.get("conversation_id") or ""),
@@ -112,7 +127,6 @@ def _poll_credential(credential: ToolCredentialRow, agent_slug: str, token: str)
             tool_instance_id=instance_id,
             tool_type_id="telegram",
         )
-        skill_id = default_skill_id(agent_slug)
         publish_event(event, agent_slug=agent_slug, skill_id=skill_id)
         processed += 1
     return processed

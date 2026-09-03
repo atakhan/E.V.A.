@@ -19,6 +19,7 @@ def build_supplier_agent_document() -> dict:
         "slug": "supplier",
         "name": "AI Supplier Agent",
         "description": "Chat and workspace orchestration for ai_supplier",
+        "defaultSkillId": "chat_with_supplier",
         "createdAt": now,
         "updatedAt": now,
         "tools": [

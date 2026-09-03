@@ -6,14 +6,10 @@ from app.config import get_settings
 
 
 def default_skill_id(agent_slug: str) -> str | None:
-    settings = get_settings()
-    mapping: dict[str, str] = {}
-    for part in settings.default_skill_ids.split(","):
-        part = part.strip()
-        if "=" in part:
-            slug, skill_id = part.split("=", 1)
-            mapping[slug.strip()] = skill_id.strip()
-    return mapping.get(agent_slug)
+    """Deprecated. Prefer defaultSkillId on the agent document or event-based routing."""
+    from runtime.skill_resolver import env_default_skill_id
+
+    return env_default_skill_id(agent_slug)
 
 
 def normalize_telegram_update(update: dict[str, Any]) -> dict[str, Any] | None:

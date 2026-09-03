@@ -62,8 +62,8 @@ def test_polza_ai_llm_run_returns_text():
 
 
 @pytest.mark.integration
-def test_polza_models_endpoint_public(client: TestClient):
-    slug = "foreman"
+def test_polza_models_endpoint_public(client: TestClient, foreman_agent: str):
+    slug = foreman_agent
     mock_models = {
         "data": [
             {

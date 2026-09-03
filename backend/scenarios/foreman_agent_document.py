@@ -15,6 +15,7 @@ def build_foreman_agent_document() -> dict:
         "slug": "foreman",
         "name": "Procurement Agent",
         "description": "Foreman request processing demo",
+        "defaultSkillId": skill_id,
         "createdAt": now,
         "updatedAt": now,
         "tools": [
