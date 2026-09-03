@@ -51,6 +51,7 @@ import { createFsmState, createFsmTransition } from "@/features/skills/types/ski
 const props = defineProps<{
   activeTool: CanvasTool;
   issueMaps?: SkillIssueMaps;
+  readOnly?: boolean;
 }>();
 
 const model = defineModel<FsmEditorState>({ required: true });
@@ -592,6 +593,21 @@ function onPointerDown(event: PointerEvent) {
   const worldPoint = toSnappedWorld(event.clientX, event.clientY);
   const hit = findStateAt(worldPoint);
 
+  if (props.readOnly) {
+    if (hit) {
+      selection.value = { kind: "state", stateId: hit.id };
+    } else {
+      interaction.value = {
+        kind: "pan",
+        startClient: { x: event.clientX, y: event.clientY },
+        startPan: { x: model.value.viewport.panX, y: model.value.viewport.panY },
+      };
+      selection.value = null;
+    }
+    viewportEl.value?.setPointerCapture(event.pointerId);
+    return;
+  }
+
   if (props.activeTool === "select") {
     const resizeHandle = findSelectedResizeHandle(worldPoint);
     if (resizeHandle && selection.value?.kind === "state") {
@@ -722,6 +738,14 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
+  if (props.readOnly) {
+    const currentPan = interaction.value;
+    if (currentPan?.kind === "pan") {
+      model.value.viewport.panX = currentPan.startPan.x + (event.clientX - currentPan.startClient.x);
+      model.value.viewport.panY = currentPan.startPan.y + (event.clientY - currentPan.startClient.y);
+    }
+    return;
+  }
   if (props.activeTool === "transition" && transitionFromId.value) {
     const worldPoint = toWorld(event.clientX, event.clientY);
     draftLinkTo.value = worldPoint;
@@ -809,6 +833,7 @@ function onPointerUp(event: PointerEvent) {
 }
 
 function onKeyDown(event: KeyboardEvent) {
+  if (props.readOnly) return;
   if (event.key !== "Delete" && event.key !== "Backspace") return;
   const target = event.target;
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
@@ -1018,7 +1043,7 @@ onUnmounted(() => {
         }"
       >
         <input
-          v-if="selection?.kind === 'state' && selection.stateId === state.id"
+          v-if="!readOnly && selection?.kind === 'state' && selection.stateId === state.id"
           v-model="state.name"
           type="text"
           class="fsm-state__name-input input input-xs w-full border-base-300/60 bg-base-100/90 px-2 font-medium"
@@ -1066,7 +1091,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <template v-if="selectedStateRect && activeTool === 'select' && !interaction">
+      <template v-if="selectedStateRect && activeTool === 'select' && !interaction && !readOnly">
         <div
           v-for="handle in RESIZE_HANDLES"
           :key="`${selection?.kind === 'state' ? selection.stateId : ''}:${handle}`"
@@ -1092,7 +1117,7 @@ onUnmounted(() => {
         />
       </template>
 
-      <template v-if="selectedEdgeHandles && activeTool === 'select'">
+      <template v-if="selectedEdgeHandles && activeTool === 'select' && !readOnly">
         <div
           class="edge-handle edge-handle--from"
           :style="{

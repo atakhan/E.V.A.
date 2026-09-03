@@ -17,7 +17,7 @@ from definition.schemas.agent_api import (
     AgentValidationReportApi,
     PublishResponseApi,
 )
-from definition.services.agent_service import AgentArchivedError, AgentProtectedError, AgentService
+from definition.services.agent_service import AgentArchivedError, AgentService
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -100,7 +100,7 @@ def archive_agent(slug: str, session: Session = Depends(_db_session)) -> dict[st
     service = get_agent_service(session)
     try:
         summary = service.archive_agent(slug)
-    except (AgentProtectedError, KeyError) as exc:
+    except KeyError as exc:
         raise_agent_service_error(exc)
     return {
         "ok": True,

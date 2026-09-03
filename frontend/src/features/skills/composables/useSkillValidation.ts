@@ -1,6 +1,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
 import { useActions } from "@/features/actions/composables/useActions";
 import type { FsmEditorState } from "@/features/skills/types/fsm";
+import type { BehaviorEditorState, BehaviorSelection } from "@/features/skills/types/behavior";
 import type { Skill } from "@/features/skills/types/skill";
 import {
   buildSkillIssueMaps,
@@ -15,6 +16,7 @@ export function useSkillValidation(
   agentSlug: MaybeRefOrGetter<string>,
   skillSource: MaybeRefOrGetter<Skill | null | undefined>,
   editorState?: MaybeRefOrGetter<FsmEditorState | null | undefined>,
+  behaviorEditor?: MaybeRefOrGetter<BehaviorEditorState | null | undefined>,
 ) {
   const { getActions } = useActions();
 
@@ -26,14 +28,17 @@ export function useSkillValidation(
   const skillForValidation = computed<Skill | null>(() => {
     const base = toValue(skillSource);
     const editor = editorState ? toValue(editorState) : null;
+    const behavior = behaviorEditor ? toValue(behaviorEditor) : null;
     if (!base) return null;
-    if (!editor) return base;
     return {
       ...base,
-      initial: editor.initial,
-      params: editor.params,
-      states: editor.states,
-      viewport: editor.viewport,
+      initial: editor?.initial ?? base.initial,
+      params: behavior?.params ?? editor?.params ?? base.params,
+      states: editor?.states ?? base.states,
+      viewport: editor?.viewport ?? base.viewport,
+      behavior: behavior?.behavior ?? base.behavior,
+      storyViewport: behavior?.storyViewport ?? base.storyViewport,
+      logicViewport: behavior?.logicViewport ?? base.logicViewport,
     };
   });
 
@@ -47,7 +52,9 @@ export function useSkillValidation(
 
   const issueMaps = computed<SkillIssueMaps>(() => buildSkillIssueMaps(issues.value));
 
-  function issuesForSelection(selection: FsmSelection): ReturnType<typeof filterIssuesForSelection> {
+  function issuesForSelection(
+    selection: FsmSelection | BehaviorSelection,
+  ): ReturnType<typeof filterIssuesForSelection> {
     return filterIssuesForSelection(issues.value, selection);
   }
 

@@ -17,7 +17,7 @@ Stack: Vue 3 + TypeScript + Vue Router + Tailwind v4 + daisyUI. Path alias `@/` 
 ```
 features/
 ├── agents/       # CRUD, overview, validateAgent
-├── skills/       # Skill FSM canvas
+├── skills/       # Behavior Graph canvas (Story / Logic / Runtime)
 ├── actions/      # Action catalog + recipes
 ├── tools/        # Tool registry + bindings
 └── workspace/
@@ -26,11 +26,13 @@ features/
 ## Data model
 
 ```ts
-Agent { skills, actions, tools: ToolBinding[] }
-Skill { initial, params, states[], viewport }
+Agent { skills, actions, tools: ToolBinding[], defaultSkillId? }
+Skill { behavior, initial, params, states[] /* compiled artifact */, storyViewport, logicViewport }
 ActionDef { id, version, policy, inputSchema, outputSchema, recipe: { id, tool, command, input, when? }[] }
 ToolBinding { toolId, enabled, configNote }
 ```
+
+Constructor SoT is `behavior` (wait / do / decide / end). `states[]` is generated on publish. UI: История · Логика · Runtime.
 
 ## Validation (constructor)
 

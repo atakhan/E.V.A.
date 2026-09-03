@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Agent } from "@/features/agents/types/agent";
 import { previewSkillPack } from "@/features/skills/utils/skillPackImport";
-import { parseSkillYamlDocument } from "@/features/skills/utils/skillYaml";
+import { parseSkillYamlDocument, skillFromYaml, skillToYaml } from "@/features/skills/utils/skillYaml";
+import { createEmptySkill } from "@/features/skills/types/skill";
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const fixtureYaml = readFileSync(
@@ -73,5 +74,32 @@ describe("previewSkillPack", () => {
       agent,
     );
     expect(preview.entries[0]?.conflict?.existingName).toBe("Existing");
+  });
+});
+
+describe("behavior YAML/JSON", () => {
+  it("round-trips behavior as canonical export", () => {
+    const skill = createEmptySkill({ name: "Разговор", id: "razgovor" });
+    skill.behavior = {
+      version: 1,
+      entry: "w1",
+      nodes: [
+        {
+          id: "w1",
+          type: "wait",
+          title: "Когда приходит новое сообщение",
+          waitFor: { type: "input", event: "channel.message.received" },
+        },
+      ],
+      edges: [],
+    };
+    const yaml = skillToYaml(skill);
+    expect(yaml).toContain('"behavior"');
+    expect(yaml.toLowerCase()).toContain("generated");
+    const imported = skillFromYaml(yaml, skill);
+    expect("error" in imported).toBe(false);
+    if ("error" in imported) return;
+    expect(imported.behavior?.entry).toBe("w1");
+    expect(imported.behavior?.nodes[0]?.type).toBe("wait");
   });
 });

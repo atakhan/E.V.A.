@@ -19,6 +19,7 @@ Full specs (source of truth):
 | Events | `E.V.A./docs/EVENT_SPEC_v0.1.md` |
 | Tools | `E.V.A./docs/TOOLS_SDK_SPEC_v0.1.md` |
 | Runtime | `E.V.A./docs/RUNTIME_SPEC_v0.1.md` |
+| Behavior | `E.V.A./docs/BEHAVIOR_SPEC.md` |
 
 Implementation gap tracker: `E.V.A./docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 
@@ -41,7 +42,7 @@ Boundaries:
 
 - **Tool** — capability (`telegram.send_message`). No business logic, no FSM control.
 - **Action** — operation (`parse_request`). Recipe of tool commands. Hides implementation from FSM.
-- **Skill** — process (`process_foreman_request`). FSM with states, events, guards, action ids.
+- **Skill** — process (`process_foreman_request`). Behavior Graph → compiled FSM.
 - **Event** — fact (`channel.message.received`). Not a command. FSM decides what to do.
 
 ## Code mapping

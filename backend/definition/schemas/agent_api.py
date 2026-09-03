@@ -106,6 +106,8 @@ class FsmTransitionApi(BaseModel):
     to_side: str | None = Field(default=None, alias="toSide")
     from_anchor: float | None = Field(default=None, alias="fromAnchor")
     to_anchor: float | None = Field(default=None, alias="toAnchor")
+    origin_node_id: str | None = Field(default=None, alias="originNodeId")
+    origin_edge_id: str | None = Field(default=None, alias="originEdgeId")
 
 
 class FsmStateApi(BaseModel):
@@ -120,6 +122,7 @@ class FsmStateApi(BaseModel):
     y: float = 0
     width: float = 0
     height: float = 0
+    origin_node_id: str | None = Field(default=None, alias="originNodeId")
 
 
 class SkillParamApi(BaseModel):
@@ -128,6 +131,15 @@ class SkillParamApi(BaseModel):
     name: str
     type: str = "string"
     required: bool = False
+
+
+class SkillExecutionApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    compiler_version: str = Field(alias="compilerVersion", default="1")
+    compiled_at: str | None = Field(default=None, alias="compiledAt")
+    initial: str | None = None
+    states: list[FsmStateApi] = Field(default_factory=list)
 
 
 class SkillApi(BaseModel):
@@ -143,6 +155,10 @@ class SkillApi(BaseModel):
     params: list[SkillParamApi] = Field(default_factory=list)
     states: list[FsmStateApi] = Field(default_factory=list)
     viewport: dict[str, float] = Field(default_factory=lambda: {"panX": 0, "panY": 0, "zoom": 1})
+    behavior: dict[str, Any] | None = None
+    execution: SkillExecutionApi | None = None
+    story_viewport: dict[str, float] | None = Field(default=None, alias="storyViewport")
+    logic_viewport: dict[str, float] | None = Field(default=None, alias="logicViewport")
 
 
 class AgentApi(BaseModel):
@@ -155,6 +171,7 @@ class AgentApi(BaseModel):
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
     archived_at: str | None = Field(default=None, alias="archivedAt")
+    default_skill_id: str | None = Field(default=None, alias="defaultSkillId")
     skills: list[SkillApi] = Field(default_factory=list)
     actions: list[ActionDefApi] = Field(default_factory=list)
     tools: list[ToolInstanceApi] = Field(default_factory=list)

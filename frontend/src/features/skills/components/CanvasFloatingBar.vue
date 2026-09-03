@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
+import type { CanvasMode } from "@/features/skills/types/behavior";
 import type { AgentSaveStatus } from "@/features/agents/services/agentsStorage";
 import { agentSaveStatus, flushAgentsToApi } from "@/features/agents/services/agentsStorage";
 import { useSkills } from "@/features/skills/composables/useSkills";
@@ -11,6 +12,7 @@ const props = defineProps<{
   skillId: string;
   errorCount?: number;
   warningCount?: number;
+  mode?: CanvasMode;
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +20,8 @@ const emit = defineEmits<{
   exportYaml: [];
   importYaml: [];
   showValidation: [];
+  showNarrative: [];
+  "update:mode": [mode: CanvasMode];
 }>();
 
 const router = useRouter();
@@ -71,13 +75,11 @@ async function saveNow() {
 }
 
 const shortcuts = [
+  { keys: "История / Логика / Runtime", action: "Три представления одного сценария" },
+  { keys: "Когда / Я / Если", action: "Добавить шаг поведения" },
+  { keys: "Стрелка", action: "Связать шаги" },
+  { keys: "Delete", action: "Удалить выбранный шаг" },
   { keys: "Колёсико", action: "Масштаб холста" },
-  { keys: "Перетаскивание фона", action: "Панорама" },
-  { keys: "State", action: "Нарисовать состояние FSM" },
-  { keys: "Transition", action: "Клик на стороне источника → клик на стороне цели" },
-  { keys: "Выбранная стрелка", action: "Тяните кружки на концах, чтобы переподключить" },
-  { keys: "Выбранный state", action: "Тяните углы и стороны, чтобы изменить размер" },
-  { keys: "Delete / Backspace", action: "Удалить state или transition" },
 ];
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -135,6 +137,33 @@ onUnmounted(() => {
       {{ currentSkill?.name ?? "Skill" }}
     </span>
 
+    <div class="join">
+      <button
+        type="button"
+        class="btn btn-xs join-item"
+        :class="{ 'btn-active': mode === 'story' }"
+        @click="emit('update:mode', 'story')"
+      >
+        История
+      </button>
+      <button
+        type="button"
+        class="btn btn-xs join-item"
+        :class="{ 'btn-active': mode === 'logic' }"
+        @click="emit('update:mode', 'logic')"
+      >
+        Логика
+      </button>
+      <button
+        type="button"
+        class="btn btn-xs join-item"
+        :class="{ 'btn-active': mode === 'runtime' }"
+        @click="emit('update:mode', 'runtime')"
+      >
+        Runtime
+      </button>
+    </div>
+
     <button
       type="button"
       class="btn btn-xs btn-ghost gap-1"
@@ -154,6 +183,15 @@ onUnmounted(() => {
     >
       <span v-if="(errorCount ?? 0) > 0" class="badge badge-xs badge-error">{{ errorCount }} err</span>
       <span v-if="(warningCount ?? 0) > 0" class="badge badge-xs badge-warning">{{ warningCount }} warn</span>
+    </button>
+
+    <button
+      type="button"
+      class="btn btn-xs btn-ghost"
+      title="Просмотреть как историю"
+      @click="emit('showNarrative')"
+    >
+      История ▸
     </button>
 
     <button

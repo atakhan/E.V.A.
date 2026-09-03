@@ -1,11 +1,15 @@
 # Skills Spec — v0.1 Cheatsheet
 
 Source: `E.V.A./docs/SKILLS_SPEC_v0.1.md`  
+Behavior constructor: `E.V.A./docs/BEHAVIOR_SPEC.md`  
 Canvas notation: `E.V.A./docs/FSM_CANVAS_STYLE.md`
 
 ## Definition
 
-Skill = managed process for a class of tasks. One FSM per skill in v0.1.
+Skill = managed process for a class of tasks.
+
+Constructor SoT (v1): **Behavior Graph** (wait / do / decide / end).  
+Runtime still executes a compiled FSM (`states[]`) from `BEHAVIOR_SPEC` compiler. One FSM per skill.
 
 ```yaml
 id: process_foreman_request
@@ -103,8 +107,9 @@ Skill run stores correlation ids (`conversation_id`, `request_id`, `skill_run_id
 
 ## Frontend
 
-- Types: `frontend/src/features/skills/types/skill.ts`, `fsm.ts`
-- Canvas: `frontend/src/features/skills/components/FsmCanvas.vue`
-- Inspector: `frontend/src/features/skills/components/SkillInspector.vue`
+- Types: `frontend/src/features/skills/types/skill.ts`, `fsm.ts`, `behavior.ts`
+- Canvas: `frontend/src/features/skills/components/BehaviorCanvas.vue`
+- Inspector: `frontend/src/features/skills/components/BehaviorInspector.vue`
+- Compile/lift: `frontend/src/features/skills/utils/behaviorCompile.ts`, `behaviorLift.ts`
 - Validation: `frontend/src/features/skills/utils/validateSkill.ts`
 - YAML: `frontend/src/features/skills/utils/skillYaml.ts`

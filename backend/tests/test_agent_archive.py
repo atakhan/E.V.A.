@@ -139,9 +139,3 @@ def test_archived_agent_excluded_from_runtime_summary(client: TestClient):
         assert agent_summary.json()["archived"] is True
     finally:
         client.delete(f"/api/agents/{slug}")
-
-
-@pytest.mark.integration
-def test_archive_demo_agent_forbidden(client: TestClient):
-    response = client.post("/api/agents/foreman/archive")
-    assert response.status_code == 403, response.text

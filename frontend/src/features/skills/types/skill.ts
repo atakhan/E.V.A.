@@ -1,4 +1,8 @@
 import type { FsmEditorState, FsmState, FsmTransition, SkillParam } from "@/features/skills/types/fsm";
+import type { BehaviorGraph, ExecutionArtifact } from "@/features/skills/types/behavior";
+import { emptyBehaviorGraph } from "@/features/skills/types/behavior";
+import { liftFsmToBehavior } from "@/features/skills/utils/behaviorLift";
+import { skillHasBehavior } from "@/features/skills/utils/behaviorGraph";
 import {
   DEFAULT_STATE_HEIGHT,
   DEFAULT_STATE_WIDTH,
@@ -17,6 +21,10 @@ export interface Skill {
   params: SkillParam[];
   states: FsmState[];
   viewport: { panX: number; panY: number; zoom: number };
+  behavior?: BehaviorGraph;
+  execution?: ExecutionArtifact;
+  storyViewport?: { panX: number; panY: number; zoom: number };
+  logicViewport?: { panX: number; panY: number; zoom: number };
 }
 
 /** Legacy Phase 0 canvas document. */
@@ -62,6 +70,9 @@ export function createEmptySkill(partial?: Partial<Skill> & { name: string }): S
     params: partial?.params ?? [],
     states: partial?.states ?? [],
     viewport: partial?.viewport ?? { panX: 0, panY: 0, zoom: 1 },
+    behavior: partial?.behavior ?? emptyBehaviorGraph(),
+    storyViewport: partial?.storyViewport ?? { panX: 0, panY: 0, zoom: 1 },
+    logicViewport: partial?.logicViewport ?? { panX: 0, panY: 0, zoom: 1 },
   };
 }
 
@@ -144,6 +155,8 @@ function normalizeTransition(raw: Partial<FsmTransition>): FsmTransition {
     toSide: normalizeRectSide(raw.toSide),
     fromAnchor: normalizeAnchor(raw.fromAnchor),
     toAnchor: normalizeAnchor(raw.toAnchor),
+    originNodeId: typeof raw.originNodeId === "string" ? raw.originNodeId : undefined,
+    originEdgeId: typeof raw.originEdgeId === "string" ? raw.originEdgeId : undefined,
   };
 }
 
@@ -163,6 +176,7 @@ function normalizeState(raw: Partial<FsmState>, fallbackId: string): FsmState {
     y: typeof raw.y === "number" ? raw.y : 0,
     width: typeof raw.width === "number" ? raw.width : DEFAULT_STATE_WIDTH,
     height: typeof raw.height === "number" ? raw.height : DEFAULT_STATE_HEIGHT,
+    originNodeId: typeof raw.originNodeId === "string" ? raw.originNodeId : undefined,
   };
 }
 
@@ -209,6 +223,15 @@ export function normalizeSkill(raw: LegacyCanvasSkill | Skill): Skill {
       : [],
     states,
     viewport: raw.viewport ?? { panX: 0, panY: 0, zoom: 1 },
+    behavior: (() => {
+      const existing = (raw as Skill).behavior;
+      if (skillHasBehavior(existing)) return existing;
+      if (states.length > 0) return liftFsmToBehavior(states, initial);
+      return existing ?? emptyBehaviorGraph();
+    })(),
+    execution: (raw as Skill).execution,
+    storyViewport: (raw as Skill).storyViewport ?? { panX: 0, panY: 0, zoom: 1 },
+    logicViewport: (raw as Skill).logicViewport ?? { panX: 0, panY: 0, zoom: 1 },
   };
 }
 

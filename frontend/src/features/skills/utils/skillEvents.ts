@@ -35,6 +35,24 @@ export const COMMON_DOMAIN_EVENTS = [
   "timer.elapsed",
 ] as const;
 
+/** Human titles for domain events (Story language). */
+export const EVENT_TITLES: Record<string, string> = {
+  "channel.message.received": "Когда приходит новое сообщение",
+  "channel.message.sent": "Когда сообщение отправлено",
+  "supplier.reply.received": "Когда приходит ответ поставщика",
+  "request.created": "Когда создана заявка",
+  "request.updated": "Когда заявка обновлена",
+  "invoice.received": "Когда приходит счёт",
+  "human.request.approved": "Когда запрос подтверждён",
+  "human.request.corrected": "Когда запрос исправлен",
+  "shipment.updated": "Когда поставка обновлена",
+  "timer.elapsed": "Когда срабатывает таймер",
+};
+
+export function humanEventName(event: string): string {
+  return EVENT_TITLES[event] ?? event;
+}
+
 export function actionCompletedEvent(actionId: string): string {
   return `action.${actionId}.completed`;
 }

@@ -18,7 +18,8 @@ export type SkillIssueLocator =
   | { kind: "skill" }
   | { kind: "state"; stateId: string }
   | { kind: "transition"; stateId: string; transitionId: string }
-  | { kind: "param"; index: number };
+  | { kind: "param"; index: number }
+  | { kind: "node"; nodeId: string };
 
 export interface AgentIssue {
   id: string;
@@ -46,6 +47,10 @@ function collectReferencedActionIds(agent: Agent): Set<string> {
         for (const actionId of transition.actions) ids.add(actionId);
       }
     }
+    for (const node of skill.behavior?.nodes ?? []) {
+      if (node.type === "do" && node.actionId) ids.add(node.actionId);
+      if (node.type === "wait" && node.waitFor.type === "action") ids.add(node.waitFor.actionId);
+    }
   }
   return ids;
 }
@@ -64,6 +69,17 @@ export function validateAgent(agent: Agent): AgentValidationReport {
       severity: "info",
       code: "no_skills",
       message: "У агента пока нет Skills",
+      href: agentSkillsPath(agent.slug),
+    });
+  }
+
+  const skillIds = new Set(agent.skills.map((skill) => skill.id));
+  if (agent.defaultSkillId && !skillIds.has(agent.defaultSkillId)) {
+    issues.push({
+      id: "agent.bad-default-skill",
+      severity: "error",
+      code: "invalid_default_skill",
+      message: `defaultSkillId «${agent.defaultSkillId}» не найден среди Skills агента`,
       href: agentSkillsPath(agent.slug),
     });
   }

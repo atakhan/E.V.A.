@@ -14,6 +14,7 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
+  defaultSkillId?: string;
   skills: Skill[];
   actions: ActionDef[];
   tools: ToolBinding[];

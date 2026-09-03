@@ -27,8 +27,6 @@ stateDiagram-v2
 
 \* v1: GET draft/publications разрешён; PUT draft / validate / publish — 409.
 
-**Защищённые агенты:** `foreman`, `supplier` (`DEMO_AGENT_SLUGS`) — archive возвращает 403.
-
 **Ephemeral** (`eva-test-*`, …) — по-прежнему **hard delete** через `prune_ephemeral_agents()`, не archive.
 
 ---
@@ -181,7 +179,7 @@ Slug остаётся занятым у archived-агента (нельзя со
 | 1 | archive → list без slug; includeArchived=true → есть |
 | 2 | archive → publish / upsert → 409 |
 | 3 | archive → create run → 409 |
-| 4 | archive demo foreman → 403 |
+| 4 | archive любого агента (включая бывшие demo-slug) → 200 |
 | 5 | unarchive → publish снова OK |
 | 6 | archive отменяет running/waiting runs |
 | 7 | summarize_runtime не включает archived slug |

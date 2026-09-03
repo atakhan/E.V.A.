@@ -92,14 +92,26 @@ backend/
 
 Импорт Tools — через пакеты: `from tools.telegram import TelegramTool`, `from tools.polza import PolzaClient`.
 
-## Dev-агенты
+## Сценарии (шаблоны агентов)
+
+Готовые документы агентов лежат в `backend/scenarios/` — это **шаблоны**, не автосоздание при старте:
+
+| Файл | Агент | Назначение |
+|------|-------|------------|
+| `foreman_agent_document.py` | `foreman` | Telegram + LLM demo |
+| `supplier_agent_document.py` | `supplier` | ai_supplier (чат + канбан) |
+| `supplier_assistant_agent_document.py` | `supplier-agent` | Ассистент снабженца + skill «Разговор» |
+| `conversation_skill.py` | — | Skill `razgovor` и stub-actions |
+
+Агентов создаёте в UI E.V.A. или поднимаете в integration-тестах через `tests/scenario_fixtures.py`.
+
+## Dev-окружение
 
 При старте backend (по умолчанию в `docker compose`):
 
-- **`EVA_SEED_DEMO_AGENTS=true`** — создаёт/обновляет демо-агентов `foreman` и `supplier`
 - **`EVA_PRUNE_EPHEMERAL_AGENTS=true`** — удаляет тестовых агентов, оставшихся после `pytest` (`eva-test-*`, `test-agent-*`, …)
 
-Чтобы отключить демо-агентов или не чистить тестовых — выставьте переменные в `false` в `backend/.env`.
+Чтобы не чистить тестовых агентов — выставьте `EVA_PRUNE_EPHEMERAL_AGENTS=false` в `backend/.env`.
 
 Полный сброс БД (удалит и логи Tools):
 

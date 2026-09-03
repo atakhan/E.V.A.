@@ -1,5 +1,6 @@
 import type { FsmState, SkillParam } from "@/features/skills/types/fsm";
 import type { Skill } from "@/features/skills/types/skill";
+import type { BehaviorGraph } from "@/features/skills/types/behavior";
 import { normalizeSkill } from "@/features/skills/types/skill";
 import { createId } from "@/shared/utils/id";
 
@@ -8,7 +9,20 @@ function quoteIfNeeded(value: string): string {
   return JSON.stringify(value);
 }
 
+const BEHAVIOR_YAML_HEADER =
+  "# Canonical: behavior. execution.states generated on publish — DO NOT EDIT\n";
+
 export function skillToYaml(skill: Skill): string {
+  if (skill.behavior && skill.behavior.nodes.length > 0) {
+    const payload = {
+      id: skill.id,
+      version: skill.version,
+      description: skill.description,
+      params: skill.params,
+      behavior: skill.behavior,
+    };
+    return `${BEHAVIOR_YAML_HEADER}${JSON.stringify(payload, null, 2)}\n`;
+  }
   const lines: string[] = [
     `id: ${quoteIfNeeded(skill.id)}`,
     `version: ${JSON.stringify(skill.version)}`,
@@ -83,6 +97,7 @@ export type YamlDoc = {
   params?: SkillParam[];
   states?: FsmState[];
   warnings?: string[];
+  behavior?: BehaviorGraph;
 };
 
 export function normalizeImportedSkillId(raw: string | undefined, fallback: string): string {
@@ -94,10 +109,11 @@ export function normalizeImportedSkillId(raw: string | undefined, fallback: stri
 export function parseSkillYamlDocument(raw: string): YamlDoc | { error: string } {
   const trimmed = raw.trim();
   if (!trimmed) return { error: "Пустой YAML" };
+  const withoutComments = trimmed.replace(/^(#.*\r?\n)+/, "").trim();
 
-  if (trimmed.startsWith("{")) {
+  if (withoutComments.startsWith("{")) {
     try {
-      const parsed = JSON.parse(trimmed) as Partial<Skill> & { id?: string };
+      const parsed = JSON.parse(withoutComments) as Partial<Skill> & { id?: string };
       return {
         skillId: parsed.id,
         description: parsed.description,
@@ -106,6 +122,7 @@ export function parseSkillYamlDocument(raw: string): YamlDoc | { error: string }
         params: parsed.params ?? [],
         states: parsed.states ?? [],
         warnings: [],
+        behavior: parsed.behavior,
       };
     } catch {
       return { error: "Не удалось разобрать JSON" };
@@ -133,6 +150,7 @@ export function skillFromYaml(raw: string, base: Skill): Skill | { error: string
     params: parsed.params ?? [],
     states: mergeLayout(base.states, parsed.states ?? []),
     viewport: base.viewport,
+    behavior: parsed.behavior,
     createdAt: base.createdAt,
     updatedAt: new Date().toISOString(),
   });

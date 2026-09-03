@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from definition.validation.validate_agent import validate_agent
-from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow, ToolCredentialRow
+from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow
 
 # Slugs created by integration tests; safe to delete on dev startup.
 EPHEMERAL_AGENT_SLUG_PREFIXES = (
@@ -19,20 +19,10 @@ EPHEMERAL_AGENT_SLUG_PREFIXES = (
     "cred-agent-",
 )
 
-# Demo agents seeded in dev; never pruned automatically.
-DEMO_AGENT_SLUGS = frozenset({"foreman", "supplier"})
-
-
 class AgentArchivedError(Exception):
     def __init__(self, slug: str) -> None:
         self.slug = slug
         super().__init__(f"Agent '{slug}' is archived")
-
-
-class AgentProtectedError(Exception):
-    def __init__(self, slug: str) -> None:
-        self.slug = slug
-        super().__init__(f"Agent '{slug}' is protected")
 
 
 def _utcnow_iso() -> str:
@@ -63,6 +53,7 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "createdAt": agent.created_at.isoformat(),
         "updatedAt": agent.updated_at.isoformat(),
         "archivedAt": agent.archived_at.isoformat() if agent.archived_at else None,
+        "defaultSkillId": draft_body.get("defaultSkillId") or None,
         "skills": draft_body.get("skills", []),
         "actions": draft_body.get("actions", []),
         "tools": draft_body.get("tools", []),
@@ -144,6 +135,7 @@ class AgentService:
         if agent.draft is None:
             agent.draft = AgentDraftRow(agent_id=agent.id, body={})
 
+        default_skill_id = str(payload.get("defaultSkillId") or "").strip() or None
         body = {
             "id": agent.id,
             "slug": agent.slug,
@@ -151,6 +143,7 @@ class AgentService:
             "description": agent.description,
             "createdAt": agent.created_at.isoformat(),
             "updatedAt": _utcnow_iso(),
+            "defaultSkillId": default_skill_id,
             "skills": payload.get("skills", []),
             "actions": payload.get("actions", []),
             "tools": payload.get("tools", []),
@@ -167,9 +160,6 @@ class AgentService:
         self.session.delete(agent)
 
     def archive_agent(self, slug: str) -> dict[str, Any]:
-        if slug.strip().lower() in DEMO_AGENT_SLUGS:
-            raise AgentProtectedError(slug)
-
         agent = self.get_agent_row(slug)
         if agent is None:
             raise KeyError(f"Agent '{slug}' not found")
@@ -198,8 +188,6 @@ class AgentService:
 
     def is_ephemeral_slug(self, slug: str) -> bool:
         normalized = slug.strip().lower()
-        if normalized in DEMO_AGENT_SLUGS:
-            return False
         return any(normalized.startswith(prefix) for prefix in EPHEMERAL_AGENT_SLUG_PREFIXES)
 
     def validate_draft(self, slug: str) -> dict[str, Any]:
@@ -210,11 +198,20 @@ class AgentService:
         return validate_agent(agent_doc)
 
     def publish(self, slug: str) -> dict[str, Any]:
+        from definition.behavior.materialize import materialize_agent_for_publish
+
         agent = self.ensure_active(slug)
         if agent.draft is None:
             raise KeyError(f"Agent '{slug}' not found")
 
-        report = validate_agent(_merge_agent(agent, agent.draft.body))
+        body = materialize_agent_for_publish(_merge_agent(agent, agent.draft.body))
+        if not body["ok"]:
+            details = "; ".join(
+                str(issue.get("message") or issue.get("code")) for issue in body["errors"][:8]
+            )
+            raise ValueError(f"Cannot publish: behavior compile failed ({details})")
+
+        report = validate_agent(body["agent"])
         if report["errors"] > 0:
             raise ValueError("Cannot publish agent with validation errors")
 
@@ -229,7 +226,7 @@ class AgentService:
             id=str(uuid.uuid4()),
             agent_id=agent.id,
             version=next_version,
-            body=_merge_agent(agent, agent.draft.body),
+            body=body["agent"],
         )
         self.session.add(publication)
         self.session.flush()
@@ -314,126 +311,3 @@ def seed_tool_catalog(session: Session) -> None:
             existing.description = tool.get("description", "")
             existing.definition = tool
 
-
-def _patch_tool_credential(doc: dict[str, Any], tool_id: str, credential_id: str) -> dict[str, Any]:
-    tools: list[dict[str, Any]] = []
-    for tool in doc.get("tools", []):
-        if not isinstance(tool, dict):
-            continue
-        entry = dict(tool)
-        if entry.get("toolId") == tool_id:
-            entry["credentialId"] = credential_id
-        tools.append(entry)
-    return {**doc, "tools": tools}
-
-
-def _seed_agent_draft(
-    service: AgentService,
-    slug: str,
-    template: dict[str, Any],
-    *,
-    tool_id: str,
-    credential_id: str,
-) -> None:
-    """Seed demo agent without overwriting a customized draft (skills/layout in DB)."""
-    existing = service.get_agent_by_slug(slug)
-    if existing and existing.get("skills"):
-        service.upsert_draft(slug, _patch_tool_credential(existing, tool_id, credential_id))
-        return
-    service.upsert_draft(slug, _patch_tool_credential(template, tool_id, credential_id))
-
-
-def seed_foreman_agent(session: Session) -> None:
-    from definition.services.credential_service import CredentialService
-    from scenarios.foreman_agent_document import build_foreman_agent_document
-
-    slug = "foreman"
-    doc = build_foreman_agent_document()
-    service = AgentService(session)
-    cred_service = CredentialService(session)
-
-    if service.get_agent_by_slug(slug) is None:
-        service.create_agent(name=doc["name"], slug=slug, description=doc.get("description", ""))
-
-    agent = session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-    assert agent is not None
-
-    credentials = cred_service.list_credentials(slug, tool_id="telegram")
-    if not credentials:
-        created = cred_service.create_credential(
-            slug,
-            tool_id="telegram",
-            name="Foreman dev bot",
-            secret={"bot_token": "000000:TEST-DEV-TOKEN"},
-        )
-        credential_id = created["id"]
-        row = session.get(ToolCredentialRow, credential_id)
-        if row is not None:
-            row.meta = {"dev_stub": True}
-            session.flush()
-    else:
-        credential_id = credentials[0]["id"]
-
-    for tool in doc.get("tools", []):
-        if tool.get("toolId") == "telegram":
-            tool["credentialId"] = credential_id
-
-    _seed_agent_draft(service, slug, doc, tool_id="telegram", credential_id=credential_id)
-
-    publication = service.get_latest_publication(slug)
-    if publication is not None and publication.body.get("skills"):
-        return
-
-    report = validate_agent(service.get_agent_by_slug(slug) or doc)
-    if report["errors"] == 0:
-        service.publish(slug)
-
-
-def seed_supplier_agent(session: Session) -> None:
-    from definition.services.credential_service import CredentialService
-    from scenarios.supplier_agent_document import build_supplier_agent_document
-
-    slug = "supplier"
-    doc = build_supplier_agent_document()
-    service = AgentService(session)
-    cred_service = CredentialService(session)
-
-    if service.get_agent_by_slug(slug) is None:
-        service.create_agent(name=doc["name"], slug=slug, description=doc.get("description", ""))
-
-    agent = session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-    assert agent is not None
-
-    credentials = cred_service.list_credentials(slug, tool_id="web_client")
-    if not credentials:
-        created = cred_service.create_credential(
-            slug,
-            tool_id="web_client",
-            name="ai_supplier dev",
-            secret={
-                "backend_base_url": "http://host.docker.internal:3000",
-                "outbound_api_key": "dev-outbound-key",
-                "inbound_api_key": "dev-inbound-key",
-            },
-        )
-        credential_id = created["id"]
-        row = session.get(ToolCredentialRow, credential_id)
-        if row is not None:
-            row.meta = {"dev_stub": True, "source": "ai_supplier"}
-            session.flush()
-    else:
-        credential_id = credentials[0]["id"]
-
-    for tool in doc.get("tools", []):
-        if tool.get("toolId") == "web_client":
-            tool["credentialId"] = credential_id
-
-    _seed_agent_draft(service, slug, doc, tool_id="web_client", credential_id=credential_id)
-
-    publication = service.get_latest_publication(slug)
-    if publication is not None and publication.body.get("skills"):
-        return
-
-    report = validate_agent(service.get_agent_by_slug(slug) or doc)
-    if report["errors"] == 0:
-        service.publish(slug)

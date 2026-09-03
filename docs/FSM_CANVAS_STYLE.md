@@ -1,73 +1,31 @@
-# FSM Canvas Style Guide (UML-lite)
+# FSM / Behavior Canvas Style Guide
 
-> Визуальный язык холста Skill FSM в E.V.A. Основан на **UML State Machine** (Harel statecharts), упрощён под v0.1 модель Skills.
+> Визуальный язык конструктора поведения в E.V.A.
 
-## Цель
+Канон модели: [`BEHAVIOR_SPEC.md`](./BEHAVIOR_SPEC.md).  
+Исполняемая FSM: [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md).
 
-Схема должна читаться без Inspector: **где мы**, **что ждём**, **что делаем**, **куда идём**.
+## Принцип
 
-## Элементы
+Canvas по умолчанию отвечает на вопрос **«что делает агент?»**, не «какие states в FSM?».
 
-### State (прямоугольник)
+- **История** — карточки wait / do / decide / end. Редактор Behavior Graph.
+- **Логика** — тот же граф, технические id / event / guard. Редактор Behavior Graph.
+- **Runtime** — подсветка шагов по `originNodeId`. Без редактирования.
+- **Машина** — скомпилированная FSM. Read-only.
 
-| Элемент | Отображение | Данные |
-|---------|-------------|--------|
-| Имя | Крупная подпись в блоке | `name` (fallback: `id`) |
-| Технический id | Мелкий mono при выборе | `id` |
-| Entry | `entry / action1, action2` | `onEnter[]` |
-| Final | Иконка «мишень» в углу блока | `final: true` |
+FSM — artifact (`execution.states`), не source of truth.
 
-**Не** помечаем `initial` внутри блока — для старта используется псевдо-состояние (см. ниже).
+## Карточки (Story)
 
-### Initial (псевдо-состояние)
+- **wait** — «Когда…» / «Жду…»
+- **do** — человеческое имя Action, мелкий `actionId`
+- **decide** — вопрос + ветки Да/Нет
+- **end** — только «задача завершена». Цикл «жду следующее сообщение» — `wait`.
 
-- Заполненный круг слева от initial state
-- Стрелка от круга к левому краю state
-- Один на Skill (`model.initial`)
+## Файлы
 
-### Final (псевдо-состояние)
-
-- Двойной круг (bullseye) внутри state — UML final
-- Не отдельный блок на холсте (в v0.1)
-
-### Transition (стрелка)
-
-Подпись в формате UML:
-
-```text
-event [guard] / action1, action2
-```
-
-| Часть | Источник | Правило отображения |
-|-------|----------|---------------------|
-| `event` | `transition.event` | Всегда, строка 1 |
-| `[guard]` | `transition.guard` | Если не пустой; усечение вне выбора |
-| `/ actions` | `transition.actions` | Если не пустой; строка 2 |
-
-Длинные списки actions: `a, b +2`.
-
-### Поток
-
-- Предпочтительно **слева направо** или **сверху вниз**
-- Self-loop — допустим (ожидание в том же state)
-
-## Соответствие SKILLS_SPEC v0.1
-
-```text
-Skill → FSM → Action → Tool
-```
-
-FSM ссылается только на **Action id**, не на Tool commands.
-
-## Вне scope (позже)
-
-- `exit`, `do` activity
-- Choice / junction pseudostates
-- Composite (nested) states
-- Orthogonal regions
-
-## Файлы реализации
-
-- Холст: `frontend/src/features/skills/components/FsmCanvas.vue`
-- Подписи: `frontend/src/features/skills/utils/edgeRouting.ts`
-- Модель: `frontend/src/features/skills/types/fsm.ts`
+- Холст: `frontend/src/features/skills/components/BehaviorCanvas.vue`
+- Инспектор: `frontend/src/features/skills/components/BehaviorInspector.vue`
+- Компилятор: `frontend/src/features/skills/utils/behaviorCompile.ts`, `backend/definition/behavior/`
+- Legacy UML canvas: `frontend/src/features/skills/components/FsmCanvas.vue`

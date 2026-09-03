@@ -58,6 +58,8 @@ export interface FsmTransition {
   fromAnchor?: number;
   /** Position along the target edge (0–1). */
   toAnchor?: number;
+  originNodeId?: string;
+  originEdgeId?: string;
 }
 
 export interface FsmState {
@@ -71,6 +73,7 @@ export interface FsmState {
   y: number;
   width: number;
   height: number;
+  originNodeId?: string;
 }
 
 export interface FsmEditorState {

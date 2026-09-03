@@ -6,8 +6,6 @@ from app.config import get_settings
 from definition.services.agent_service import (
     AgentService,
     prune_ephemeral_agents,
-    seed_foreman_agent,
-    seed_supplier_agent,
     seed_tool_catalog,
 )
 from infrastructure.db.session import get_engine, get_session_factory, session_scope
@@ -65,9 +63,6 @@ def init_db() -> None:
         seed_tool_catalog(session)
         if settings.prune_ephemeral_agents:
             prune_ephemeral_agents(session)
-        if settings.seed_demo_agents:
-            seed_foreman_agent(session)
-            seed_supplier_agent(session)
 
 
 def get_agent_service(session: Session) -> AgentService:

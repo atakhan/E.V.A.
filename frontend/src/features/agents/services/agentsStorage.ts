@@ -200,6 +200,7 @@ function migrateAgentRecord(raw: unknown): Agent {
     name: record.name || "Агент",
     description: record.description ?? "",
     archivedAt: record.archivedAt ?? null,
+    defaultSkillId: record.defaultSkillId,
     createdAt: record.createdAt || new Date().toISOString(),
     updatedAt: record.updatedAt || new Date().toISOString(),
     skills,

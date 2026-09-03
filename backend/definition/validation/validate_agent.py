@@ -39,6 +39,13 @@ def _collect_referenced_action_ids(agent: dict[str, Any]) -> set[str]:
             for transition in state.get("transitions", []):
                 for action_id in transition.get("actions", []):
                     ids.add(action_id)
+        behavior = skill.get("behavior") or {}
+        for node in behavior.get("nodes") or []:
+            if node.get("type") == "do" and node.get("actionId"):
+                ids.add(str(node["actionId"]))
+            wait_for = node.get("waitFor") or {}
+            if wait_for.get("type") == "action" and wait_for.get("actionId"):
+                ids.add(str(wait_for["actionId"]))
     return ids
 
 
@@ -60,6 +67,19 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
                 "info",
                 "no_skills",
                 "У агента пока нет Skills",
+                f"/agents/{slug}/skills" if slug else None,
+            )
+        )
+
+    skill_ids = {skill.get("id") for skill in agent.get("skills", []) if skill.get("id")}
+    default_skill_id = agent.get("defaultSkillId")
+    if default_skill_id and default_skill_id not in skill_ids:
+        issues.append(
+            _issue(
+                "agent.bad-default-skill",
+                "error",
+                "invalid_default_skill",
+                f"defaultSkillId «{default_skill_id}» не найден среди Skills агента",
                 f"/agents/{slug}/skills" if slug else None,
             )
         )
