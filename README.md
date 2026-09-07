@@ -13,6 +13,15 @@ Engine for Versatile Agents.
 | Слой | Путь |
 |------|------|
 | Нормативные спеки | [`docs/*_SPEC_v0.1.md`](docs/) |
+| Взаимодействие человек ↔ агент | [`docs/INTERACTION_SPEC_v0.1.md`](docs/INTERACTION_SPEC_v0.1.md) |
+| План слоя взаимодействия | [`docs/INTERACTION_IMPLEMENTATION_PLAN.md`](docs/INTERACTION_IMPLEMENTATION_PLAN.md) |
+| Заметки по внедрению | [`docs/INTERACTION_IMPLEMENTATION_NOTES.md`](docs/INTERACTION_IMPLEMENTATION_NOTES.md) |
+| Разбор заметок (архитектура) | [`docs/INTERACTION_NOTES_ARCHITECTURE_REVIEW.md`](docs/INTERACTION_NOTES_ARCHITECTURE_REVIEW.md) |
+| Модель конторы (директор / стойка / бюро) | [`docs/INTERACTION_OFFICE_MODEL.md`](docs/INTERACTION_OFFICE_MODEL.md) |
+| Конституция аналитического бюро | [`docs/INTERACTION_BUREAU_MODEL.md`](docs/INTERACTION_BUREAU_MODEL.md) |
+| Зачем была аналогия конторы | [`docs/INTERACTION_FUNDAMENTAL_PROBLEM.md`](docs/INTERACTION_FUNDAMENTAL_PROBLEM.md) |
+| Три проекции ситуации (оператор / домен / агентство) | [`docs/INTERACTION_WORLD_MODEL.md`](docs/INTERACTION_WORLD_MODEL.md) |
+| Контора vs сборка | [`docs/INTERACTION_OFFICE_GAP.md`](docs/INTERACTION_OFFICE_GAP.md) |
 | Концептуальная архитектура | [`architecture/`](architecture/) |
 | Статус runtime (код vs spec) | [`docs/RUNTIME_IMPLEMENTATION_STATUS.md`](docs/RUNTIME_IMPLEMENTATION_STATUS.md) |
 | Согласование architecture ↔ docs | [`docs/ARCHITECTURE_DOCS_ALIGNMENT.md`](docs/ARCHITECTURE_DOCS_ALIGNMENT.md) |
