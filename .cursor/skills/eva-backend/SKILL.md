@@ -74,7 +74,7 @@ Event → EventRouter → SkillRunner (FSM) → ActionExecutor → Tool → Even
 
 - Agent document: skills, actions, tool bindings
 - `runtime/definition_loader.py` — builds ToolRegistry from agent bindings
-- Specs: `docs/ACTIONS_SPEC_v0.1.md`, `docs/SKILLS_SPEC_v0.1.md`, `docs/EVENT_SPEC_v0.1.md`, `docs/TOOLS_SDK_SPEC_v0.1.md`
+- Specs: `docs/ACTIONS_SPEC_v0.1.md`, `docs/SKILLS_SPEC_v0.1.md`, `docs/EVENT_SPEC_v0.1.md`, `docs/TOOLS_SDK_SPEC_v0.1.md`, `docs/INTERACTION_SPEC_v0.1.md` (target: dispatcher / conversation ≠ run)
 - Cursor cheatsheets: `.cursor/skills/eva-specs/`
 
 ## Tests

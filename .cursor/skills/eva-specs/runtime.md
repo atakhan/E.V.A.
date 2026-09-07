@@ -13,8 +13,12 @@ Runtime:    SkillRun, ActionRun, ToolExecution, Event
 ## Execution loop
 
 ```text
-Event → route → SkillRun → FSM → Action → Tool → result → FSM
+Event → Dispatcher (act class) → waiting run only if current_state handles event.type → else new SkillRun → FSM → Action → Tool
 ```
+
+Waiting on `conversation_id` must **not** swallow a card button just because the chat skill is waiting for the next message. Resume iff the state's transitions include this event type.
+
+Worker lock: `conv-skill:{conversation}:{skill}` when both are known (inbound and completion of the same skill serialize; chat vs parse do not share a lock). Not the whole conversation.
 
 ## SkillRun status (spec)
 

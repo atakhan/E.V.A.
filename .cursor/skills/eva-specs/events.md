@@ -39,8 +39,10 @@ Event → FSM → Action → Tool → World → Event
 
 - `id` — stable, used for dedup (at-least-once delivery)
 - `timestamp` — when event occurred, not when processed
-- `correlation` — links events to execution context
+- `correlation` — links events to execution context. `conversation_id` is the voice thread, not Skill Run ownership.
+- `metadata.focus` — ephemeral act focus (`view`, `openEntityId`, `selectedEntityIds`)
 - `causation_id` — direct cause chain (≠ correlation)
+- `user_id` — actor (web `actor_id` maps here)
 
 ## Naming
 

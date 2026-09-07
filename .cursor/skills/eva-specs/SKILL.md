@@ -1,9 +1,9 @@
 ---
 name: eva-specs
 description: >-
-  E.V.A. platform specifications (Actions, Skills, Events, Tools). Use when
-  implementing or validating runtime behavior, editing specs in E.V.A./docs,
-  or aligning backend/frontend with the v0.1 contracts.
+  E.V.A. platform specifications (Actions, Skills, Events, Tools, Interaction).
+  Use when implementing or validating runtime behavior, editing specs in
+  E.V.A./docs, or aligning backend/frontend with the v0.1 contracts.
 ---
 
 # E.V.A. Specifications
@@ -20,12 +20,21 @@ Full specs (source of truth):
 | Tools | `E.V.A./docs/TOOLS_SDK_SPEC_v0.1.md` |
 | Runtime | `E.V.A./docs/RUNTIME_SPEC_v0.1.md` |
 | Behavior | `E.V.A./docs/BEHAVIOR_SPEC.md` |
+| Interaction | `E.V.A./docs/INTERACTION_SPEC_v0.1.md` |
+| Interaction plan | `E.V.A./docs/INTERACTION_IMPLEMENTATION_PLAN.md` |
+| Interaction notes | `E.V.A./docs/INTERACTION_IMPLEMENTATION_NOTES.md` |
+| Interaction notes review | `E.V.A./docs/INTERACTION_NOTES_ARCHITECTURE_REVIEW.md` |
+| Interaction office model | `E.V.A./docs/INTERACTION_OFFICE_MODEL.md` |
+| Interaction bureau model | `E.V.A./docs/INTERACTION_BUREAU_MODEL.md` |
+| Interaction fundamental problem | `E.V.A./docs/INTERACTION_FUNDAMENTAL_PROBLEM.md` |
+| Interaction world model | `E.V.A./docs/INTERACTION_WORLD_MODEL.md` |
+| Interaction office gap | `E.V.A./docs/INTERACTION_OFFICE_GAP.md` |
 
 Implementation gap tracker: `E.V.A./docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 
 Architecture ↔ docs alignment: `E.V.A./docs/ARCHITECTURE_DOCS_ALIGNMENT.md`
 
-Condensed references: `.cursor/skills/eva-specs/{actions,skills,events,tools,runtime}.md`
+Condensed references: `.cursor/skills/eva-specs/{actions,skills,events,tools,runtime,interaction}.md`
 
 ## Platform model
 
@@ -35,7 +44,7 @@ Agent
   ├── Actions (recipe) — what to do (atomic operation)
   └── Tools (commands) — technical capabilities
 
-Event → FSM → Action → Tool → World → Event
+Event → Dispatcher → FSM → Action → Tool → World → Event
 ```
 
 Boundaries:
@@ -67,6 +76,7 @@ Runtime implementation status: `docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 | Event envelope, correlation, naming, routing | `events.md` |
 | Tool manifest, commands, credentials, package layout | `tools.md` |
 | SkillRun, worker, pinning, retry, execution history | `runtime.md` |
+| Chat vs button, session vs skill run, dispatcher, focus | `interaction.md` + `docs/INTERACTION_SPEC_v0.1.md` + plan + notes + `docs/INTERACTION_NOTES_ARCHITECTURE_REVIEW.md` |
 
 ## Cross-cutting rules (v0.1)
 
