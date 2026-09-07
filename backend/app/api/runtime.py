@@ -189,19 +189,31 @@ def cancel_run(run_id: str, session: Session = Depends(_db_session)) -> dict[str
 
 
 @router.get("/runs/by-conversation")
-def find_run_by_conversation(
+def find_runs_by_conversation(
     conversation_id: str = Query(alias="conversationId"),
     session: Session = Depends(_db_session),
 ) -> dict[str, Any]:
     store = PostgresSkillRunStore(session)
-    run = store.find_waiting_by_conversation(conversation_id)
-    if run is None:
+    runs = store.find_waiting_runs("conversation_id", conversation_id)
+    if not runs:
         raise HTTPException(status_code=404, detail="Waiting run not found")
+    items = [
+        {
+            "skillRunId": run.id,
+            "skillId": run.skill_id,
+            "status": run.status.value,
+            "currentState": run.current_state,
+        }
+        for run in runs
+    ]
+    first = runs[0]
     return {
         "ok": True,
-        "skillRunId": run.id,
-        "status": run.status.value,
-        "currentState": run.current_state,
+        "items": items,
+        "skillRunId": first.id,
+        "skillId": first.skill_id,
+        "status": first.status.value,
+        "currentState": first.current_state,
     }
 
 

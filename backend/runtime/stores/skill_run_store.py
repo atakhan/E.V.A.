@@ -9,7 +9,7 @@ from domain.agent import SkillRun, SkillRunStatus
 @dataclass
 class InMemoryStore:
     runs: dict[str, SkillRun] = field(default_factory=dict)
-    by_conversation: dict[str, str] = field(default_factory=dict)
+    by_conversation: dict[str, list[str]] = field(default_factory=dict)
 
 
 class SkillRunStore(Protocol):
@@ -35,7 +35,9 @@ def store_save_run(store: SkillRunStore | InMemoryStore, run: SkillRun) -> None:
         store.runs[run.id] = run
         conversation_id = run.vars.get("conversation_id")
         if isinstance(conversation_id, str) and conversation_id:
-            store.by_conversation[conversation_id] = run.id
+            ids = store.by_conversation.setdefault(conversation_id, [])
+            if run.id not in ids:
+                ids.append(run.id)
         return
     store.save_run(run)
     conversation_id = run.vars.get("conversation_id")
@@ -49,16 +51,14 @@ def store_find_waiting_runs(
     value: str,
 ) -> list[SkillRun]:
     if isinstance(store, InMemoryStore):
-        if correlation_key == "conversation_id":
-            run_id = store.by_conversation.get(value)
-            if not run_id:
-                return []
-            existing = store.runs.get(run_id)
-            if existing and existing.status in (SkillRunStatus.waiting, SkillRunStatus.running):
-                return [existing]
         matches: list[SkillRun] = []
         for run in store.runs.values():
             if run.status not in (SkillRunStatus.waiting, SkillRunStatus.running):
+                continue
+            cid = run.vars.get("conversation_id") or run.params.get("conversation_id")
+            if correlation_key == "conversation_id":
+                if cid == value:
+                    matches.append(run)
                 continue
             if run.params.get(correlation_key) == value or run.vars.get(correlation_key) == value:
                 matches.append(run)
@@ -67,12 +67,5 @@ def store_find_waiting_runs(
 
 
 def store_find_waiting(store: SkillRunStore | InMemoryStore, conversation_id: str) -> SkillRun | None:
-    if isinstance(store, InMemoryStore):
-        run_id = store.by_conversation.get(conversation_id)
-        if not run_id:
-            return None
-        existing = store.runs.get(run_id)
-        if existing and existing.status in (SkillRunStatus.waiting, SkillRunStatus.running):
-            return existing
-        return None
-    return store.find_waiting_by_conversation(conversation_id)
+    runs = store_find_waiting_runs(store, "conversation_id", conversation_id)
+    return runs[0] if runs else None

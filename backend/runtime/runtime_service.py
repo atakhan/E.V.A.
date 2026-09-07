@@ -8,9 +8,10 @@ from domain.events import Event
 from infrastructure.stores.postgres_action_run_store import PostgresActionRunStore
 from infrastructure.stores.postgres_tool_execution_store import PostgresToolExecutionStore
 from runtime.action_executor import ActionExecutor
+from runtime.dispatcher import classify_act
 from runtime.event_router import RuntimeCatalog, RouterResult
 from runtime.fsm_engine import FSMEngine
-from runtime.skill_routing import find_skills_for_event
+from runtime.skill_routing import find_skills_for_event, waiting_runs_matching_event
 from runtime.skill_runner import SkillRunner, SkillRunTrace
 from runtime.stores.skill_run_store import (
     InMemoryStore,
@@ -88,6 +89,7 @@ class RuntimeService:
         return results[0]
 
     def route_all(self, event: Event) -> list[RouterResult]:
+        event = self._apply_dispatch(event)
         targets = self._resolve_targets(event)
         results: list[RouterResult] = []
         for run, created, service in targets:
@@ -95,9 +97,28 @@ class RuntimeService:
             results.append(result)
         return results
 
+    def _apply_dispatch(self, event: Event) -> Event:
+        body = self.context.publication_body or self.context.agent_body
+        if not body:
+            return event
+        decision = classify_act(event, self.context.store, body)
+        for run_id in decision.cancel_run_ids:
+            self.cancel_run(run_id)
+        prepared = decision.event
+        if decision.resume_run_id and not prepared.skill_run_id:
+            prepared = prepared.model_copy(update={"skill_run_id": decision.resume_run_id})
+        return prepared
+
     def _route_single(self, run: SkillRun, event: Event, *, created: bool) -> RouterResult:
         if run.status == SkillRunStatus.cancelled:
             return RouterResult(run=run.model_copy(deep=True), trace=SkillRunTrace(skill_run_id=run.id), created=created)
+
+        if not created and not self._event_targets_run(run, event):
+            return RouterResult(
+                run=run.model_copy(deep=True),
+                trace=SkillRunTrace(skill_run_id=run.id, status=run.status),
+                created=created,
+            )
 
         event_copy = event.model_copy(deep=True)
         if event_copy.skill_run_id is None:
@@ -113,6 +134,9 @@ class RuntimeService:
             run.vars["last_message"] = event_copy.payload["text"]
         self._sync_correlation(run, event_copy)
         run.vars["_last_event_id"] = event_copy.id
+        from runtime.desk import refresh_desk_snapshot
+
+        refresh_desk_snapshot(run, event_copy, self.context.registry)
 
         trace = self.runner.handle(run, event_copy)
         store_save_run(self.context.store, run)
@@ -150,14 +174,20 @@ class RuntimeService:
         if event.skill_run_id:
             existing = store_get_run(self.context.store, event.skill_run_id)
             if existing is not None:
-                return [(existing, False, self)]
+                return [(existing, False, self._service_for_run(existing))]
 
+        body = self.context.publication_body or self.context.agent_body
         for key in ("conversation_id", "request_id", "entity_id"):
             value = event.payload.get(key) or getattr(event.correlation, key, None)
             if isinstance(value, str) and value:
                 waiting = self._find_waiting_runs(key, value)
-                if waiting:
-                    return [(run, False, self._service_for_run(run)) for run in waiting]
+                matching = (
+                    waiting_runs_matching_event(waiting, event.type, body)
+                    if body
+                    else waiting
+                )
+                if matching:
+                    return [(run, False, self._service_for_run(run)) for run in matching]
 
         skill_ids = [self.context.catalog.skill.id]
         if self.context.publication_body:
@@ -197,20 +227,68 @@ class RuntimeService:
         *,
         publication_version: str | None = None,
     ) -> RuntimeService | None:
-        if self.context.session is None:
-            return None
-        from runtime.runtime_factory import build_runtime_service
+        if skill_id == self.context.catalog.skill.id and (
+            publication_version is None or publication_version == self.context.publication_version
+        ):
+            return self
+        if self.context.session is not None:
+            from runtime.runtime_factory import build_runtime_service
 
-        version = publication_version or self.context.publication_version
+            version = publication_version or self.context.publication_version
+            try:
+                return build_runtime_service(
+                    self.context.session,
+                    agent_slug=self.context.agent_slug,
+                    skill_id=skill_id,
+                    publication_version=version,
+                )
+            except KeyError:
+                return None
+        cloned = self._context_for_skill(skill_id)
+        return RuntimeService(cloned) if cloned is not None else None
+
+    def _context_for_skill(self, skill_id: str) -> RuntimeContext | None:
+        body = self.context.publication_body or self.context.agent_body
+        if not body:
+            return None
+        from runtime.definition_loader import load_runtime_catalog
+
         try:
-            return build_runtime_service(
-                self.context.session,
-                agent_slug=self.context.agent_slug,
-                skill_id=skill_id,
-                publication_version=version,
-            )
+            catalog = load_runtime_catalog(body, skill_id)
         except KeyError:
             return None
+        ctx = self.context
+        return RuntimeContext(
+            catalog=catalog,
+            registry=ctx.registry,
+            store=ctx.store,
+            agent_id=ctx.agent_id,
+            agent_slug=ctx.agent_slug,
+            publication_version=ctx.publication_version,
+            publication_body=ctx.publication_body or body,
+            event_log=ctx.event_log,
+            session=ctx.session,
+            credential_by_instance=ctx.credential_by_instance,
+            agent_body=ctx.agent_body or body,
+            action_run_store=ctx.action_run_store,
+            tool_execution_store=ctx.tool_execution_store,
+        )
+
+    def _agent_body(self) -> dict[str, Any]:
+        return self.context.publication_body or self.context.agent_body
+
+    def _event_targets_run(self, run: SkillRun, event: Event) -> bool:
+        if event.type.startswith("action.") or event.type == "runtime.continue":
+            return True
+        body = self._agent_body()
+        if body:
+            from runtime.skill_routing import run_accepts_event
+
+            return run_accepts_event(run, event.type, body)
+        state = self.context.catalog.skill.get_state(run.current_state)
+        if state is None:
+            return False
+        return any(transition.event == event.type for transition in state.transitions)
 
     def _find_waiting_runs(self, correlation_key: str, value: str) -> list[SkillRun]:
         store = self.context.store

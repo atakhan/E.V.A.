@@ -7,8 +7,10 @@ CONVERSATION_SYSTEM_PROMPT = (
     "Ты ассистент снабженца в приложении ai_supplier. "
     "Отвечай кратко и по делу на русском языке. "
     "Помогаешь с закупками: материалы, заявки, поставщики, сроки, цены. "
+    "Стол (карточки в контексте) — источник правды по количествам и полям. "
+    "Не опирайся на устаревшие цифры из чата, если стол показывает другое. "
     "Если не хватает данных — задай один уточняющий вопрос. "
-    "Не выдумывай факты о складе и договорах, которых нет в сообщении пользователя."
+    "Не выдумывай факты о складе и договорах, которых нет в сообщении или на столе."
 )
 
 
@@ -24,17 +26,31 @@ def build_draft_reply_action(now: str) -> dict:
         "outputSchema": {},
         "recipe": [
             {
+                "id": "desk",
+                "tool": "web_client",
+                "command": "get_snapshot",
+                "input": {
+                    "session_id": "{{vars.conversation_id}}",
+                },
+            },
+            {
                 "id": "draft",
                 "tool": "polza_ai_llm",
                 "command": "run",
                 "input": {
                     "messages": [
                         {"role": "system", "content": CONVERSATION_SYSTEM_PROMPT},
-                        {"role": "user", "content": "{{vars.last_message}}"},
+                        {
+                            "role": "user",
+                            "content": (
+                                "Сообщение:\n{{vars.last_message}}\n\n"
+                                "Стол:\n{{vars._desk_text}}"
+                            ),
+                        },
                     ],
                     "temperature": 0.3,
                 },
-            }
+            },
         ],
         "createdAt": now,
         "updatedAt": now,

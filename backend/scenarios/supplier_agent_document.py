@@ -65,23 +65,29 @@ def build_supplier_agent_document() -> dict:
                     {
                         "id": str(uuid.uuid4()),
                         "tool": "web_client",
+                        "command": "get_snapshot",
+                        "input": {"session_id": "{{vars.conversation_id}}"},
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "tool": "web_client",
                         "command": "send_message",
                         "input": {
                             "session_id": "{{vars.conversation_id}}",
                             "text": "Запрос {{vars.request_id}} разобран и отправлен на проверку.",
-                            "meta": {
-                                "workspace_update": {
-                                    "entity": "request",
-                                    "id": "{{vars.request_id}}",
-                                    "patch": {
-                                        "status": "review",
-                                        "confidence": 0.89,
-                                        "title": "{{vars.last_message}}",
-                                    },
-                                }
+                            "workspace_update": {
+                                "entity": "request",
+                                "id": "{{vars.request_id}}",
+                                "patch": {
+                                    "status": "review",
+                                    "confidence": 0.89,
+                                    "title": "{{vars.title}}",
+                                    "quantity": "{{vars.quantity}}",
+                                    "unit": "{{vars.unit}}",
+                                },
                             },
                         },
-                    }
+                    },
                 ],
                 "createdAt": now,
                 "updatedAt": now,

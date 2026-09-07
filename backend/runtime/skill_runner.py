@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -8,6 +9,8 @@ from domain.agent import SkillRun, SkillRunStatus
 from domain.events import Event
 from domain.skill import SkillDefinition
 from runtime.fsm_engine import AUTO_EVENT, FSMEngine, TransitionResult, action_completed_event_type
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -76,14 +79,19 @@ class SkillRunner:
 
         transition = self.fsm.find_transition(state, event, run.vars)
         if transition is None:
-            if event.type == AUTO_EVENT or event.type.startswith("action."):
-                return TransitionResult(
-                    from_state=run.current_state,
-                    to_state=run.current_state,
-                    event=event.type,
+            if event.type != AUTO_EVENT and not event.type.startswith("action."):
+                logger.info(
+                    "No-match: skill %s state %s ignores event %s (run %s stays %s)",
+                    self.skill.id,
+                    run.current_state,
+                    event.type,
+                    run.id,
+                    run.status.value,
                 )
-            raise RuntimeError(
-                f"No transition for event '{event.type}' in state '{run.current_state}'"
+            return TransitionResult(
+                from_state=run.current_state,
+                to_state=run.current_state,
+                event=event.type,
             )
 
         result = self.fsm.apply_transition(run, transition, event)

@@ -43,6 +43,15 @@ class WebClientTool(BaseTool):
             return ToolResult(ok=False, error="text is required for web_client.send_message")
 
         meta = args.get("meta") if isinstance(args.get("meta"), dict) else {}
+        if isinstance(args.get("workspace_update"), dict):
+            meta = {**meta, "workspace_update": args["workspace_update"]}
+        if args.get("ui_proposal") is not None:
+            meta = {**meta, "ui_proposal": args["ui_proposal"]}
+        from runtime.presence import presence_for_conversation
+
+        presence = presence_for_conversation(self.session, session_id)
+        if presence:
+            meta = {**meta, "presence": presence}
         try:
             response = self.http.send_message(session_id=session_id, text=text, meta=meta)
         except WebClientHttpError as exc:

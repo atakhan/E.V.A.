@@ -195,7 +195,10 @@ def test_find_run_by_conversation_endpoint(client: TestClient):
             params={"conversationId": conversation_id},
         )
         assert found.status_code == 200, found.text
-        assert found.json()["skillRunId"] == run_id
+        payload = found.json()
+        assert payload["skillRunId"] == run_id
+        assert payload["items"][0]["skillRunId"] == run_id
+        assert payload["items"][0]["skillId"]
     finally:
         client.delete(f"/api/agents/{slug}")
 

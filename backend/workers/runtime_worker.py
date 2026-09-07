@@ -18,11 +18,53 @@ from infrastructure.redis.event_bus import (
 from infrastructure.stores.postgres_skill_run_store import PostgresSkillRunStore
 from runtime.correlation_lock import correlation_lock
 from runtime.dlq import increment_attempt, max_delivery_attempts, move_to_dlq
+from runtime.dispatcher import classify_act
+from runtime.event_lock import event_lock_key
 from runtime.exceptions import ConcurrentUpdateError
+from runtime.publication_loader import load_published_agent_body
 from runtime.runtime_factory import build_runtime_service
 from runtime.scheduler import RuntimeScheduler
+from runtime.skill_routing import matching_waiting_run
 
 logger = logging.getLogger(__name__)
+
+
+def _prepared_event(session, event: Event, transport: dict[str, str]) -> Event:
+    agent_slug = transport.get("agentSlug")
+    body = load_published_agent_body(session, agent_slug) if agent_slug else None
+    if not body:
+        return event
+    store = PostgresSkillRunStore(session)
+    decision = classify_act(event, store, body)
+    prepared = decision.event
+    if decision.resume_run_id and not prepared.skill_run_id:
+        prepared = prepared.model_copy(update={"skill_run_id": decision.resume_run_id})
+    return prepared
+
+
+def _lock_key_for_event(session, event: Event, transport: dict[str, str]) -> str:
+    event = _prepared_event(session, event, transport)
+    store = PostgresSkillRunStore(session)
+    if event.skill_run_id:
+        existing = store.get_run(event.skill_run_id)
+        skill_id = existing.skill_id if existing is not None else None
+        return event_lock_key(event, skill_id=skill_id)
+    agent_slug = transport.get("agentSlug")
+    body = load_published_agent_body(session, agent_slug) if agent_slug else None
+    waiting = matching_waiting_run(store, event, body)
+    skill_id = (waiting.skill_id if waiting is not None else None) or transport.get("skillId")
+    if not skill_id and agent_slug:
+        from runtime.skill_resolver import resolve_skill_for_agent_slug
+
+        resolution = resolve_skill_for_agent_slug(
+            session,
+            agent_slug=str(agent_slug),
+            event_type=event.type,
+            explicit_skill_id=transport.get("skillId"),
+        )
+        if resolution.ok:
+            skill_id = resolution.skill_id
+    return event_lock_key(event, skill_id=skill_id)
 
 
 def _pinned_version_for_event(session, event: Event, transport: dict[str, str]) -> str | None:
@@ -31,11 +73,11 @@ def _pinned_version_for_event(session, event: Event, transport: dict[str, str]) 
         existing = store.get_run(event.skill_run_id)
         if existing is not None:
             return existing.skill_version
-    conversation_id = event.payload.get("conversation_id")
-    if isinstance(conversation_id, str):
-        existing = store.find_waiting_by_conversation(conversation_id)
-        if existing is not None:
-            return existing.skill_version
+    agent_slug = transport.get("agentSlug")
+    body = load_published_agent_body(session, agent_slug) if agent_slug else None
+    existing = matching_waiting_run(store, event, body)
+    if existing is not None:
+        return existing.skill_version
     return None
 
 
@@ -47,6 +89,7 @@ def _resolve_runtime_for_event(
     agent_slug = transport.get("agentSlug")
     skill_id = transport.get("skillId")
     store = PostgresSkillRunStore(session)
+    body = load_published_agent_body(session, agent_slug) if agent_slug else None
 
     if event.skill_run_id:
         existing = store.get_run(event.skill_run_id)
@@ -54,8 +97,8 @@ def _resolve_runtime_for_event(
             return None
         agent_slug = agent_slug or existing.vars.get("_agent_slug")
         skill_id = existing.skill_id
-    elif isinstance(event.payload.get("conversation_id"), str):
-        existing = store.find_waiting_by_conversation(event.payload["conversation_id"])
+    else:
+        existing = matching_waiting_run(store, event, body)
         if existing is not None:
             agent_slug = agent_slug or existing.vars.get("_agent_slug")
             skill_id = existing.skill_id
@@ -111,17 +154,19 @@ def process_event_data(raw: dict, *, message_id: str | None = None) -> None:
         logger.info("Skipping duplicate event %s", event.id)
         return
 
-    correlation_key = (
-        event.payload.get("conversation_id")
-        or event.correlation.conversation_id
-        or event.skill_run_id
-        or event.id
-    )
+    lock_key = event.id
+    with session_scope() as peek:
+        event = _prepared_event(peek, event, transport)
+        lock_key = _lock_key_for_event(peek, event, transport)
 
-    with correlation_lock(str(correlation_key)):
+    with correlation_lock(str(lock_key)):
         with session_scope() as session:
             resolved = _resolve_runtime_for_event(session, event, transport)
             if resolved is None:
+                if event.type == "web.state.changed":
+                    mark_event_processed(event.id)
+                    logger.info("World fact %s has no skill run — acked", event.id)
+                    return
                 logger.warning("Skipping event — runtime not resolved: %s", event.id)
                 return
             service, agent_slug, skill_id = resolved

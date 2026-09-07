@@ -10,7 +10,7 @@ from domain.skill import SkillDefinition
 from runtime.action_executor import ActionExecutor
 from runtime.fsm_engine import FSMEngine
 from runtime.skill_runner import SkillRunner, SkillRunTrace
-from runtime.stores.skill_run_store import InMemoryStore, store_find_waiting, store_get_run, store_save_run
+from runtime.stores.skill_run_store import InMemoryStore, store_find_waiting_runs, store_get_run, store_save_run
 from runtime.tool_executor import ToolExecutor
 from tools.registry import ToolRegistry
 
@@ -75,9 +75,13 @@ class EventRouter:
 
         conversation_id = event.payload.get("conversation_id")
         if isinstance(conversation_id, str):
-            existing = store_find_waiting(self.store, conversation_id)
-            if existing is not None:
-                return existing, False
+            waiting = store_find_waiting_runs(self.store, "conversation_id", conversation_id)
+            for existing in waiting:
+                if existing.skill_id != self.catalog.skill.id:
+                    continue
+                state = self.catalog.skill.get_state(existing.current_state)
+                if state is not None and any(item.event == event.type for item in state.transitions):
+                    return existing, False
 
         run = SkillRun(
             skill_id=self.catalog.skill.id,

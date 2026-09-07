@@ -14,6 +14,8 @@ WEB_CLIENT_TOOL_MANIFEST: dict = {
                 field("session_id", type="template", label="Session ID", placeholder="{{vars.conversation_id}}"),
                 field("text", type="template", required=True, label="Текст", placeholder="{{vars.last_message}}"),
                 field("meta", type="json", label="Meta (JSON)"),
+                field("workspace_update", type="json", label="Патч мира"),
+                field("ui_proposal", type="json", label="Предложение UI"),
             ],
             "outputSchema": [
                 field("sent", type="json", scope="call"),

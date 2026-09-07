@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.channels.event_ingress import enqueue_channel_event
+from app.api.channels.web_act import normalize_web_act
 from definition.services.credential_service import CredentialService
 from definition.services.agent_service import AgentService
 from runtime.tool_instance_resolver import find_instance_by_credential
@@ -26,6 +27,10 @@ class WebEventRequest(BaseModel):
     session_id: str = Field(alias="sessionId")
     type: str = "channel.message.received"
     skill_id: str | None = Field(default=None, alias="skillId")
+    actor_id: str | None = Field(default=None, alias="actorId")
+    focus: dict[str, Any] | None = None
+    intent: str | None = None
+    entity_ids: list[Any] | None = Field(default=None, alias="entityIds")
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -72,6 +77,10 @@ def _verify_inbound_key(session: Session, agent_slug: str, token: str | None) ->
     raise HTTPException(status_code=401, detail="Invalid inbound API key")
 
 
+def _allow_unrouted_event(event_type: str) -> bool:
+    return event_type == "web.state.changed" or event_type.startswith("web.")
+
+
 def _enqueue_inbound(
     *,
     session: Session,
@@ -88,13 +97,14 @@ def _enqueue_inbound(
         event_type=event_type,
         explicit_skill_id=skill_id,
     )
-    if not resolution.ok:
+    routed_skill_id = resolution.skill_id if resolution.ok else None
+    if not resolution.ok and not _allow_unrouted_event(event_type):
         raise HTTPException(status_code=422, detail=resolution.error)
     return enqueue_channel_event(
         agent_slug=agent_slug,
         payload=payload,
         event_type=event_type,
-        skill_id=resolution.skill_id,
+        skill_id=routed_skill_id,
         source=source,
         tool_instance_id=tool_instance_id,
         tool_type_id="web_client" if tool_instance_id else None,
@@ -120,6 +130,13 @@ async def web_events(
     payload.setdefault("conversation_id", body.session_id)
     if "text" not in payload and isinstance(payload.get("message"), str):
         payload["text"] = payload["message"]
+    payload, _act_meta = normalize_web_act(
+        payload,
+        actor_id=body.actor_id,
+        focus=body.focus,
+        intent=body.intent,
+        entity_ids=body.entity_ids,
+    )
 
     WebClientSessionStore().upsert_snapshot(
         agent_slug=agent_slug,
@@ -127,6 +144,10 @@ async def web_events(
         payload={
             "conversation_id": body.session_id,
             "lastMessage": payload.get("text", ""),
+            "actor_id": payload.get("actor_id") or payload.get("user_id"),
+            "focus": payload.get("focus"),
+            "intent": payload.get("intent"),
+            "entity_ids": payload.get("entity_ids"),
             "context": payload.get("context") if isinstance(payload.get("context"), dict) else payload,
         },
     )
