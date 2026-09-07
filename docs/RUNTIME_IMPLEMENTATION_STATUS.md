@@ -1,8 +1,8 @@
 # Runtime Implementation Status
 
 > Статус соответствия кода [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md).  
-> Обновлено: 2026-08-31.  
-> Оценка: **~88%** — P0–P2 закрыты; cockpit UI v1; P3 (replay UI, pause) частично.
+> Обновлено: 2026-09-06.  
+> Оценка: **~88%** — P0–P2 закрыты; cockpit UI v1; P3 (replay UI, pause) частично. Interaction фаза 1: pin по event.type.
 
 ## Summary
 
@@ -65,6 +65,7 @@ Legend: ✅ done · ⚠️ partial · ❌ not implemented
 | Optimistic locking | `skill_runs.revision`, `ConcurrentUpdateError` |
 | ActionRun / ToolExecution | `domain/action_run.py`, `postgres_*_store.py`, `tables.py` |
 | Multi-run routing | `runtime_service.route_all()`, `skill_routing.py` |
+| Waiting resume by event type | `waiting_runs_matching_event`, worker `_matching_waiting_run` |
 | Cancel / start / execute | `app/api/runtime.py` |
 | List runs + summary (cockpit) | `GET /api/runtime/runs`, `/summary`, `/agents/{slug}/summary` |
 | Retry / timeout / needs_human | `action_executor.py`, `tool_executor.py` |
@@ -92,6 +93,7 @@ Backend: `GET /api/runtime/runs`, `/summary`, `/agents/{slug}/summary`, `/runs/b
 
 | Spec § | Topic | Status |
 |--------|-------|--------|
+| 18 | Correlation lock per `skill_run_id` | ⚠️ inbound/completion: `conv-skill:{conversation}:{skill}` when both known; else `run:` / entity. Not the whole conversation. Same skill on a thread is serialized (prevents forked `razgovor`). |
 | 7 | `CREATED` status | ❌ |
 | 24 | Parallel recipe step groups | ❌ |
 | 29 | Tool `idempotent` manifest flag | ❌ |

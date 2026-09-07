@@ -423,25 +423,35 @@ on:
 
 # 15. Event Routing
 
-Event Router получает Event и ищет активные Skill Runs, которые могут его обработать.
+Event Router получает Event и ищет Skill Runs, которые могут его обработать **в текущем состоянии**, либо стартует новый run.
 
 Учитываются:
 
 ```text
 event.type
-correlation
-current_state
+correlation (skill_run_id, затем сущность / разговор)
+current_state — есть ли переход на этот event.type
 Skill definition
 ```
 
-Guard остаётся логикой FSM.
+`conversation_id` — адрес голоса (куда ответить), **не** ключ «этот run владеет сессией». См. [INTERACTION_SPEC](./INTERACTION_SPEC_v0.1.md) R0, R4.2.
+
+Resume waiting/running run по `conversation_id` (или `request_id` / `entity_id`) **только если** текущее состояние этого run объявляет переход на данный `event.type`. Иначе waiting не перехватывает событие: резолвится другой скилл / новый run.
+
+Явный `skill_run_id` на событии (completion action, targeted resume) по-прежнему адресует тот run.
+
+Guard остаётся логикой FSM (проверяется при apply, не обязан дублироваться на pin).
+
+Нет перехода на доменный event ≠ перевод run в `error`. No-match **пропускается**, run остаётся в прежнем статусе.
 
 ```text
 Event
  ↓
-candidate Skill Runs
+явный skill_run_id? → тот run
  ↓
-matching current states
+waiting runs по correlation, у которых current_state ждёт event.type
+ ↓
+иначе новые Skill Runs (initial-state / default / skillId-подсказка)
  ↓
 FSM handlers
 ```
@@ -474,13 +484,16 @@ event_id
 
 Глобальный порядок Events не гарантируется.
 
-Ordering может обеспечиваться внутри correlation key:
+Ordering и correlation lock обеспечиваются внутри ключа **работы или сущности**, не всего разговора:
 
 ```text
-conversation_id
 skill_run_id
 entity_id
 ```
+
+`conversation_id` можно использовать для упорядочивания реплик голоса, но **не** как exclusive lock на все работы нити. Несколько Skill Run с одним `conversation_id` — норма ([INTERACTION](./INTERACTION_SPEC_v0.1.md) R5.1).
+
+Код worker (фаза 2): ключ `conv-skill:{conversation_id}:{skill_id}`, когда оба известны — и для inbound, и для completion. Разные скиллы на одной нити не делят lock; два события одного скилла сериализуются (чтобы не форкнуть второй `razgovor` и не гонять completion против следующей реплики). Без skill id: `run:{skill_run_id}` / сущность / `event:{id}`.
 
 Разные correlation domains могут обрабатываться параллельно.
 
@@ -488,10 +501,11 @@ entity_id
 
 # 19. Waiting / Suspension
 
-Если Skill достигает:
+Если Skill достигает состояния без автоматического продолжения (не final):
 
 ```text
 WAITING_FOR_FOREMAN
+IDLE
 ```
 
 Runtime:
@@ -501,8 +515,10 @@ Runtime:
 2. сохраняет Variables;
 3. ставит SkillRun = WAITING;
 4. освобождает worker;
-5. ждёт Event.
+5. ждёт Event, для которого **текущее состояние** имеет переход.
 ```
+
+WAITING не означает «любое событие с тем же `conversation_id` — моё».
 
 Worker не должен удерживаться в ожидании часами.
 
@@ -515,7 +531,7 @@ Worker не должен удерживаться в ожидании часам
 ```text
 Event
  ↓
-correlation
+явный skill_run_id или waiting run, чьё current_state ждёт event.type
  ↓
 SkillRun
  ↓
@@ -526,7 +542,9 @@ FSM
 continue
 ```
 
-SkillRun переходит:
+Если ни один waiting run не ждёт этот `event.type` — это не resume, а routing нового run (RUNTIME §15).
+
+SkillRun при успешном resume переходит:
 
 ```text
 WAITING → RUNNING
@@ -570,16 +588,18 @@ SkillRun #3
 ...
 ```
 
-Каждый Run имеет независимые:
+Несколько run **могут разделять** один `conversation_id` (чат + поручение на одном столе). Они независимы по:
 
 ```text
 state
 variables
 ActionRuns
-correlation
+skill_run_id
 ```
 
-Shared mutable state не должен изменяться без явной synchronization policy.
+Shared mutable state (мир / стол) не должен изменяться без явной synchronization policy.
+
+Код worker сериализует inbound одного скилла на нити (`conv-skill:{conversation}:{skill}`), не весь разговор. Разные скиллы на одном `conversation_id` не делят lock. Два run одного скилла на одной нити обрабатываются по очереди.
 
 ---
 

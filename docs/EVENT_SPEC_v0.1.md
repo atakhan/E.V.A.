@@ -256,7 +256,13 @@ Schema является частью Event contract.
     "text": "Нужны грибки 10x100"
   },
 
-  "metadata": {}
+  "metadata": {
+    "focus": {
+      "view": "requests",
+      "openEntityId": "REQ-17",
+      "selectedEntityIds": ["REQ-17"]
+    }
+  }
 }
 ```
 
@@ -308,11 +314,14 @@ Correlation связывает Event с контекстом выполнени�
 Минимально могут использоваться:
 
 ```text
-conversation_id
+conversation_id   # нить голоса (web sessionId). Не владелец Skill Run.
 entity_id
-skill_run_id
+skill_run_id      # конкретная работа
 action_run_id
 agent_id
+request_id
+user_id           # актёр (веб-контракт actor_id → сюда)
+parent_run_id
 ```
 
 Пример:
@@ -322,12 +331,17 @@ agent_id
   "correlation": {
     "conversation_id": "conv_123",
     "request_id": "req_42",
-    "skill_run_id": "run_991"
+    "skill_run_id": "run_991",
+    "user_id": "user_42"
   }
 }
 ```
 
 Не каждое поле обязательно.
+
+**Разговор ≠ работа.** Одному `conversation_id` могут соответствовать несколько `skill_run_id`. Waiting-run не имеет права трактовать любое событие этой нити как resume. Норма: [INTERACTION_SPEC](./INTERACTION_SPEC_v0.1.md) R0, [RUNTIME §15](./RUNTIME_SPEC_v0.1.md).
+
+**Фокус акта** (`view`, `openEntityId`, `selectedEntityIds`) — не поле correlation «навсегда». Класть в `metadata.focus` или `payload.focus` этого события.
 
 ---
 
@@ -645,7 +659,7 @@ Event сам не меняет State.
 
 # 21. Event → Multiple Skills
 
-Один Event может интересовать несколько Skills.
+Один Event может интересовать несколько Skills (несколько **новых** или уже ждущих этот тип в текущем состоянии). Это не означает «отдать событие единственному waiting-run на том же `conversation_id`». См. RUNTIME §15.
 
 Например:
 

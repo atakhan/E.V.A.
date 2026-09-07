@@ -3,9 +3,10 @@
 
 > **Статус:** conceptual / non-normative — мотивация и модель, не контракт реализации.  
 > **Нормативные спеки:** [`docs/ACTIONS_SPEC_v0.1.md`](../docs/ACTIONS_SPEC_v0.1.md), [`SKILLS_SPEC_v0.1.md`](../docs/SKILLS_SPEC_v0.1.md), [`EVENT_SPEC_v0.1.md`](../docs/EVENT_SPEC_v0.1.md), [`TOOLS_SDK_SPEC_v0.1.md`](../docs/TOOLS_SDK_SPEC_v0.1.md), [`RUNTIME_SPEC_v0.1.md`](../docs/RUNTIME_SPEC_v0.1.md)  
+> **Взаимодействие (target):** [`docs/INTERACTION_SPEC_v0.1.md`](../docs/INTERACTION_SPEC_v0.1.md)  
 > **Согласование:** [`docs/ARCHITECTURE_DOCS_ALIGNMENT.md`](../docs/ARCHITECTURE_DOCS_ALIGNMENT.md)
 
-Документ фиксирует текущие выводы и наработки по архитектуре конструктора ИИ-агентов, возникшие при проектировании ИИ-агента для снабжения. При расхождении с `docs/*_SPEC` приоритет у спеков.
+Документ фиксирует текущие выводы и наработки по архитектуре конструктора ИИ-агентов, возникшие при проектировании ИИ-агента для снабжения. При расхождении с `docs/*_SPEC` приоритет у спеков. Слой человек ↔ агент (стол, голос, диспетчер): [`INTERACTION_SPEC`](../docs/INTERACTION_SPEC_v0.1.md) — target; исполнение уже выбранной работы — RUNTIME/SKILLS.
 
 ---
 
@@ -1303,7 +1304,7 @@ Event
 
 ## Остаётся открытым
 
-1. **Planner** — приоритизация и планирование Skill Runs (вне scope v0.1).
+1. **Planner** — приоритизация и планирование Skill Runs (вне scope v0.1). Диспетчер очередного акта человека — отдельно: [`INTERACTION_SPEC`](../docs/INTERACTION_SPEC_v0.1.md).
 2. **Multi-tenant** — изоляция агентов, credentials, quotas на уровне платформы.
 3. **Advanced observability** — distributed tracing, execution replay, audit UI.
 
