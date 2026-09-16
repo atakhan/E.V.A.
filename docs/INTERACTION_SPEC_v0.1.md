@@ -2,7 +2,7 @@
 ## Требования к архитектуре агента: человек, стол, голос, работа
 
 > **Статус:** норматив слоя «акт человека → работа» (канон). Код: фазы 0–5 (pin, lock `conv-skill`, акт на проводе, таблица-диспетчер, snapshot/presence). Оговорки — в заметках. Честная приёмка §16 после фаз — [`INTERACTION_NOTES_ARCHITECTURE_REVIEW.md`](./INTERACTION_NOTES_ARCHITECTURE_REVIEW.md). Внедрение: [`INTERACTION_IMPLEMENTATION_PLAN.md`](./INTERACTION_IMPLEMENTATION_PLAN.md). Заметки: [`INTERACTION_IMPLEMENTATION_NOTES.md`](./INTERACTION_IMPLEMENTATION_NOTES.md).  
-> **Не заменяет** [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md), [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md), [`EVENT_SPEC_v0.1.md`](./EVENT_SPEC_v0.1.md), [`ACTIONS_SPEC_v0.1.md`](./ACTIONS_SPEC_v0.1.md), [`BEHAVIOR_SPEC.md`](./BEHAVIOR_SPEC.md) **для исполнения уже выбранной работы**.  
+> **Не заменяет** [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md), [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md), [`EVENT_SPEC_v0.1.md`](./EVENT_SPEC_v0.1.md), [`ACTIONS_SPEC_v0.1.md`](./ACTIONS_SPEC_v0.1.md) **для исполнения уже выбранной работы**.  
 > **Опора:** гладкость работы человека с агентом через веб-клиент (чат + рабочий стол + жесты).
 
 Код v0.1 исполняет `Event → Skill Run → FSM → Action → Tool`. Этот документ фиксирует, чего **недостаточно**, чтобы агент ощущался коллегой за столом, а не двумя несвязанными ботами (чат vs кнопки).
@@ -252,7 +252,7 @@ Event → (Диспетчер) → Skill Run → FSM → Action → Tool → Wor
 **R10.3** Event остаётся фактом. «Нажали разобрать» — факт UI. Командует диспетчер + FSM.  
 **R10.4** Веб-клиент — носитель стола, фокуса, жестов и отрисовки присутствия/предложений, не только транспорт чата.
 
-Поведение одной работы по-прежнему задаётся Behavior Graph ([`BEHAVIOR_SPEC`](./BEHAVIOR_SPEC.md)): `wait` / `do` / `decide`. Этот документ не меняет компиляцию графа.
+Поведение одной работы задаётся FSM скилла ([`SKILLS_SPEC`](./SKILLS_SPEC_v0.1.md)). Этот документ не меняет states / guards / actions.
 
 ---
 
@@ -347,7 +347,6 @@ Planner как отдельный модуль приоритизации оче
 |----------|-------------------------|
 | [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md) | Исполнение Skill Run; resume/cancel; routing v0.1 |
 | [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md) | Skill как процесс класса задач |
-| [`BEHAVIOR_SPEC.md`](./BEHAVIOR_SPEC.md) | wait / do / decide одной работы |
 | [`EVENT_SPEC_v0.1.md`](./EVENT_SPEC_v0.1.md) | Event = факт; envelope; correlation |
 | [`ACTIONS_SPEC_v0.1.md`](./ACTIONS_SPEC_v0.1.md) | Рецепт поступка |
 | [`ARCHITECTURE_DOCS_ALIGNMENT.md`](./ARCHITECTURE_DOCS_ALIGNMENT.md) | Иерархия docs; gap vs код |

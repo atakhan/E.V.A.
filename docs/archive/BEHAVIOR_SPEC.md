@@ -1,10 +1,11 @@
 # Behavior Spec — v1
 
-> Нормативный контракт семантической модели поведения агента.  
-> Видение: [`NEW_CONSTRUCTOR_DESC.md`](./NEW_CONSTRUCTOR_DESC.md).  
-> Исполняемый runtime по-прежнему: [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md) + [`RUNTIME_SPEC_v0.1.md`](./RUNTIME_SPEC_v0.1.md).
+> Нормативный контракт семантической модели поведения агента (Behavior Graph).  
+> **Статус: архив.** Снят как канон конструктора. Редактор снова пишет FSM (`states[]`): [`../SKILLS_CONSTRUCTOR.md`](../SKILLS_CONSTRUCTOR.md).  
+> Видение эксперимента: [`NEW_CONSTRUCTOR_DESC.md`](./NEW_CONSTRUCTOR_DESC.md).  
+> Не использовать при реализации холста или publish.
 
-**Статус:** v1. UI конструктора — проекция этого контракта, не источник семантики.
+**Статус:** снят. UI конструктора — FSM-холст, не проекция этого контракта.
 
 ---
 
@@ -441,7 +442,7 @@ actionRuns        →  do-узлы по actionId (доп. сигнал)
 
 | Слой | Путь |
 |------|------|
-| Спека | `docs/BEHAVIOR_SPEC.md` |
+| Спека | `docs/archive/BEHAVIOR_SPEC.md` |
 | Backend | `backend/definition/behavior/` |
 | Frontend | `frontend/src/features/skills/types/behavior.ts`, `utils/behavior*.ts` |
 | Runtime mapper | игнорирует `behavior` / `origin*`; читает `states` |

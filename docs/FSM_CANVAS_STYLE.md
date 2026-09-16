@@ -1,31 +1,22 @@
-# FSM / Behavior Canvas Style Guide
+# FSM Canvas Style Guide
 
-> Визуальный язык конструктора поведения в E.V.A.
+> Визуальный язык конструктора Skills в E.V.A.
 
-Канон модели: [`BEHAVIOR_SPEC.md`](./BEHAVIOR_SPEC.md).  
-Исполняемая FSM: [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md).
+Канон конструктора: [`SKILLS_CONSTRUCTOR.md`](./SKILLS_CONSTRUCTOR.md).  
+Исполняемая FSM: [`SKILLS_SPEC_v0.1.md`](./SKILLS_SPEC_v0.1.md).  
+Геометрия и маршрутизация: [`FSM_CANVAS_GEOMETRY.md`](./FSM_CANVAS_GEOMETRY.md).
 
 ## Принцип
 
-Canvas по умолчанию отвечает на вопрос **«что делает агент?»**, не «какие states в FSM?».
+Холст — редактор автомата. Source of truth — `states[]`. Что нарисовано, то уходит в publish и runtime.
 
-- **История** — карточки wait / do / decide / end. Редактор Behavior Graph.
-- **Логика** — тот же граф, технические id / event / guard. Редактор Behavior Graph.
-- **Runtime** — подсветка шагов по `originNodeId`. Без редактирования.
-- **Машина** — скомпилированная FSM. Read-only.
-
-FSM — artifact (`execution.states`), не source of truth.
-
-## Карточки (Story)
-
-- **wait** — «Когда…» / «Жду…»
-- **do** — человеческое имя Action, мелкий `actionId`
-- **decide** — вопрос + ветки Да/Нет
-- **end** — только «задача завершена». Цикл «жду следующее сообщение» — `wait`.
+- **State** — прямоугольник: id, необязательное человеческое имя, `on_enter`, `final`.
+- **Transition** — стрелка: event, optional guard, `actions[]`, `to`.
+- UML-подписи на рёбрах, магнитные порты, ортогональная маршрутизация вокруг узлов, ресайз states.
 
 ## Файлы
 
-- Холст: `frontend/src/features/skills/components/BehaviorCanvas.vue`
-- Инспектор: `frontend/src/features/skills/components/BehaviorInspector.vue`
-- Компилятор: `frontend/src/features/skills/utils/behaviorCompile.ts`, `backend/definition/behavior/`
-- Legacy UML canvas: `frontend/src/features/skills/components/FsmCanvas.vue`
+- Холст: `frontend/src/features/skills/components/FsmCanvas.vue`
+- Геометрия: `frontend/src/features/skills/utils/geometry/`
+- Инспектор: `frontend/src/features/skills/components/SkillInspector.vue`
+- Тулбар: `frontend/src/features/skills/components/CanvasToolbar.vue`

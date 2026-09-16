@@ -13,6 +13,8 @@ Engine for Versatile Agents.
 | Слой | Путь |
 |------|------|
 | Нормативные спеки | [`docs/*_SPEC_v0.1.md`](docs/) |
+| Конструктор Skills (обзор модели) | [`docs/SKILLS_CONSTRUCTOR.md`](docs/SKILLS_CONSTRUCTOR.md) |
+| Архив устаревших docs | [`docs/archive/`](docs/archive/) |
 | Взаимодействие человек ↔ агент | [`docs/INTERACTION_SPEC_v0.1.md`](docs/INTERACTION_SPEC_v0.1.md) |
 | План слоя взаимодействия | [`docs/INTERACTION_IMPLEMENTATION_PLAN.md`](docs/INTERACTION_IMPLEMENTATION_PLAN.md) |
 | Заметки по внедрению | [`docs/INTERACTION_IMPLEMENTATION_NOTES.md`](docs/INTERACTION_IMPLEMENTATION_NOTES.md) |

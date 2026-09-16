@@ -19,7 +19,8 @@ Full specs (source of truth):
 | Events | `E.V.A./docs/EVENT_SPEC_v0.1.md` |
 | Tools | `E.V.A./docs/TOOLS_SDK_SPEC_v0.1.md` |
 | Runtime | `E.V.A./docs/RUNTIME_SPEC_v0.1.md` |
-| Behavior | `E.V.A./docs/BEHAVIOR_SPEC.md` |
+| Skills constructor (overview) | `E.V.A./docs/SKILLS_CONSTRUCTOR.md` |
+| FSM canvas geometry | `E.V.A./docs/FSM_CANVAS_GEOMETRY.md` |
 | Interaction | `E.V.A./docs/INTERACTION_SPEC_v0.1.md` |
 | Interaction plan | `E.V.A./docs/INTERACTION_IMPLEMENTATION_PLAN.md` |
 | Interaction notes | `E.V.A./docs/INTERACTION_IMPLEMENTATION_NOTES.md` |
@@ -33,6 +34,8 @@ Full specs (source of truth):
 Implementation gap tracker: `E.V.A./docs/RUNTIME_IMPLEMENTATION_STATUS.md`
 
 Architecture ↔ docs alignment: `E.V.A./docs/ARCHITECTURE_DOCS_ALIGNMENT.md`
+
+Withdrawn constructor experiment (Story / Behavior Graph / compile-on-publish): `E.V.A./docs/archive/`
 
 Condensed references: `.cursor/skills/eva-specs/{actions,skills,events,tools,runtime,interaction}.md`
 
@@ -51,7 +54,7 @@ Boundaries:
 
 - **Tool** — capability (`telegram.send_message`). No business logic, no FSM control.
 - **Action** — operation (`parse_request`). Recipe of tool commands. Hides implementation from FSM.
-- **Skill** — process (`process_foreman_request`). Behavior Graph → compiled FSM.
+- **Skill** — process (`process_foreman_request`). One FSM. `states[]` is the constructor SoT.
 - **Event** — fact (`channel.message.received`). Not a command. FSM decides what to do.
 
 ## Code mapping

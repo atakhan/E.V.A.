@@ -9,7 +9,9 @@
 |-------|------|------|
 | **Conceptual** | [`architecture/agent_architecture_v1.md`](../architecture/agent_architecture_v1.md), [`architecture/backend_architecture_v1.md`](../architecture/backend_architecture_v1.md) | Мотивация, модель, направление. Не переопределяет спеки. |
 | **Interaction** | [`INTERACTION_SPEC_v0.1.md`](./INTERACTION_SPEC_v0.1.md), план: [`INTERACTION_IMPLEMENTATION_PLAN.md`](./INTERACTION_IMPLEMENTATION_PLAN.md), заметки: [`INTERACTION_IMPLEMENTATION_NOTES.md`](./INTERACTION_IMPLEMENTATION_NOTES.md), синтез: [`INTERACTION_NOTES_ARCHITECTURE_REVIEW.md`](./INTERACTION_NOTES_ARCHITECTURE_REVIEW.md), контора: [`INTERACTION_OFFICE_MODEL.md`](./INTERACTION_OFFICE_MODEL.md), бюро: [`INTERACTION_BUREAU_MODEL.md`](./INTERACTION_BUREAU_MODEL.md), мир: [`INTERACTION_WORLD_MODEL.md`](./INTERACTION_WORLD_MODEL.md) | Человек ↔ агент: стол, голос, фокус, диспетчер, 1 разговор → N работ. Канон слоя над Skill Run. Исполнение уже выбранной работы — RUNTIME/SKILLS. |
-| **Normative (execution)** | [`docs/*_SPEC_v0.1.md`](./), [`BEHAVIOR_SPEC.md`](./BEHAVIOR_SPEC.md) | Контракты исполнения — source of truth для runtime v0.1. |
+| **Normative (execution)** | [`docs/*_SPEC_v0.1.md`](./) | Контракты исполнения — source of truth для runtime v0.1. |
+| **Constructor overview** | [`SKILLS_CONSTRUCTOR.md`](./SKILLS_CONSTRUCTOR.md) | FSM-холст Skills: states, publish as-is. Геометрия: [`FSM_CANVAS_GEOMETRY.md`](./FSM_CANVAS_GEOMETRY.md). |
+| **Archive** | [`archive/`](./archive/) | Снятые спеки (Behavior Graph, Story/нарратив). Не канон. |
 | **Implementation status** | [`RUNTIME_IMPLEMENTATION_STATUS.md`](./RUNTIME_IMPLEMENTATION_STATUS.md) | Соответствие кода `RUNTIME_SPEC`. |
 | **This tracker** | `ARCHITECTURE_DOCS_ALIGNMENT.md` | Решения по расхождениям docs ↔ docs; roadmap code gaps. |
 
