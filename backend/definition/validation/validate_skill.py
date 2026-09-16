@@ -4,8 +4,6 @@ import re
 from typing import Any, Literal
 
 from runtime.guards import is_valid_guard_syntax
-from definition.behavior.compile import compile_behavior
-from definition.behavior.validate import validate_behavior_graph
 
 AgentIssueSeverity = Literal["error", "warning", "info"]
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -70,27 +68,6 @@ def validate_skill(
                 href,
             )
         )
-
-    behavior = skill.get("behavior") if isinstance(skill.get("behavior"), dict) else None
-    has_behavior = bool(behavior and behavior.get("nodes"))
-    if has_behavior:
-        for issue in validate_behavior_graph(behavior, action_ids=action_ids, skill_id=skill_id):
-            issues.append(
-                _issue(
-                    f"skill.{skill_id}.behavior.{issue.get('code')}.{issue.get('nodeId') or 'graph'}",
-                    issue.get("severity") or "error",
-                    str(issue.get("code") or "behavior"),
-                    f"Skill «{skill_name}»: {issue.get('message')}",
-                    href,
-                )
-            )
-        compiled = compile_behavior(behavior, action_ids=action_ids)
-        if compiled["ok"] and compiled["artifact"]:
-            skill = {
-                **skill,
-                "states": compiled["artifact"]["states"],
-                "initial": compiled["artifact"]["initial"],
-            }
 
     state_ids = {state["id"] for state in skill.get("states", []) if state.get("id")}
 

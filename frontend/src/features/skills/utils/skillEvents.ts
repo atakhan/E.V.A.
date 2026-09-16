@@ -35,7 +35,7 @@ export const COMMON_DOMAIN_EVENTS = [
   "timer.elapsed",
 ] as const;
 
-/** Human titles for domain events (Story language). */
+/** Human titles for domain events (inspector / labels). */
 export const EVENT_TITLES: Record<string, string> = {
   "channel.message.received": "Когда приходит новое сообщение",
   "channel.message.sent": "Когда сообщение отправлено",

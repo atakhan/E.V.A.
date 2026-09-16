@@ -51,10 +51,6 @@ export function useSkills() {
       name?: string;
       description?: string;
       version?: string;
-      behavior?: Skill["behavior"];
-      execution?: Skill["execution"];
-      storyViewport?: Skill["storyViewport"];
-      logicViewport?: Skill["logicViewport"];
     },
   ) {
     const agent = getAgentBySlug(agentSlug);
@@ -85,20 +81,8 @@ export function useSkills() {
       params: editor.params,
       states: editor.states,
       viewport: editor.viewport,
+      flowDirection: editor.flowDirection ?? "vertical",
     });
-  }
-
-  function replaceSkillBehavior(
-    agentSlug: string,
-    skillId: string,
-    patch: {
-      behavior: Skill["behavior"];
-      params?: Skill["params"];
-      storyViewport?: Skill["storyViewport"];
-      logicViewport?: Skill["logicViewport"];
-    },
-  ) {
-    updateSkill(agentSlug, skillId, patch);
   }
 
   function renameSkill(agentSlug: string, skillId: string, name: string) {
@@ -143,7 +127,6 @@ export function useSkills() {
     createSkill,
     updateSkill,
     replaceSkillFsm,
-    replaceSkillBehavior,
     renameSkill,
     deleteSkill,
     loadEditorState,

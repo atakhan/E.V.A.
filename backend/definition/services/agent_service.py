@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from definition.behavior.materialize import flatten_agent_document
 from definition.validation.validate_agent import validate_agent
 from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow
 
@@ -109,7 +110,7 @@ class AgentService:
         agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))
         if agent is None or agent.draft is None:
             return None
-        return _merge_agent(agent, agent.draft.body)
+        return flatten_agent_document(_merge_agent(agent, agent.draft.body))
 
     def create_agent(self, *, name: str, slug: str, description: str = "") -> dict[str, Any]:
         if self.session.scalar(select(AgentRow).where(AgentRow.slug == slug)):
@@ -136,7 +137,7 @@ class AgentService:
             agent.draft = AgentDraftRow(agent_id=agent.id, body={})
 
         default_skill_id = str(payload.get("defaultSkillId") or "").strip() or None
-        body = {
+        body = flatten_agent_document({
             "id": agent.id,
             "slug": agent.slug,
             "name": agent.name,
@@ -147,7 +148,7 @@ class AgentService:
             "skills": payload.get("skills", []),
             "actions": payload.get("actions", []),
             "tools": payload.get("tools", []),
-        }
+        })
         agent.draft.body = body
         agent.draft.updated_at = datetime.now(timezone.utc)
         self.session.flush()
@@ -198,20 +199,12 @@ class AgentService:
         return validate_agent(agent_doc)
 
     def publish(self, slug: str) -> dict[str, Any]:
-        from definition.behavior.materialize import materialize_agent_for_publish
-
         agent = self.ensure_active(slug)
         if agent.draft is None:
             raise KeyError(f"Agent '{slug}' not found")
 
-        body = materialize_agent_for_publish(_merge_agent(agent, agent.draft.body))
-        if not body["ok"]:
-            details = "; ".join(
-                str(issue.get("message") or issue.get("code")) for issue in body["errors"][:8]
-            )
-            raise ValueError(f"Cannot publish: behavior compile failed ({details})")
-
-        report = validate_agent(body["agent"])
+        body = flatten_agent_document(_merge_agent(agent, agent.draft.body))
+        report = validate_agent(body)
         if report["errors"] > 0:
             raise ValueError("Cannot publish agent with validation errors")
 
@@ -226,7 +219,7 @@ class AgentService:
             id=str(uuid.uuid4()),
             agent_id=agent.id,
             version=next_version,
-            body=body["agent"],
+            body=body,
         )
         self.session.add(publication)
         self.session.flush()

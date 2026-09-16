@@ -1,12 +1,10 @@
 import type { AgentIssue, AgentIssueSeverity } from "@/features/agents/utils/validateAgent";
-import type { BehaviorSelection } from "@/features/skills/types/behavior";
 import type { FsmSelection } from "@/features/skills/types/fsm";
 
 export interface SkillIssueMaps {
   skillLevel: AgentIssue[];
   byState: Map<string, AgentIssue[]>;
   byTransition: Map<string, AgentIssue[]>;
-  byNode: Map<string, AgentIssue[]>;
 }
 
 export function transitionIssueKey(stateId: string, transitionId: string): string {
@@ -17,18 +15,11 @@ export function buildSkillIssueMaps(issues: AgentIssue[]): SkillIssueMaps {
   const skillLevel: AgentIssue[] = [];
   const byState = new Map<string, AgentIssue[]>();
   const byTransition = new Map<string, AgentIssue[]>();
-  const byNode = new Map<string, AgentIssue[]>();
 
   for (const issue of issues) {
     const locator = issue.locator;
     if (!locator || locator.kind === "skill") {
       skillLevel.push(issue);
-      continue;
-    }
-    if (locator.kind === "node") {
-      const list = byNode.get(locator.nodeId) ?? [];
-      list.push(issue);
-      byNode.set(locator.nodeId, list);
       continue;
     }
     if (locator.kind === "state") {
@@ -47,7 +38,7 @@ export function buildSkillIssueMaps(issues: AgentIssue[]): SkillIssueMaps {
     skillLevel.push(issue);
   }
 
-  return { skillLevel, byState, byTransition, byNode };
+  return { skillLevel, byState, byTransition };
 }
 
 const SEVERITY_RANK: Record<AgentIssueSeverity, number> = {
@@ -76,21 +67,8 @@ export function countBySeverity(issues: AgentIssue[]): {
   };
 }
 
-export function filterIssuesForSelection(
-  issues: AgentIssue[],
-  selection: FsmSelection | BehaviorSelection,
-): AgentIssue[] {
+export function filterIssuesForSelection(issues: AgentIssue[], selection: FsmSelection): AgentIssue[] {
   if (!selection) return issues;
-  if (selection.kind === "node" || selection.kind === "branch") {
-    return issues.filter(
-      (issue) =>
-        issue.locator?.kind === "skill" ||
-        (issue.locator?.kind === "node" && issue.locator.nodeId === selection.nodeId),
-    );
-  }
-  if (selection.kind === "edge") {
-    return issues.filter((issue) => issue.locator?.kind === "skill");
-  }
   if (selection.kind === "state") {
     return issues.filter(
       (issue) =>

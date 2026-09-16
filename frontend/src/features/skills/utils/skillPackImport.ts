@@ -70,9 +70,6 @@ export function previewSkillPack(files: SkillPackFile[], agent: Agent): SkillPac
     }
 
     const skillId = normalizeImportedSkillId(parsed.skillId, fallbackId);
-    const states = parsed.states ?? [];
-    const referencedActionIds = collectReferencedActionIds(states);
-    const missingActionIds = referencedActionIds.filter((id) => !actionIds.has(id));
     const existing = existingById.get(skillId);
 
     const skill = normalizeSkill({
@@ -81,14 +78,17 @@ export function previewSkillPack(files: SkillPackFile[], agent: Agent): SkillPac
       version: parsed.version ?? "0.1.0",
       initial: parsed.initial ?? null,
       params: parsed.params ?? [],
-      states: mergeLayout([], states),
+      states: mergeLayout([], parsed.states ?? []),
+      behavior: parsed.behavior,
     });
+    const referencedActionIds = collectReferencedActionIds(skill.states);
+    const missingActionIds = referencedActionIds.filter((id) => !actionIds.has(id));
 
     return {
       fileName: file.fileName,
       skillId,
       name: skill.name,
-      statesCount: states.length,
+      statesCount: skill.states.length,
       referencedActionIds,
       missingActionIds,
       warnings: parsed.warnings ?? [],

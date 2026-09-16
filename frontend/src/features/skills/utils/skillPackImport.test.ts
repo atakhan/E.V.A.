@@ -77,29 +77,33 @@ describe("previewSkillPack", () => {
   });
 });
 
-describe("behavior YAML/JSON", () => {
-  it("round-trips behavior as canonical export", () => {
+describe("leftover behavior JSON", () => {
+  it("compiles imported behavior into FSM states", () => {
     const skill = createEmptySkill({ name: "Разговор", id: "razgovor" });
-    skill.behavior = {
-      version: 1,
-      entry: "w1",
-      nodes: [
-        {
-          id: "w1",
-          type: "wait",
-          title: "Когда приходит новое сообщение",
-          waitFor: { type: "input", event: "channel.message.received" },
-        },
-      ],
-      edges: [],
-    };
-    const yaml = skillToYaml(skill);
-    expect(yaml).toContain('"behavior"');
-    expect(yaml.toLowerCase()).toContain("generated");
-    const imported = skillFromYaml(yaml, skill);
+    const raw = JSON.stringify({
+      id: "razgovor",
+      version: "0.1.0",
+      description: "",
+      params: [],
+      behavior: {
+        version: 1,
+        entry: "w1",
+        nodes: [
+          {
+            id: "w1",
+            type: "wait",
+            title: "Когда приходит новое сообщение",
+            waitFor: { type: "input", event: "channel.message.received" },
+          },
+        ],
+        edges: [],
+      },
+    });
+    const imported = skillFromYaml(raw, skill);
     expect("error" in imported).toBe(false);
     if ("error" in imported) return;
-    expect(imported.behavior?.entry).toBe("w1");
-    expect(imported.behavior?.nodes[0]?.type).toBe("wait");
+    expect(imported.states.length).toBe(1);
+    expect(imported.states[0]?.id).toBe("s_w1");
+    expect(skillToYaml(imported)).not.toContain('"behavior"');
   });
 });

@@ -1,13 +1,11 @@
-import type { FsmEditorState, FsmState, FsmTransition, SkillParam } from "@/features/skills/types/fsm";
-import type { BehaviorGraph, ExecutionArtifact } from "@/features/skills/types/behavior";
-import { emptyBehaviorGraph } from "@/features/skills/types/behavior";
-import { liftFsmToBehavior } from "@/features/skills/utils/behaviorLift";
-import { skillHasBehavior } from "@/features/skills/utils/behaviorGraph";
+import type { FsmEditorState, FsmState, FsmTransition, SkillParam, FlowDirection } from "@/features/skills/types/fsm";
 import {
   DEFAULT_STATE_HEIGHT,
   DEFAULT_STATE_WIDTH,
   GRID_SIZE,
 } from "@/features/skills/types/fsm";
+import type { BehaviorGraph } from "@/features/skills/types/behavior";
+import { compileBehavior } from "@/features/skills/utils/behaviorCompile";
 import { createId } from "@/shared/utils/id";
 
 export interface Skill {
@@ -21,11 +19,14 @@ export interface Skill {
   params: SkillParam[];
   states: FsmState[];
   viewport: { panX: number; panY: number; zoom: number };
-  behavior?: BehaviorGraph;
-  execution?: ExecutionArtifact;
-  storyViewport?: { panX: number; panY: number; zoom: number };
-  logicViewport?: { panX: number; panY: number; zoom: number };
+  flowDirection?: FlowDirection;
 }
+
+/** Incoming document may still carry a leftover Behavior Graph from drafts. */
+type SkillIncoming = Skill & {
+  behavior?: BehaviorGraph;
+  rectangles?: LegacyCanvasSkill["rectangles"];
+};
 
 /** Legacy Phase 0 canvas document. */
 interface LegacyCanvasSkill {
@@ -46,6 +47,8 @@ interface LegacyCanvasSkill {
   params?: SkillParam[];
   states?: FsmState[];
   version?: string;
+  behavior?: BehaviorGraph;
+  flowDirection?: FlowDirection;
 }
 
 export function createEmptyFsmEditorState(): FsmEditorState {
@@ -54,6 +57,7 @@ export function createEmptyFsmEditorState(): FsmEditorState {
     params: [],
     states: [],
     viewport: { panX: 0, panY: 0, zoom: 1 },
+    flowDirection: "vertical",
   };
 }
 
@@ -70,9 +74,7 @@ export function createEmptySkill(partial?: Partial<Skill> & { name: string }): S
     params: partial?.params ?? [],
     states: partial?.states ?? [],
     viewport: partial?.viewport ?? { panX: 0, panY: 0, zoom: 1 },
-    behavior: partial?.behavior ?? emptyBehaviorGraph(),
-    storyViewport: partial?.storyViewport ?? { panX: 0, panY: 0, zoom: 1 },
-    logicViewport: partial?.logicViewport ?? { panX: 0, panY: 0, zoom: 1 },
+    flowDirection: partial?.flowDirection ?? "vertical",
   };
 }
 
@@ -142,6 +144,20 @@ function normalizeAnchor(raw: unknown): number | undefined {
   return Math.min(1, Math.max(0, raw));
 }
 
+function normalizeWaypoints(raw: unknown): FsmTransition["waypoints"] {
+  if (!Array.isArray(raw)) return undefined;
+  const points = raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const point = item as { x?: unknown; y?: unknown };
+      if (typeof point.x !== "number" || typeof point.y !== "number") return null;
+      if (Number.isNaN(point.x) || Number.isNaN(point.y)) return null;
+      return { x: point.x, y: point.y };
+    })
+    .filter((item): item is { x: number; y: number } => item !== null);
+  return points.length > 0 ? points : undefined;
+}
+
 function normalizeTransition(raw: Partial<FsmTransition>): FsmTransition {
   return {
     id: raw.id || createId(),
@@ -155,6 +171,8 @@ function normalizeTransition(raw: Partial<FsmTransition>): FsmTransition {
     toSide: normalizeRectSide(raw.toSide),
     fromAnchor: normalizeAnchor(raw.fromAnchor),
     toAnchor: normalizeAnchor(raw.toAnchor),
+    waypoints: normalizeWaypoints(raw.waypoints),
+    routingMode: raw.routingMode === "manual_assisted" ? "manual_assisted" : "automatic",
     originNodeId: typeof raw.originNodeId === "string" ? raw.originNodeId : undefined,
     originEdgeId: typeof raw.originEdgeId === "string" ? raw.originEdgeId : undefined,
   };
@@ -180,14 +198,33 @@ function normalizeState(raw: Partial<FsmState>, fallbackId: string): FsmState {
   };
 }
 
+function flattenLeftoverBehavior(raw: SkillIncoming | LegacyCanvasSkill): {
+  states: FsmState[];
+  initial: string | null;
+} | null {
+  const behavior = raw.behavior;
+  if (!behavior || !Array.isArray(behavior.nodes) || behavior.nodes.length === 0) {
+    return null;
+  }
+  const compiled = compileBehavior(behavior);
+  if (!compiled.ok) return null;
+  return {
+    states: compiled.artifact.states.map((state, index) => normalizeState(state, `state_${index + 1}`)),
+    initial: compiled.artifact.initial || null,
+  };
+}
+
 export function skillFromLegacyCanvas(canvas: LegacyCanvasSkill): Skill {
   return normalizeSkill(canvas);
 }
 
-export function normalizeSkill(raw: LegacyCanvasSkill | Skill): Skill {
-  let states: FsmState[] = Array.isArray(raw.states)
-    ? raw.states.map((state, index) => normalizeState(state, `state_${index + 1}`))
-    : [];
+export function normalizeSkill(raw: LegacyCanvasSkill | SkillIncoming): Skill {
+  const flattened = flattenLeftoverBehavior(raw);
+  let states: FsmState[] = flattened
+    ? flattened.states
+    : Array.isArray(raw.states)
+      ? raw.states.map((state, index) => normalizeState(state, `state_${index + 1}`))
+      : [];
 
   if (states.length === 0 && Array.isArray((raw as LegacyCanvasSkill).rectangles)) {
     states = migrateRectanglesToStates(raw as LegacyCanvasSkill);
@@ -199,10 +236,11 @@ export function normalizeSkill(raw: LegacyCanvasSkill | Skill): Skill {
     transitions: state.transitions.filter((transition) => stateIds.has(transition.to)),
   }));
 
+  const preferredInitial = flattened?.initial ?? raw.initial;
   const initial =
-    raw.initial && stateIds.has(raw.initial)
-      ? raw.initial
-      : states[0]?.id ?? null;
+    preferredInitial && stateIds.has(preferredInitial)
+      ? preferredInitial
+      : (states[0]?.id ?? null);
 
   return {
     id: raw.id || createId(),
@@ -223,15 +261,7 @@ export function normalizeSkill(raw: LegacyCanvasSkill | Skill): Skill {
       : [],
     states,
     viewport: raw.viewport ?? { panX: 0, panY: 0, zoom: 1 },
-    behavior: (() => {
-      const existing = (raw as Skill).behavior;
-      if (skillHasBehavior(existing)) return existing;
-      if (states.length > 0) return liftFsmToBehavior(states, initial);
-      return existing ?? emptyBehaviorGraph();
-    })(),
-    execution: (raw as Skill).execution,
-    storyViewport: (raw as Skill).storyViewport ?? { panX: 0, panY: 0, zoom: 1 },
-    logicViewport: (raw as Skill).logicViewport ?? { panX: 0, panY: 0, zoom: 1 },
+    flowDirection: raw.flowDirection === "horizontal" ? "horizontal" : "vertical",
   };
 }
 
@@ -245,9 +275,11 @@ export function skillToEditorState(skill: Skill): FsmEditorState {
       transitions: state.transitions.map((transition) => ({
         ...transition,
         actions: [...transition.actions],
+        waypoints: transition.waypoints?.map((point) => ({ ...point })),
       })),
     })),
     viewport: { ...skill.viewport },
+    flowDirection: skill.flowDirection ?? "vertical",
   };
 }
 

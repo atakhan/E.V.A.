@@ -4,9 +4,6 @@ import type {
   SkillIssueLocator,
 } from "@/features/agents/utils/validateAgent";
 import type { Skill } from "@/features/skills/types/skill";
-import { compileBehavior } from "@/features/skills/utils/behaviorCompile";
-import { skillHasBehavior } from "@/features/skills/utils/behaviorGraph";
-import { validateBehaviorGraph } from "@/features/skills/utils/behaviorValidate";
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const GUARD_PATTERN = /^[\w.]+\s*(==|!=|>=|<=|>|<)\s*.+$/;
@@ -72,31 +69,8 @@ export function validateSkill(skill: Skill, actionIds: Set<string>, href?: strin
     );
   }
 
-  let working = skill;
-  if (skillHasBehavior(skill.behavior)) {
-    for (const item of validateBehaviorGraph(skill.behavior, { actionIds })) {
-      issues.push(
-        issue(
-          `skill.${skill.id}.behavior.${item.code}.${item.nodeId ?? "graph"}`,
-          item.severity,
-          item.code,
-          `Skill «${skill.name}»: ${item.message}`,
-          { href, locator: item.nodeId ? { kind: "node", nodeId: item.nodeId } : skillLocator },
-        ),
-      );
-    }
-    const compiled = compileBehavior(skill.behavior, { actionIds });
-    if (compiled.ok) {
-      working = {
-        ...skill,
-        states: compiled.artifact.states,
-        initial: compiled.artifact.initial,
-      };
-    }
-  }
-
-  const stateIds = new Set(working.states.map((state) => state.id));
-  if (working.states.length === 0) {
+  const stateIds = new Set(skill.states.map((state) => state.id));
+  if (skill.states.length === 0) {
     issues.push(
       issue(
         `skill.${skill.id}.empty`,
@@ -109,7 +83,7 @@ export function validateSkill(skill: Skill, actionIds: Set<string>, href?: strin
     return issues;
   }
 
-  if (!working.initial) {
+  if (!skill.initial) {
     issues.push(
       issue(
         `skill.${skill.id}.no-initial`,
@@ -119,23 +93,23 @@ export function validateSkill(skill: Skill, actionIds: Set<string>, href?: strin
         { href, locator: skillLocator },
       ),
     );
-  } else if (!stateIds.has(working.initial)) {
+  } else if (!stateIds.has(skill.initial)) {
     issues.push(
       issue(
         `skill.${skill.id}.bad-initial`,
         "error",
         "invalid_initial",
-        `Skill «${skill.name}»: initial «${working.initial}» отсутствует среди states`,
+        `Skill «${skill.name}»: initial «${skill.initial}» отсутствует среди states`,
         { href, locator: skillLocator },
       ),
     );
   }
 
-  const reachable = reachableStates(working);
-  for (const state of working.states) {
+  const reachable = reachableStates(skill);
+  for (const state of skill.states) {
     const stateLocator: SkillIssueLocator = { kind: "state", stateId: state.id };
 
-    if (!reachable.has(state.id) && state.id !== working.initial) {
+    if (!reachable.has(state.id) && state.id !== skill.initial) {
       issues.push(
         issue(
           `skill.${skill.id}.state.${state.id}.unreachable`,

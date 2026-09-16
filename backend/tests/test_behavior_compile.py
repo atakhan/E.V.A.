@@ -4,7 +4,6 @@ from definition.behavior.compile import compile_behavior
 from definition.behavior.equivalence import fsm_behaviorally_equivalent
 from definition.behavior.ids import COMPILER_VERSION
 from definition.behavior.lift import lift_fsm_to_behavior
-from definition.behavior.narrative import behavior_narrative
 from scenarios.conversation_skill import build_razgovor_skill
 
 
@@ -133,24 +132,14 @@ def test_branching_compile_preserves_guards():
     assert ("propose",) in actions
 
 
-def test_materialize_publish_stamps_compiler_and_states():
-    from definition.behavior.materialize import materialize_skill_execution
+def test_flatten_behavior_drops_graph_and_keeps_fsm():
+    from definition.behavior.materialize import flatten_skill_document
 
     states, initial = _razgovor_states()
     graph = lift_fsm_to_behavior(states, initial)
-    skill = {"id": "razgovor", "initial": initial, "states": states, "behavior": graph}
-    result = materialize_skill_execution(skill, compiled_at="2026-01-01T00:00:00+00:00")
-    assert result["ok"]
-    artifact = result["skill"]["execution"]
-    assert artifact["compilerVersion"] == COMPILER_VERSION
-    assert artifact["compiledAt"] == "2026-01-01T00:00:00+00:00"
-    assert result["skill"]["states"] == artifact["states"]
-    assert fsm_behaviorally_equivalent(states, initial, artifact["states"], artifact["initial"])
-
-
-def test_narrative_razgovor():
-    states, initial = _razgovor_states()
-    graph = lift_fsm_to_behavior(states, initial)
-    text = behavior_narrative(graph)
-    assert "Когда" in text
-    assert "Возвращаюсь" in text
+    skill = {"id": "razgovor", "initial": "stale", "states": [], "behavior": graph}
+    flat = flatten_skill_document(skill)
+    assert "behavior" not in flat
+    assert "execution" not in flat
+    assert flat["states"]
+    assert fsm_behaviorally_equivalent(states, initial, flat["states"], flat["initial"])

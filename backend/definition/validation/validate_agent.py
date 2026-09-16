@@ -39,13 +39,6 @@ def _collect_referenced_action_ids(agent: dict[str, Any]) -> set[str]:
             for transition in state.get("transitions", []):
                 for action_id in transition.get("actions", []):
                     ids.add(action_id)
-        behavior = skill.get("behavior") or {}
-        for node in behavior.get("nodes") or []:
-            if node.get("type") == "do" and node.get("actionId"):
-                ids.add(str(node["actionId"]))
-            wait_for = node.get("waitFor") or {}
-            if wait_for.get("type") == "action" and wait_for.get("actionId"):
-                ids.add(str(wait_for["actionId"]))
     return ids
 
 

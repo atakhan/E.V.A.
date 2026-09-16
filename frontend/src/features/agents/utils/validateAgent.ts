@@ -18,8 +18,7 @@ export type SkillIssueLocator =
   | { kind: "skill" }
   | { kind: "state"; stateId: string }
   | { kind: "transition"; stateId: string; transitionId: string }
-  | { kind: "param"; index: number }
-  | { kind: "node"; nodeId: string };
+  | { kind: "param"; index: number };
 
 export interface AgentIssue {
   id: string;
@@ -46,10 +45,6 @@ function collectReferencedActionIds(agent: Agent): Set<string> {
       for (const transition of state.transitions) {
         for (const actionId of transition.actions) ids.add(actionId);
       }
-    }
-    for (const node of skill.behavior?.nodes ?? []) {
-      if (node.type === "do" && node.actionId) ids.add(node.actionId);
-      if (node.type === "wait" && node.waitFor.type === "action") ids.add(node.waitFor.actionId);
     }
   }
   return ids;

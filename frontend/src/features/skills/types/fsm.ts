@@ -58,6 +58,9 @@ export interface FsmTransition {
   fromAnchor?: number;
   /** Position along the target edge (0–1). */
   toAnchor?: number;
+  /** Soft routing preferences. Not a locked path. */
+  waypoints?: Point[];
+  routingMode?: "automatic" | "manual_assisted";
   originNodeId?: string;
   originEdgeId?: string;
 }
@@ -76,11 +79,14 @@ export interface FsmState {
   originNodeId?: string;
 }
 
+export type FlowDirection = "vertical" | "horizontal";
+
 export interface FsmEditorState {
   initial: string | null;
   params: SkillParam[];
   states: FsmState[];
   viewport: Viewport;
+  flowDirection?: FlowDirection;
 }
 
 /** Selection in the FSM canvas editor. */

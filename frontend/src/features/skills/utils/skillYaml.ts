@@ -9,20 +9,7 @@ function quoteIfNeeded(value: string): string {
   return JSON.stringify(value);
 }
 
-const BEHAVIOR_YAML_HEADER =
-  "# Canonical: behavior. execution.states generated on publish — DO NOT EDIT\n";
-
 export function skillToYaml(skill: Skill): string {
-  if (skill.behavior && skill.behavior.nodes.length > 0) {
-    const payload = {
-      id: skill.id,
-      version: skill.version,
-      description: skill.description,
-      params: skill.params,
-      behavior: skill.behavior,
-    };
-    return `${BEHAVIOR_YAML_HEADER}${JSON.stringify(payload, null, 2)}\n`;
-  }
   const lines: string[] = [
     `id: ${quoteIfNeeded(skill.id)}`,
     `version: ${JSON.stringify(skill.version)}`,
@@ -113,7 +100,10 @@ export function parseSkillYamlDocument(raw: string): YamlDoc | { error: string }
 
   if (withoutComments.startsWith("{")) {
     try {
-      const parsed = JSON.parse(withoutComments) as Partial<Skill> & { id?: string };
+      const parsed = JSON.parse(withoutComments) as Partial<Skill> & {
+        id?: string;
+        behavior?: BehaviorGraph;
+      };
       return {
         skillId: parsed.id,
         description: parsed.description,

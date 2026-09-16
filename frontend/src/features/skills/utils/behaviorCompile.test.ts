@@ -5,7 +5,6 @@ import { compileBehavior } from "@/features/skills/utils/behaviorCompile";
 import { fsmBehaviorallyEquivalent } from "@/features/skills/utils/behaviorEquivalence";
 import { insertBehaviorStep } from "@/features/skills/utils/behaviorGraph";
 import { liftFsmToBehavior } from "@/features/skills/utils/behaviorLift";
-import { behaviorNarrative } from "@/features/skills/utils/behaviorNarrative";
 
 function razgovorStates(): { states: FsmState[]; initial: string } {
   return {
@@ -157,13 +156,6 @@ describe("behavior compile/lift", () => {
     const guards = new Set(wait?.transitions.map((item) => item.guard));
     expect(guards.has("results.length > 1")).toBe(true);
     expect(guards.has("results.length == 1")).toBe(true);
-  });
-
-  it("builds a narrative", () => {
-    const { states, initial } = razgovorStates();
-    const text = behaviorNarrative(liftFsmToBehavior(states, initial));
-    expect(text).toContain("Когда");
-    expect(text).toContain("Возвращаюсь");
   });
 
   it("inserts a do step as node + edge", () => {
