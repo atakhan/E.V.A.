@@ -5,6 +5,7 @@ import {
   type Point,
   type ResizeHandle,
 } from "@/features/skills/types/fsm";
+import { formatUmlEntryLine } from "@/features/skills/utils/fsmLabelFormat";
 
 export function snap(value: number, grid = GRID_SIZE): number {
   return Math.round(value / grid) * grid;
@@ -135,6 +136,50 @@ export function resizeRectFromHandle(
 export function stateDisplayName(state: { id: string; name?: string }): string {
   const trimmed = state.name?.trim();
   return trimmed || state.id;
+}
+
+const STATE_PAD_X = 28;
+const STATE_PAD_Y = 22;
+const STATE_NAME_CHAR = 8;
+const STATE_ENTRY_CHAR = 5.5;
+const STATE_LINE_NAME = 18;
+const STATE_LINE_ENTRY = 14;
+const STATE_MAX_WIDTH = GRID_SIZE * 18;
+const STATE_MAX_HEIGHT = GRID_SIZE * 10;
+
+/** Minimum box that can hold the state's visible text without spilling. */
+export function sizeNeededForStateContent(state: {
+  id: string;
+  name?: string;
+  onEnter: string[];
+  final?: boolean;
+}): { width: number; height: number } {
+  const title = stateDisplayName(state);
+  const entry = formatUmlEntryLine(state.onEnter);
+  const width = Math.max(
+    MIN_STATE_SIZE,
+    title.length * STATE_NAME_CHAR + STATE_PAD_X + (state.final ? 18 : 0),
+    entry ? Math.min(STATE_MAX_WIDTH, entry.length * STATE_ENTRY_CHAR + STATE_PAD_X) : 0,
+  );
+  const extraIdLine = state.name?.trim() ? 12 : 0;
+  const height = Math.max(
+    MIN_STATE_SIZE,
+    STATE_PAD_Y + STATE_LINE_NAME + extraIdLine + (entry ? STATE_LINE_ENTRY + 4 : 0),
+  );
+  return {
+    width: snap(Math.min(STATE_MAX_WIDTH, width)),
+    height: snap(Math.min(STATE_MAX_HEIGHT, height)),
+  };
+}
+
+export function growStateToFitContent<T extends { width: number; height: number }>(
+  state: T & { id: string; name?: string; onEnter: string[]; final?: boolean },
+): T {
+  const needed = sizeNeededForStateContent(state);
+  const width = Math.max(state.width, needed.width);
+  const height = Math.max(state.height, needed.height);
+  if (width === state.width && height === state.height) return state;
+  return { ...state, width, height };
 }
 
 export function stateCenter(state: { x: number; y: number; width: number; height: number }): Point {

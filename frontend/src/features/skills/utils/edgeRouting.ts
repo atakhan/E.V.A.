@@ -114,40 +114,14 @@ export function defaultAnchorsForPair(
   const toCenter = rectCenter(to);
   const dx = toCenter.x - fromCenter.x;
   const dy = toCenter.y - fromCenter.y;
-
-  const primaryPairs: Array<{ from: RectSide; to: RectSide }> =
-    Math.abs(dx) >= Math.abs(dy)
-      ? [
-          { from: "right", to: "left" },
-          { from: "left", to: "right" },
-        ]
-      : [
-          { from: "bottom", to: "top" },
-          { from: "top", to: "bottom" },
-        ];
-
-  const secondaryPairs: Array<{ from: RectSide; to: RectSide }> =
-    Math.abs(dx) >= Math.abs(dy)
-      ? [
-          { from: "bottom", to: "top" },
-          { from: "top", to: "bottom" },
-          { from: "right", to: "top" },
-          { from: "right", to: "bottom" },
-        ]
-      : [
-          { from: "right", to: "left" },
-          { from: "left", to: "right" },
-          { from: "bottom", to: "left" },
-          { from: "bottom", to: "right" },
-        ];
-
-  const pairs = [...primaryPairs, ...secondaryPairs];
-  const pair = pairs[parallelIndex % pairs.length];
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const fromSide: RectSide = horizontal ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "bottom" : "top";
+  const toSide: RectSide = horizontal ? (dx >= 0 ? "left" : "right") : dy >= 0 ? "top" : "bottom";
   const anchor = MAGNETIC_ANCHORS[parallelIndex % MAGNETIC_ANCHORS.length];
 
   return {
-    from: { side: pair.from, anchor },
-    to: { side: pair.to, anchor: MAGNETIC_ANCHORS[(parallelIndex + 1) % MAGNETIC_ANCHORS.length] },
+    from: { side: fromSide, anchor },
+    to: { side: toSide, anchor: MAGNETIC_ANCHORS[(parallelIndex + 1) % MAGNETIC_ANCHORS.length] },
   };
 }
 
@@ -443,8 +417,10 @@ function labelPointOnPath(points: Point[]): Point {
   return points[Math.floor(points.length / 2)];
 }
 
-export const EDGE_LABEL_NODE_RADIUS = 5;
-export const EDGE_LABEL_LINE_GAP = 6;
+export const EDGE_LABEL_LINE_GAP = 4;
+/** Max gap radius along the line. The badge is opaque and covers the rest. */
+export const EDGE_LABEL_MAX_GAP = 10;
+const MIN_VISIBLE_EACH_SIDE = 8;
 
 function pointAlongSegment(a: Point, b: Point, distanceFromA: number): Point {
   const length = Math.hypot(b.x - a.x, b.y - a.y);
@@ -456,16 +432,11 @@ function pointAlongSegment(a: Point, b: Point, distanceFromA: number): Point {
   };
 }
 
-/** Split a polyline around `labelAt`, leaving a gap for a circular label badge. */
-export function splitPolylineForLabel(
-  points: Point[],
-  labelAt: Point,
-  gapRadius: number,
-): { before: Point[]; after: Point[] } {
-  if (points.length < 2) {
-    return { before: points, after: [] };
-  }
+export function labelLineGapRadius(size: { width: number; height: number }): number {
+  return Math.min(EDGE_LABEL_MAX_GAP, size.height / 2 + EDGE_LABEL_LINE_GAP);
+}
 
+function findClosestSegmentIndex(points: Point[], labelAt: Point): number {
   let bestIndex = 1;
   let bestDist = Infinity;
   for (let i = 1; i < points.length; i += 1) {
@@ -475,20 +446,44 @@ export function splitPolylineForLabel(
       bestIndex = i;
     }
   }
+  return bestIndex;
+}
 
-  const a = points[bestIndex - 1];
-  const b = points[bestIndex];
-  const segmentLength = Math.hypot(b.x - a.x, b.y - a.y);
-  if (segmentLength <= gapRadius * 2) {
-    const before = points.slice(0, bestIndex);
-    const after = points.slice(bestIndex);
-    return { before, after };
+/** Split a polyline around `labelAt`, leaving a small gap under the event badge. */
+export function splitPolylineForLabel(
+  points: Point[],
+  labelAt: Point,
+  gapRadius: number,
+): { before: Point[]; after: Point[] } {
+  if (points.length < 2 || gapRadius <= 0) {
+    return { before: points, after: [] };
   }
 
-  const toLabel = Math.hypot(labelAt.x - a.x, labelAt.y - a.y);
-  const cutA = pointAlongSegment(a, b, Math.max(0, toLabel - gapRadius));
-  const cutB = pointAlongSegment(a, b, Math.min(segmentLength, toLabel + gapRadius));
+  const bestIndex = findClosestSegmentIndex(points, labelAt);
+  const a = points[bestIndex - 1];
+  const b = points[bestIndex];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const segmentLength = Math.hypot(dx, dy);
+  if (segmentLength <= MIN_VISIBLE_EACH_SIDE * 2 + 2) {
+    return { before: points, after: [] };
+  }
 
+  const along =
+    segmentLength === 0
+      ? 0
+      : Math.max(0, Math.min(segmentLength, ((labelAt.x - a.x) * dx + (labelAt.y - a.y) * dy) / segmentLength));
+  const radius = Math.min(
+    gapRadius,
+    Math.max(0, along - MIN_VISIBLE_EACH_SIDE),
+    Math.max(0, segmentLength - along - MIN_VISIBLE_EACH_SIDE),
+  );
+  if (radius <= 1) {
+    return { before: points, after: [] };
+  }
+
+  const cutA = pointAlongSegment(a, b, along - radius);
+  const cutB = pointAlongSegment(a, b, along + radius);
   const before = [...points.slice(0, bestIndex - 1), a, cutA];
   const after = [cutB, ...points.slice(bestIndex)];
   return { before, after };

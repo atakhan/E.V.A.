@@ -32,6 +32,19 @@ describe("fsmLabelFormat", () => {
     expect(label.actionLine).toBeNull();
   });
 
+  it("truncates long action lines so they stay in the label card", () => {
+    const label = formatUmlTransitionLabel(
+      "event",
+      "",
+      ["very_long_action_name_that_should_not_spill"],
+      false,
+      80,
+    );
+    expect(label.actionLine).toContain("…");
+    expect(label.actionLine!.length).toBeLessThanOrEqual(24);
+    expect(label.width).toBeLessThanOrEqual(200);
+  });
+
   it("formats entry line for state", () => {
     expect(formatUmlEntryLine(["greet", "track"])).toBe("entry / greet, track");
     expect(formatUmlEntryLine([])).toBeNull();

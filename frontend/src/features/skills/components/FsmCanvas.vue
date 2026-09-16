@@ -12,6 +12,7 @@ import {
   snapPoint,
   snapRect,
   stateDisplayName,
+  growStateToFitContent,
 } from "@/features/skills/utils/canvasGeometry";
 import {
   transitionIssueKey,
@@ -20,20 +21,30 @@ import {
 import type { SkillIssueMaps } from "@/features/skills/utils/skillIssueIndex";
 import { formatUmlEntryLine, formatUmlTransitionLabel } from "@/features/skills/utils/fsmLabelFormat";
 import {
-  defaultAnchorsForPair,
   distanceToPolyline,
-  EDGE_LABEL_NODE_RADIUS,
-  EDGE_LABEL_LINE_GAP,
   magneticPointsForRect,
-  normalizeMagneticAnchor,
   polylineToPath,
-  routeEdge,
   snapEndpointToState,
   snapSideAnchorFromPoint,
   splitPolylineForLabel,
-  polylineLength,
+  labelLineGapRadius,
   type SideAnchor,
 } from "@/features/skills/utils/edgeRouting";
+import {
+  autoLayoutStates,
+  labelCollisionRect,
+  pinMissingTransitionPorts,
+  placeLabelOnRoute,
+  reassignTransitionPorts,
+  rectsOverlap,
+  resolveRectOverlap,
+  resolvedAnchorsForTransition,
+  routeOrthogonal,
+  routeSkillGraph,
+  snapRectToAlignment,
+  transitionRouteKey,
+  type GuideLine,
+} from "@/features/skills/utils/geometry";
 import {
   GRID_SIZE,
   RESIZE_HANDLES,
@@ -88,9 +99,25 @@ type Interaction =
   | { kind: "draw"; anchor: Point }
   | { kind: "move"; id: string; offset: Point }
   | { kind: "resize"; id: string; handle: ResizeHandle; startRect: DraftRect }
-  | { kind: "edge-endpoint"; endpoint: "from" | "to"; ownerStateId: string; transitionId: string };
+  | { kind: "edge-endpoint"; endpoint: "from" | "to"; ownerStateId: string; transitionId: string }
+  | { kind: "waypoint"; ownerStateId: string; transitionId: string; index: number };
 
 const interaction = ref<Interaction | null>(null);
+const alignmentGuides = ref<GuideLine[]>([]);
+const selectedWaypointIndex = ref<number | null>(null);
+const overlappingNodeIds = computed(() => {
+  const ids = new Set<string>();
+  const list = model.value.states;
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      if (rectsOverlap(list[i], list[j])) {
+        ids.add(list[i].id);
+        ids.add(list[j].id);
+      }
+    }
+  }
+  return ids;
+});
 
 watch(
   () => props.activeTool,
@@ -136,19 +163,20 @@ const draftLinkRoute = computed(() => {
 
   const targetAt = findStateAt(draftLinkTo.value);
   const target = targetAt ?? source;
-  const isSelfLoop = target.id === source.id;
   const toAnchor = targetAt
     ? snapSideAnchorFromPoint(target, draftLinkTo.value)
     : snapSideAnchorFromPoint(source, draftLinkTo.value);
 
-  return routeEdge(
+  return routeOrthogonal({
     source,
     target,
-    transitionFromAnchor.value,
+    fromAnchor: transitionFromAnchor.value,
     toAnchor,
-    0,
-    isSelfLoop,
-  ).points;
+    obstacles: states.value,
+    flowDirection: model.value.flowDirection ?? "vertical",
+    preview: true,
+    parallelIndex: 0,
+  }).points;
 });
 
 function getTransition(ownerStateId: string, transitionId: string) {
@@ -158,56 +186,46 @@ function getTransition(ownerStateId: string, transitionId: string) {
   return { owner, transition };
 }
 
+function freezeTransitionPorts() {
+  if (props.readOnly) return;
+  pinMissingTransitionPorts(model.value.states);
+}
+
 function resolveTransitionAnchors(
   source: FsmState,
   target: FsmState,
   transition: FsmTransition,
   parallelIndex: number,
 ): { from: SideAnchor; to: SideAnchor } {
-  const isSelfLoop = source.id === target.id;
-  if (transition.fromSide && transition.toSide) {
-    return {
-      from: {
-        side: transition.fromSide,
-        anchor: normalizeMagneticAnchor(transition.fromAnchor ?? 0.5),
-      },
-      to: {
-        side: transition.toSide,
-        anchor: normalizeMagneticAnchor(transition.toAnchor ?? 0.5),
-      },
-    };
-  }
-  return defaultAnchorsForPair(source, target, parallelIndex, isSelfLoop);
+  return resolvedAnchorsForTransition(source, target, transition, parallelIndex);
 }
 
-function routeForTransition(
-  source: FsmState,
-  target: FsmState,
-  transition: FsmTransition,
-  parallelIndex: number,
-  preview: EdgeDragPreview | null,
-): ReturnType<typeof routeEdge> {
-  const usePreview = preview?.transitionId === transition.id;
-  const fromState = usePreview
-    ? (model.value.states.find((state) => state.id === preview.fromStateId) ?? source)
-    : source;
-  const toState = usePreview
-    ? (model.value.states.find((state) => state.id === preview.toStateId) ?? target)
-    : target;
+const previewRouting = computed(
+  () => interaction.value?.kind === "move" || interaction.value?.kind === "resize",
+);
 
-  const anchors = usePreview
-    ? { from: preview.from, to: preview.to }
-    : resolveTransitionAnchors(source, target, transition, parallelIndex);
-
-  return routeEdge(
-    fromState,
-    toState,
-    anchors.from,
-    anchors.to,
-    parallelIndex,
-    fromState.id === toState.id,
-  );
-}
+const routedGraph = computed(() => {
+  const routes = routeSkillGraph(states.value, {
+    flowDirection: model.value.flowDirection ?? "vertical",
+    preview: previewRouting.value,
+  });
+  const preview = edgeDragPreview.value;
+  if (!preview) return routes;
+  const source = states.value.find((state) => state.id === preview.fromStateId);
+  const target = states.value.find((state) => state.id === preview.toStateId);
+  if (!source || !target) return routes;
+  const overlay = routeOrthogonal({
+    source,
+    target,
+    fromAnchor: preview.from,
+    toAnchor: preview.to,
+    obstacles: states.value,
+    flowDirection: model.value.flowDirection ?? "vertical",
+    preview: true,
+  });
+  routes.set(transitionRouteKey(preview.ownerStateId, preview.transitionId), overlay);
+  return routes;
+});
 
 const INITIAL_DOT_OFFSET = 28;
 
@@ -225,7 +243,8 @@ const initialMarker = computed(() => {
 
 const edges = computed(() => {
   const byId = new Map(states.value.map((state) => [state.id, state]));
-  const parallelCounts = new Map<string, number>();
+  const routes = routedGraph.value;
+  const labelRects: Array<{ x: number; y: number; width: number; height: number }> = [];
   const result: Array<{
     key: string;
     stateId: string;
@@ -240,8 +259,10 @@ const edges = computed(() => {
     labelAt: Point;
     labelWidth: number;
     labelHeight: number;
-    nodeRadius: number;
     selected: boolean;
+    valid: boolean;
+    compactLabel: boolean;
+    clipId: string;
   }> = [];
 
   for (const state of states.value) {
@@ -249,37 +270,43 @@ const edges = computed(() => {
       const target = byId.get(transition.to);
       if (!target) continue;
 
-      const pairKey = `${state.id}->${transition.to}`;
-      const parallelIndex = parallelCounts.get(pairKey) ?? 0;
-      parallelCounts.set(pairKey, parallelIndex + 1);
+      const key = transitionRouteKey(state.id, transition.id);
+      const routed = routes.get(key);
+      if (!routed) continue;
 
-      const routed = routeForTransition(
-        state,
-        target,
-        transition,
-        parallelIndex,
-        edgeDragPreview.value,
-      );
-      const labelAt = routed.labelAt;
       const selected =
         selection.value?.kind === "transition" &&
         selection.value.stateId === state.id &&
         selection.value.transitionId === transition.id;
+      const estimate = formatUmlTransitionLabel(
+        transition.event,
+        transition.guard,
+        transition.actions,
+        selected,
+        routed.labelAt.y,
+      );
+      const placed = placeLabelOnRoute(
+        routed.points,
+        { width: estimate.width, height: estimate.height },
+        states.value,
+        labelRects,
+      );
       const label = formatUmlTransitionLabel(
         transition.event,
         transition.guard,
         transition.actions,
         selected,
-        labelAt.y,
+        placed.at.y,
       );
-      const lineGap = Math.min(
-        EDGE_LABEL_LINE_GAP + label.width / 2,
-        Math.max(EDGE_LABEL_LINE_GAP, polylineLength(routed.points) / 2 - 2),
+      labelRects.push(labelCollisionRect(placed.at, { width: label.width, height: label.height }));
+      const split = splitPolylineForLabel(
+        routed.points,
+        placed.at,
+        labelLineGapRadius({ width: label.width, height: label.height }),
       );
-      const split = splitPolylineForLabel(routed.points, labelAt, lineGap);
 
       result.push({
-        key: `${state.id}:${transition.id}`,
+        key,
         stateId: state.id,
         transitionId: transition.id,
         title: label.title,
@@ -289,11 +316,13 @@ const edges = computed(() => {
         points: routed.points,
         beforePoints: split.before,
         afterPoints: split.after,
-        labelAt,
+        labelAt: placed.at,
         labelWidth: label.width,
         labelHeight: label.height,
-        nodeRadius: EDGE_LABEL_NODE_RADIUS,
         selected,
+        valid: routed.valid,
+        compactLabel: placed.compact,
+        clipId: `fsm-label-${state.id}-${transition.id}`.replace(/[^a-zA-Z0-9_-]/g, "_"),
       });
     }
   }
@@ -337,6 +366,13 @@ const selectedEdgeHandles = computed(() => {
     ownerStateId: edge.stateId,
     transitionId: edge.transitionId,
   };
+});
+
+const selectedWaypoints = computed(() => {
+  const current = selection.value;
+  if (current?.kind !== "transition") return [];
+  const resolved = getTransition(current.stateId, current.transitionId);
+  return resolved?.transition.waypoints ?? [];
 });
 
 const viewportClass = computed(() => {
@@ -442,6 +478,64 @@ function findEndpointHandleAt(clientX: number, clientY: number): "from" | "to" |
   if (toDist <= threshold) return "to";
 
   return null;
+}
+
+function findWaypointHandleAt(clientX: number, clientY: number): number | null {
+  if (props.activeTool !== "select" || selection.value?.kind !== "transition") return null;
+  const threshold = HANDLE_RADIUS_PX + 4;
+  for (const [index, point] of selectedWaypoints.value.entries()) {
+    const screen = worldToScreen(point);
+    if (Math.hypot(clientX - screen.x, clientY - screen.y) <= threshold) return index;
+  }
+  return null;
+}
+
+function applyCollisionFor(stateId: string) {
+  const current = model.value.states.find((item) => item.id === stateId);
+  if (!current) return;
+  const others = model.value.states.filter((item) => item.id !== stateId);
+  const resolved = resolveRectOverlap(current, others);
+  current.x = resolved.x;
+  current.y = resolved.y;
+}
+
+function fitStatesToContent() {
+  if (interaction.value) return;
+  for (const state of model.value.states) {
+    const fitted = growStateToFitContent(state);
+    state.width = fitted.width;
+    state.height = fitted.height;
+  }
+  for (const state of model.value.states) {
+    applyCollisionFor(state.id);
+  }
+}
+
+watch(
+  () =>
+    model.value.states
+      .map((state) => `${state.id}:${state.name ?? ""}:${state.onEnter.join(",")}:${state.final ? 1 : 0}`)
+      .join("|"),
+  () => fitStatesToContent(),
+  { immediate: true },
+);
+
+function applyAutoLayout() {
+  const next = autoLayoutStates(
+    model.value.states,
+    model.value.initial,
+    model.value.flowDirection ?? "vertical",
+  );
+  reassignTransitionPorts(next);
+  model.value.states = next;
+}
+
+function addWaypointAt(stateId: string, transitionId: string, point: Point) {
+  const resolved = getTransition(stateId, transitionId);
+  if (!resolved) return;
+  const waypoints = [...(resolved.transition.waypoints ?? []), snapPoint(point)];
+  resolved.transition.waypoints = waypoints;
+  selectedWaypointIndex.value = waypoints.length - 1;
 }
 
 function beginEdgeEndpointDrag(endpoint: "from" | "to", ownerStateId: string, transitionId: string) {
@@ -588,6 +682,8 @@ function onPointerDown(event: PointerEvent) {
 
   if (event.button !== 0) return;
 
+  selectedWaypointIndex.value = null;
+
   if (isInteractiveTarget(event.target)) return;
 
   const worldPoint = toSnappedWorld(event.clientX, event.clientY);
@@ -624,9 +720,23 @@ function onPointerDown(event: PointerEvent) {
             height: state.height,
           },
         };
+        freezeTransitionPorts();
         viewportEl.value?.setPointerCapture(event.pointerId);
         return;
       }
+    }
+
+    const waypointIndex = findWaypointHandleAt(event.clientX, event.clientY);
+    if (waypointIndex !== null && selection.value?.kind === "transition") {
+      selectedWaypointIndex.value = waypointIndex;
+      interaction.value = {
+        kind: "waypoint",
+        ownerStateId: selection.value.stateId,
+        transitionId: selection.value.transitionId,
+        index: waypointIndex,
+      };
+      viewportEl.value?.setPointerCapture(event.pointerId);
+      return;
     }
 
     const handle = findEndpointHandleAt(event.clientX, event.clientY);
@@ -692,6 +802,7 @@ function onPointerDown(event: PointerEvent) {
         id: hit.id,
         offset: { x: worldPoint.x - hit.x, y: worldPoint.y - hit.y },
       };
+      freezeTransitionPorts();
     } else {
       selection.value = null;
       interaction.value = { kind: "draw", anchor: worldPoint };
@@ -724,6 +835,7 @@ function onPointerDown(event: PointerEvent) {
       id: hit.id,
       offset: { x: worldPoint.x - hit.x, y: worldPoint.y - hit.y },
     };
+    freezeTransitionPorts();
     viewportEl.value?.setPointerCapture(event.pointerId);
     return;
   }
@@ -770,6 +882,13 @@ function onPointerMove(event: PointerEvent) {
     return;
   }
 
+  if (current?.kind === "waypoint") {
+    const resolved = getTransition(current.ownerStateId, current.transitionId);
+    if (!resolved?.transition.waypoints) return;
+    resolved.transition.waypoints[current.index] = toSnappedWorld(event.clientX, event.clientY);
+    return;
+  }
+
   if (!current) return;
 
   if (current.kind === "pan") {
@@ -796,12 +915,25 @@ function onPointerMove(event: PointerEvent) {
     return;
   }
 
+  if (current.kind !== "move") return;
+
   const state = model.value.states.find((item) => item.id === current.id);
   if (!state) return;
 
   const worldPoint = toSnappedWorld(event.clientX, event.clientY);
-  state.x = snap(worldPoint.x - current.offset.x);
-  state.y = snap(worldPoint.y - current.offset.y);
+  const moving = {
+    x: snap(worldPoint.x - current.offset.x),
+    y: snap(worldPoint.y - current.offset.y),
+    width: state.width,
+    height: state.height,
+  };
+  const aligned = snapRectToAlignment(
+    moving,
+    model.value.states.filter((item) => item.id !== state.id),
+  );
+  state.x = aligned.x;
+  state.y = aligned.y;
+  alignmentGuides.value = aligned.guides;
 }
 
 function onPointerUp(event: PointerEvent) {
@@ -820,13 +952,19 @@ function onPointerUp(event: PointerEvent) {
     return;
   }
 
+  if (current?.kind === "move" || current?.kind === "resize") {
+    applyCollisionFor(current.id);
+  }
+
   if (current?.kind === "draw" && draftRect.value && isValidRect(draftRect.value)) {
     const state = createFsmState(model.value.states, draftRect.value);
     model.value.states.push(state);
+    applyCollisionFor(state.id);
     if (!model.value.initial) model.value.initial = state.id;
     selection.value = { kind: "state", stateId: state.id };
   }
 
+  alignmentGuides.value = [];
   draftRect.value = null;
   interaction.value = null;
   viewportEl.value?.releasePointerCapture(event.pointerId);
@@ -838,6 +976,23 @@ function onKeyDown(event: KeyboardEvent) {
   const target = event.target;
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
   if (!selection.value) return;
+
+  if (
+    selection.value.kind === "transition" &&
+    selectedWaypointIndex.value !== null
+  ) {
+    const resolved = getTransition(selection.value.stateId, selection.value.transitionId);
+    if (resolved?.transition.waypoints) {
+      resolved.transition.waypoints = resolved.transition.waypoints.filter(
+        (_point, index) => index !== selectedWaypointIndex.value,
+      );
+      if (resolved.transition.waypoints.length === 0) {
+        resolved.transition.waypoints = undefined;
+      }
+      selectedWaypointIndex.value = null;
+      return;
+    }
+  }
 
   if (selection.value.kind === "state") {
     const stateId = selection.value.stateId;
@@ -859,6 +1014,20 @@ function onKeyDown(event: KeyboardEvent) {
   if (!state) return;
   state.transitions = state.transitions.filter((transition) => transition.id !== transitionId);
   selection.value = { kind: "state", stateId };
+}
+
+function onDoubleClick(event: MouseEvent) {
+  if (props.readOnly || props.activeTool !== "select") return;
+  const point = toWorld(event.clientX, event.clientY);
+  const edgeHit = findEdgeAt(point);
+  if (!edgeHit) return;
+  event.preventDefault();
+  selection.value = {
+    kind: "transition",
+    stateId: edgeHit.stateId,
+    transitionId: edgeHit.transitionId,
+  };
+  addWaypointAt(edgeHit.stateId, edgeHit.transitionId, point);
 }
 
 function focusState(stateId: string) {
@@ -885,7 +1054,7 @@ function focusTransition(stateId: string, transitionId: string) {
   selection.value = { kind: "transition", stateId, transitionId };
 }
 
-defineExpose({ focusState, focusTransition });
+defineExpose({ focusState, focusTransition, applyAutoLayout });
 
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
@@ -906,6 +1075,7 @@ onUnmounted(() => {
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
+    @dblclick="onDoubleClick"
     @contextmenu.prevent
   >
     <div class="canvas-world absolute inset-0" :style="worldStyle">
@@ -958,11 +1128,26 @@ onUnmounted(() => {
             v-if="edge.beforePoints.length >= 2"
             :d="polylineToPath(edge.beforePoints)"
             fill="none"
+            stroke-width="5"
+            class="stroke-base-300"
+          />
+          <path
+            v-if="edge.afterPoints.length >= 2"
+            :d="polylineToPath(edge.afterPoints)"
+            fill="none"
+            stroke-width="5"
+            class="stroke-base-300"
+          />
+          <path
+            v-if="edge.beforePoints.length >= 2"
+            :d="polylineToPath(edge.beforePoints)"
+            fill="none"
             stroke-width="2"
+            :stroke-dasharray="edge.valid ? undefined : '7 5'"
             :class="[
               edge.selected
                 ? 'stroke-primary'
-                : transitionSeverity(edge.stateId, edge.transitionId) === 'error'
+                : !edge.valid || transitionSeverity(edge.stateId, edge.transitionId) === 'error'
                   ? 'stroke-error'
                   : transitionSeverity(edge.stateId, edge.transitionId) === 'warning'
                     ? 'stroke-warning'
@@ -975,24 +1160,17 @@ onUnmounted(() => {
             :d="polylineToPath(edge.afterPoints)"
             fill="none"
             stroke-width="2"
+            :stroke-dasharray="edge.valid ? undefined : '7 5'"
             :class="[
               edge.selected
                 ? 'stroke-primary'
-                : transitionSeverity(edge.stateId, edge.transitionId) === 'error'
+                : !edge.valid || transitionSeverity(edge.stateId, edge.transitionId) === 'error'
                   ? 'stroke-error'
                   : transitionSeverity(edge.stateId, edge.transitionId) === 'warning'
                     ? 'stroke-warning'
                     : 'stroke-base-content/40',
             ]"
             marker-end="url(#fsm-arrow)"
-          />
-          <circle
-            :cx="edge.labelAt.x"
-            :cy="edge.labelAt.y"
-            :r="edge.nodeRadius"
-            class="fill-base-100 stroke-base-content/35"
-            stroke-width="1.5"
-            :class="edge.selected ? 'stroke-primary' : ''"
           />
           <rect
             :x="edge.labelAt.x - edge.labelWidth / 2"
@@ -1004,7 +1182,20 @@ onUnmounted(() => {
             stroke-width="1"
             :class="edge.selected ? 'stroke-primary' : ''"
           />
-          <text text-anchor="middle" class="fill-base-content font-mono">
+          <clipPath :id="edge.clipId">
+            <rect
+              :x="edge.labelAt.x - edge.labelWidth / 2 + 4"
+              :y="edge.labelAt.y - edge.labelHeight / 2"
+              :width="Math.max(8, edge.labelWidth - 8)"
+              :height="edge.labelHeight"
+              rx="6"
+            />
+          </clipPath>
+          <text
+            text-anchor="middle"
+            class="fill-base-content font-mono"
+            :clip-path="`url(#${edge.clipId})`"
+          >
             <title>{{ edge.title }}</title>
             <tspan
               :x="edge.labelAt.x"
@@ -1023,17 +1214,30 @@ onUnmounted(() => {
             </tspan>
           </text>
         </g>
+        <line
+          v-for="(guide, index) in alignmentGuides"
+          :key="`guide-${index}`"
+          :x1="guide.x1"
+          :y1="guide.y1"
+          :x2="guide.x2"
+          :y2="guide.y2"
+          class="stroke-primary"
+          stroke-width="1"
+          stroke-dasharray="4 3"
+        />
       </svg>
 
       <div
         v-for="state in states"
         :key="state.id"
-        class="fsm-state"
+        class="fsm-state box-border overflow-hidden"
         :class="{
           'fsm-state--selected': selection?.kind === 'state' && selection.stateId === state.id,
           'fsm-state--connector-target': connectorTargetStateId === state.id,
           'fsm-state--error': stateSeverity(state.id) === 'error',
           'fsm-state--warning': stateSeverity(state.id) === 'warning',
+          'fsm-state--conflict': overlappingNodeIds.has(state.id),
+          'fsm-state--final': state.final,
         }"
         :style="{
           left: `${state.x}px`,
@@ -1046,26 +1250,32 @@ onUnmounted(() => {
           v-if="!readOnly && selection?.kind === 'state' && selection.stateId === state.id"
           v-model="state.name"
           type="text"
-          class="fsm-state__name-input input input-xs w-full border-base-300/60 bg-base-100/90 px-2 font-medium"
+          class="fsm-state__name-input input input-xs min-w-0 w-full max-w-full border-base-300/60 bg-base-100/90 px-2 font-medium"
           :placeholder="state.id"
+          :title="state.name || state.id"
           @pointerdown.stop
           @click.stop
         />
         <span
           v-else
-          class="fsm-state__name truncate text-xs font-medium"
+          class="fsm-state__name min-w-0 w-full truncate text-xs font-medium"
           :class="{ 'text-base-content/45': !state.name?.trim() }"
+          :title="stateDisplayName(state)"
         >
           {{ stateDisplayName(state) }}
         </span>
         <p
           v-if="state.name?.trim() && selection?.kind === 'state' && selection.stateId === state.id"
-          class="truncate font-mono text-[10px] text-base-content/40"
+          class="min-w-0 w-full truncate font-mono text-[10px] text-base-content/40"
+          :title="state.id"
         >
           {{ state.id }}
         </p>
-        <div v-if="state.onEnter.length > 0" class="fsm-state__on-enter">
-          <span class="fsm-state__on-enter-label font-mono text-[9px] text-base-content/55">
+        <div v-if="state.onEnter.length > 0" class="fsm-state__on-enter min-w-0 w-full">
+          <span
+            class="fsm-state__on-enter-label block min-w-0 w-full truncate font-mono text-[9px] text-base-content/55"
+            :title="formatUmlEntryLine(state.onEnter) ?? ''"
+          >
             {{ formatUmlEntryLine(state.onEnter) }}
           </span>
         </div>
@@ -1134,6 +1344,17 @@ onUnmounted(() => {
           }"
           title="Перетащите конец стрелки"
         />
+        <div
+          v-for="(point, index) in selectedWaypoints"
+          :key="`wp-${index}`"
+          class="waypoint-handle"
+          :class="{ 'waypoint-handle--active': selectedWaypointIndex === index }"
+          :style="{
+            left: `${point.x}px`,
+            top: `${point.y}px`,
+          }"
+          title="Опорная точка маршрута"
+        />
       </template>
 
       <div
@@ -1193,9 +1414,12 @@ onUnmounted(() => {
   position: absolute;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: center;
   gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   padding: 0.5rem 0.75rem;
   border: 2px solid color-mix(in oklab, var(--color-base-content) 18%, transparent);
   border-radius: 0.75rem;
@@ -1203,6 +1427,10 @@ onUnmounted(() => {
   box-shadow:
     0 1px 2px color-mix(in oklab, var(--color-base-content) 10%, transparent),
     0 8px 24px color-mix(in oklab, var(--color-base-content) 6%, transparent);
+}
+
+.fsm-state--final {
+  padding-right: 1.6rem;
 }
 
 .fsm-state--selected {
@@ -1229,6 +1457,11 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-warning) 25%, transparent);
 }
 
+.fsm-state--conflict {
+  border-style: dashed;
+  border-color: var(--color-error);
+}
+
 .edge-handle {
   position: absolute;
   z-index: 30;
@@ -1245,6 +1478,22 @@ onUnmounted(() => {
 
 .edge-handle--to {
   background: var(--color-primary);
+}
+
+.waypoint-handle {
+  position: absolute;
+  z-index: 31;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-secondary);
+  background: var(--color-base-100);
+  transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: none;
+}
+
+.waypoint-handle--active {
+  background: var(--color-secondary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-secondary) 22%, transparent);
 }
 
 .magnetic-point {
@@ -1280,15 +1529,18 @@ onUnmounted(() => {
 
 .fsm-state__name-input {
   pointer-events: auto;
+  min-width: 0;
 }
 
 .fsm-state__on-enter {
+  min-width: 0;
   width: 100%;
   margin-top: 0.15rem;
 }
 
 .fsm-state__on-enter-label {
   display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1303,6 +1555,9 @@ onUnmounted(() => {
 
 .fsm-state__badges {
   margin-top: 0.15rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .resize-handle {

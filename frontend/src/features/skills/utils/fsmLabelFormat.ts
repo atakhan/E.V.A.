@@ -24,8 +24,8 @@ export interface UmlTransitionLabel {
   labelLines: { triggerY: number; actionY?: number };
 }
 
-const TRIGGER_CHAR_WIDTH = 5.3;
-const ACTION_CHAR_WIDTH = 4.9;
+const TRIGGER_CHAR_WIDTH = 6.2;
+const ACTION_CHAR_WIDTH = 5.6;
 const LABEL_PADDING = 14;
 const TRIGGER_LINE_HEIGHT = 14;
 const ACTION_LINE_HEIGHT = 11;
@@ -45,15 +45,20 @@ export function formatUmlTransitionLabel(
   const triggerLine = truncateLabelText(`${eventPart}${guardInTrigger}`, selected ? 48 : 38);
 
   const actionsSegment = formatUmlActionsSegment(actions);
-  const actionLine = actionsSegment ? `/ ${actionsSegment}` : null;
+  const actionLineRaw = actionsSegment ? `/ ${actionsSegment}` : null;
+  const actionLine = actionLineRaw
+    ? truncateLabelText(actionLineRaw, selected ? 36 : 24)
+    : null;
 
-  const title = actionLine ? `${eventPart}${guardInTrigger} ${actionLine}` : `${eventPart}${guardInTrigger}`;
+  const title = actionLineRaw
+    ? `${eventPart}${guardInTrigger} ${actionLineRaw}`
+    : `${eventPart}${guardInTrigger}`;
 
   const widths = [
     triggerLine.length * TRIGGER_CHAR_WIDTH + LABEL_PADDING,
     actionLine ? actionLine.length * ACTION_CHAR_WIDTH + LABEL_PADDING : 0,
   ];
-  const width = Math.min(220, Math.max(44, ...widths.filter((item) => item > 0)));
+  const width = Math.min(200, Math.max(48, ...widths.filter((item) => item > 0)));
 
   let height = TRIGGER_LINE_HEIGHT + 4;
   if (actionLine) height += ACTION_LINE_HEIGHT;
