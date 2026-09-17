@@ -6,8 +6,6 @@ dist/
 .env
 .env.*
 !.env.example
-!.env.prod.example
-!.env.stage.example
 
 *.log
 

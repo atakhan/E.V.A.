@@ -63,13 +63,13 @@ docker compose up --build
 
 Сервисы: Postgres, Redis, backend API, runtime-worker, telegram-poller, frontend (nginx :8080). Frontend ходит в API по относительному `/api/` — маршрутизацию делает edge-прокси.
 
-Секреты не кладутся в `.env.prod` / `.env.stage`. Compose читает их из окружения, которое подставляет **Infisical CLI** (`infisical run`), как у filestorage и sous.
+Секреты не кладутся в `.env` на сервере. Compose читает их из окружения, которое подставляет **Infisical CLI** (`infisical run`). Шаблоны папок — `infisical/stage/` и `infisical/prod/`.
 
 | Infisical | Stage (`env=staging`) | Prod (`env=prod`) |
 |-----------|------------------------|-------------------|
 | `/eva-postgres` | `POSTGRES_*` | то же |
 | `/eva-redis` | `REDIS_URL` → `eva-redis-stage` | `eva-redis-prod` |
-| `/eva-backend` | `DATABASE_URL`, `EVA_CREDENTIALS_KEY`, публичные URL | то же, хосты `*-prod` |
+| `/eva-backend` | весь runtime-конфиг (`PORT`, `DATABASE_URL`, `EVA_*`, `POLZA_*`) | то же, хосты `*-prod` |
 
 ```bash
 # Один раз: CLI + привязка к проекту tetrakom
