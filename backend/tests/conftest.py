@@ -2,7 +2,6 @@ import os
 import uuid
 
 import pytest
-from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text
 
 from app.config import get_settings
@@ -24,19 +23,12 @@ def _services_available() -> bool:
         client.ping()
         return True
     except Exception:
+        get_settings.cache_clear()
         return False
 
 
 def new_ephemeral_agent_slug() -> str:
     return f"eva-test-{uuid.uuid4().hex[:8]}"
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _test_env():
-    os.environ.setdefault("EVA_TELEGRAM_MODE", "stub")
-    os.environ.setdefault("EVA_CREDENTIALS_KEY", Fernet.generate_key().decode())
-    os.environ.setdefault("EVA_DEFAULT_SKILL_IDS", "")
-    yield
 
 
 @pytest.fixture

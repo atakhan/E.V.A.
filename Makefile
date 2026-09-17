@@ -48,28 +48,9 @@ logs-prod:
 health-prod:
 	$(COMPOSE_PROD) exec -T eva-backend-prod curl -fsS http://127.0.0.1:8000/health
 
-prod-secrets-check:
-	@command -v $(INFISICAL) >/dev/null || (echo "Установите Infisical CLI (см. tetrakom/devops_stuff/INFISICAL_HANDBOOK.md)" && exit 1)
-	@$(INFISICAL_RUN_PROD) env | grep -E '^(POSTGRES_PASSWORD|DATABASE_URL|REDIS_URL|EVA_CREDENTIALS_KEY)=' >/dev/null \
-		|| (echo "Секреты E.V.A. не найдены в Infisical (env=$(INFISICAL_ENV_PROD))." && \
-		    echo "  Ожидаются папки: $(INFISICAL_PATH_EVA_POSTGRES), $(INFISICAL_PATH_EVA_REDIS), $(INFISICAL_PATH_EVA_BACKEND)" && \
-		    echo "  1) infisical login --domain $(INFISICAL_DOMAIN)" && \
-		    echo "  2) infisical init  (в каталоге E.V.A.)" && \
-		    echo "  3) make prod-secrets-upload   или заполните папки в UI" && \
-		    exit 1)
-	@echo "Infisical secrets OK for env=$(INFISICAL_ENV_PROD)"
-
-prod-secrets-upload:
-	@command -v $(INFISICAL) >/dev/null || (echo "Установите Infisical CLI" && exit 1)
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_PROD) --path=$(INFISICAL_PATH_EVA_POSTGRES) --file=infisical/prod/eva-postgres.env.example
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_PROD) --path=$(INFISICAL_PATH_EVA_REDIS) --file=infisical/prod/eva-redis.env.example
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_PROD) --path=$(INFISICAL_PATH_EVA_BACKEND) --file=infisical/prod/eva-backend.env.example
-	@echo "Шаблоны загружены в Infisical env=$(INFISICAL_ENV_PROD)."
-	@echo "Замените POSTGRES_PASSWORD, DATABASE_URL и EVA_CREDENTIALS_KEY в UI, затем: make prod-secrets-check"
-
 # --- Stage (tetrakomnet-stage, Infisical env=staging) ---
 
-start-stage: stage-secrets-check
+start-stage:
 	@docker network ls | grep -q tetrakomnet-stage || docker network create tetrakomnet-stage
 	$(INFISICAL_RUN_STAGE) $(COMPOSE_STAGE) up -d --build
 
@@ -86,22 +67,3 @@ logs-stage:
 
 health-stage:
 	$(COMPOSE_STAGE) exec -T eva-backend-stage curl -fsS http://127.0.0.1:8000/health
-
-stage-secrets-check:
-	@command -v $(INFISICAL) >/dev/null || (echo "Установите Infisical CLI (см. tetrakom/devops_stuff/INFISICAL_HANDBOOK.md)" && exit 1)
-	@$(INFISICAL_RUN_STAGE) env | grep -E '^(POSTGRES_PASSWORD|DATABASE_URL|REDIS_URL|EVA_CREDENTIALS_KEY)=' >/dev/null \
-		|| (echo "Секреты E.V.A. не найдены в Infisical (env=$(INFISICAL_ENV_STAGE))." && \
-		    echo "  Ожидаются папки: $(INFISICAL_PATH_EVA_POSTGRES), $(INFISICAL_PATH_EVA_REDIS), $(INFISICAL_PATH_EVA_BACKEND)" && \
-		    echo "  1) infisical login --domain $(INFISICAL_DOMAIN)" && \
-		    echo "  2) infisical init  (в каталоге E.V.A.)" && \
-		    echo "  3) make stage-secrets-upload   или заполните папки в UI" && \
-		    exit 1)
-	@echo "Infisical secrets OK for env=$(INFISICAL_ENV_STAGE)"
-
-stage-secrets-upload:
-	@command -v $(INFISICAL) >/dev/null || (echo "Установите Infisical CLI" && exit 1)
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_STAGE) --path=$(INFISICAL_PATH_EVA_POSTGRES) --file=infisical/stage/eva-postgres.env.example
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_STAGE) --path=$(INFISICAL_PATH_EVA_REDIS) --file=infisical/stage/eva-redis.env.example
-	$(INFISICAL) secrets set --env=$(INFISICAL_ENV_STAGE) --path=$(INFISICAL_PATH_EVA_BACKEND) --file=infisical/stage/eva-backend.env.example
-	@echo "Шаблоны загружены в Infisical env=$(INFISICAL_ENV_STAGE)."
-	@echo "Замените POSTGRES_PASSWORD, DATABASE_URL и EVA_CREDENTIALS_KEY в UI, затем: make stage-secrets-check"

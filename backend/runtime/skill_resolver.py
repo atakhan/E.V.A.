@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from runtime.publication_loader import load_published_agent_body
 from runtime.skill_routing import find_skills_for_event
 
@@ -29,7 +29,7 @@ class SkillResolution:
 def env_default_skill_id(agent_slug: str) -> str | None:
     """Deprecated server-wide fallback from EVA_DEFAULT_SKILL_IDS."""
     mapping: dict[str, str] = {}
-    for part in os.getenv("EVA_DEFAULT_SKILL_IDS", "").split(","):
+    for part in get_settings().default_skill_ids.split(","):
         part = part.strip()
         if "=" in part:
             slug, skill_id = part.split("=", 1)
