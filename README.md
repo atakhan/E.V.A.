@@ -52,14 +52,43 @@ docker compose up --build
 docker compose up --build
 ```
 
-## Production
+## Production / Stage (Docker-сеть + reverse proxy)
+
+Стек подключается к общей сети экосистемы: **prod** → `tetrakomnet`, **stage** → `tetrakomnet-stage`. Порты на хост не публикуются — снаружи отвечает `nginx_proxy`:
+
+| Окружение | Хост | Сеть | Compose |
+|-----------|------|------|---------|
+| Stage | https://eva-stage.tetrakom-crm-miniapp.ru | `tetrakomnet-stage` | `docker-compose.stage.yml` |
+| Prod | https://eva.tetrakom-crm-miniapp.ru | `tetrakomnet` | `docker-compose.prod.yml` |
+
+Сервисы: Postgres, Redis, backend API, runtime-worker, telegram-poller, frontend (nginx :8080). Frontend ходит в API по относительному `/api/` — маршрутизацию делает edge-прокси.
+
+Секреты не кладутся в `.env.prod` / `.env.stage`. Compose читает их из окружения, которое подставляет **Infisical CLI** (`infisical run`), как у filestorage и sous.
+
+| Infisical | Stage (`env=staging`) | Prod (`env=prod`) |
+|-----------|------------------------|-------------------|
+| `/eva-postgres` | `POSTGRES_*` | то же |
+| `/eva-redis` | `REDIS_URL` → `eva-redis-stage` | `eva-redis-prod` |
+| `/eva-backend` | `DATABASE_URL`, `EVA_CREDENTIALS_KEY`, публичные URL | то же, хосты `*-prod` |
 
 ```bash
-cp backend/.env.example backend/.env
-docker compose -f docker-compose.prod.yml up --build
+# Один раз: CLI + привязка к проекту tetrakom
+infisical login --domain https://secrets.tetrakom-crm-miniapp.ru   # на сервере
+# infisical login --domain http://127.0.0.1:8079                   # локальный Infisical
+infisical init   # в каталоге E.V.A.
+
+# Шаблоны в UI (потом заменить пароли и Fernet-ключ)
+make stage-secrets-upload
+make prod-secrets-upload
+
+# Деплой
+make start-stage
+make start-prod
 ```
 
-Frontend отдаётся через nginx (порт 5173 → 80 внутри контейнера).
+На сервере: `export INFISICAL_DOMAIN=https://secrets.tetrakom-crm-miniapp.ru` (в Makefile по умолчанию локальный `http://127.0.0.1:8079`, как у остальных сервисов).
+
+Сети `tetrakomnet` / `tetrakomnet-stage` должны существовать. После первого деплоя E.V.A. перезапустите `nginx_proxy`, чтобы он увидел контейнеры.
 
 ## Локально без Docker
 

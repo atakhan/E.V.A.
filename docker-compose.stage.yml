@@ -1,8 +1,8 @@
-# Production: сеть tetrakomnet, edge — nginx_proxy (eva.tetrakom-crm-miniapp.ru).
-# Секреты — Infisical (папки /eva-postgres, /eva-redis, /eva-backend, env=prod).
-# Запуск: make start-prod
+# Stage: сеть tetrakomnet-stage, edge — nginx_proxy (eva-stage.tetrakom-crm-miniapp.ru).
+# Секреты — Infisical (папки /eva-postgres, /eva-redis, /eva-backend, env=staging).
+# Запуск: make start-stage
 
-name: eva-prod
+name: eva-stage
 
 x-backend-environment: &backend-environment
   PORT: ${PORT:-8000}
@@ -12,31 +12,31 @@ x-backend-environment: &backend-environment
   EVA_EVENT_CONSUMER_GROUP: ${EVA_EVENT_CONSUMER_GROUP:-eva-runtime}
   EVA_AUTO_MIGRATE: ${EVA_AUTO_MIGRATE:-true}
   EVA_CREDENTIALS_KEY: ${EVA_CREDENTIALS_KEY}
-  EVA_WEBHOOK_BASE: ${EVA_WEBHOOK_BASE:-https://eva.tetrakom-crm-miniapp.ru}
+  EVA_WEBHOOK_BASE: ${EVA_WEBHOOK_BASE:-https://eva-stage.tetrakom-crm-miniapp.ru}
   EVA_TELEGRAM_MODE: ${EVA_TELEGRAM_MODE:-real}
   EVA_TELEGRAM_POLLING: ${EVA_TELEGRAM_POLLING:-false}
   EVA_POLZA_MODE: ${EVA_POLZA_MODE:-real}
   POLZA_API_BASE: ${POLZA_API_BASE:-https://polza.ai/api/v1}
   POLZA_DEFAULT_MODEL: ${POLZA_DEFAULT_MODEL:-openai/gpt-4o-mini}
   EVA_DEFAULT_SKILL_IDS: ${EVA_DEFAULT_SKILL_IDS:-}
-  EVA_PUBLIC_URL: ${EVA_PUBLIC_URL:-https://eva.tetrakom-crm-miniapp.ru}
+  EVA_PUBLIC_URL: ${EVA_PUBLIC_URL:-https://eva-stage.tetrakom-crm-miniapp.ru}
   EVA_WEB_CLIENT_DOCKER_REWRITE: ${EVA_WEB_CLIENT_DOCKER_REWRITE:-false}
   EVA_TOOL_INPUT_VALIDATION: ${EVA_TOOL_INPUT_VALIDATION:-warn}
   EVA_EVENT_MAX_ATTEMPTS: ${EVA_EVENT_MAX_ATTEMPTS:-5}
   EVA_PRUNE_EPHEMERAL_AGENTS: ${EVA_PRUNE_EPHEMERAL_AGENTS:-false}
 
 services:
-  eva-postgres-prod:
-    container_name: eva-postgres-prod
+  eva-postgres-stage:
+    container_name: eva-postgres-stage
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-eva}
       POSTGRES_DB: ${POSTGRES_DB:-eva}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.stage}
     expose:
       - "5432"
     volumes:
-      - eva_postgres_data_prod:/var/lib/postgresql/data
+      - eva_postgres_data_stage:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -44,16 +44,16 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
-  eva-redis-prod:
-    container_name: eva-redis-prod
+  eva-redis-stage:
+    container_name: eva-redis-stage
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     expose:
       - "6379"
     volumes:
-      - eva_redis_data_prod:/data
+      - eva_redis_data_stage:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -61,22 +61,22 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
-  eva-backend-prod:
-    container_name: eva-backend-prod
+  eva-backend-stage:
+    container_name: eva-backend-stage
     build:
       context: .
       dockerfile: Dockerfile.backend
-    image: tetrakom-eva-backend:prod
+    image: tetrakom-eva-backend:stage
     environment:
       <<: *backend-environment
     expose:
       - "8000"
     depends_on:
-      eva-postgres-prod:
+      eva-postgres-stage:
         condition: service_healthy
-      eva-redis-prod:
+      eva-redis-stage:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
@@ -86,67 +86,67 @@ services:
       start_period: 60s
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
-  eva-runtime-worker-prod:
-    container_name: eva-runtime-worker-prod
+  eva-runtime-worker-stage:
+    container_name: eva-runtime-worker-stage
     build:
       context: .
       dockerfile: Dockerfile.backend
-    image: tetrakom-eva-backend:prod
+    image: tetrakom-eva-backend:stage
     command: python -m workers.runtime_worker
     environment:
       <<: *backend-environment
     depends_on:
-      eva-postgres-prod:
+      eva-postgres-stage:
         condition: service_healthy
-      eva-redis-prod:
+      eva-redis-stage:
         condition: service_healthy
-      eva-backend-prod:
+      eva-backend-stage:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
-  eva-telegram-poller-prod:
-    container_name: eva-telegram-poller-prod
+  eva-telegram-poller-stage:
+    container_name: eva-telegram-poller-stage
     build:
       context: .
       dockerfile: Dockerfile.backend
-    image: tetrakom-eva-backend:prod
+    image: tetrakom-eva-backend:stage
     command: python -m workers.telegram_poller
     environment:
       <<: *backend-environment
     depends_on:
-      eva-postgres-prod:
+      eva-postgres-stage:
         condition: service_healthy
-      eva-redis-prod:
+      eva-redis-stage:
         condition: service_healthy
-      eva-backend-prod:
+      eva-backend-stage:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
-  eva-frontend-prod:
-    container_name: eva-frontend-prod
+  eva-frontend-stage:
+    container_name: eva-frontend-stage
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    image: tetrakom-eva-frontend:prod
+    image: tetrakom-eva-frontend:stage
     expose:
       - "8080"
     depends_on:
-      eva-backend-prod:
+      eva-backend-stage:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - tetrakomnet
+      - tetrakomnet-stage
 
 volumes:
-  eva_postgres_data_prod:
-  eva_redis_data_prod:
+  eva_postgres_data_stage:
+  eva_redis_data_stage:
 
 networks:
-  tetrakomnet:
+  tetrakomnet-stage:
     external: true

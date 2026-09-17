@@ -147,8 +147,9 @@ def poll_once() -> int:
 def run_poller(interval_sec: float = 2.0) -> None:
     settings = get_settings()
     if not settings.telegram_polling:
-        logger.info("Telegram polling disabled (EVA_TELEGRAM_POLLING=false)")
-        return
+        logger.info("Telegram polling disabled (EVA_TELEGRAM_POLLING=false); idling")
+        while True:
+            time.sleep(3600)
 
     logger.info("Telegram poller started")
     while True:
