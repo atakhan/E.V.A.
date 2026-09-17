@@ -63,14 +63,14 @@ class ToolExecutor:
                     validation_errors = validate_command_input_errors_only(
                         tool_type, command, prepared_args
                     )
-                    mode = get_settings().tool_input_validation.lower()
+                    mode = get_settings().tool_input_validation
                     if validation_errors:
                         message = validation_errors[0]
                         if mode == "strict":
                             result = ToolResult(ok=False, error=message)
                         elif mode == "off":
                             result = tool.handle(command, prepared_args, context)
-                        else:
+                        elif mode == "warn":
                             logger.warning(
                                 "tool input validation warning for %s.%s: %s",
                                 tool_type,
@@ -78,6 +78,10 @@ class ToolExecutor:
                                 message,
                             )
                             result = tool.handle(command, prepared_args, context)
+                        else:
+                            raise RuntimeError(
+                                f"invalid EVA_TOOL_INPUT_VALIDATION: {mode!r}"
+                            )
                     else:
                         result = tool.handle(command, prepared_args, context)
                 else:

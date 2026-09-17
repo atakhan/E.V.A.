@@ -130,18 +130,23 @@ def test_resolve_unknown_event_without_default_fails():
 
 
 def test_resolve_env_fallback_is_deprecated(monkeypatch):
+    from app.config import get_settings
     from scenarios.conversation_skill import build_razgovor_skill
 
     monkeypatch.setenv("EVA_DEFAULT_SKILL_IDS", "legacy=razgovor")
-    doc = build_razgovor_skill("2026-01-01T00:00:00+00:00")
-    agent = {"slug": "legacy", "skills": [doc]}
-    result = resolve_skill_for_event(
-        agent,
-        "custom.unknown.event",
-        agent_slug="legacy",
-        allow_env_fallback=True,
-    )
-    assert result.ok
-    assert result.skill_id == "razgovor"
-    assert result.deprecated is True
-    assert result.reason == "env_fallback"
+    get_settings.cache_clear()
+    try:
+        doc = build_razgovor_skill("2026-01-01T00:00:00+00:00")
+        agent = {"slug": "legacy", "skills": [doc]}
+        result = resolve_skill_for_event(
+            agent,
+            "custom.unknown.event",
+            agent_slug="legacy",
+            allow_env_fallback=True,
+        )
+        assert result.ok
+        assert result.skill_id == "razgovor"
+        assert result.deprecated is True
+        assert result.reason == "env_fallback"
+    finally:
+        get_settings.cache_clear()
