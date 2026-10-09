@@ -4,7 +4,7 @@ import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
 
-const apiProxy = process.env.VITE_API_PROXY ?? "http://localhost:8000";
+const apiProxy = process.env.VITE_API_PROXY ?? "http://localhost:8100";
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],

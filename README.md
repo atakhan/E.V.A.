@@ -43,8 +43,10 @@ docker compose up --build
 
 - Frontend: http://localhost:5173
 - Runtime Cockpit: http://localhost:5173/runtime (глобально) · `/:slug/runtime` (per-agent)
-- Backend API: http://localhost:8000/api/hello
-- Health: http://localhost:8000/health
+- Backend API: http://localhost:8100/api/hello
+- Health: http://localhost:8100/health
+
+Порты на хосте сдвинуты, чтобы dev Евы можно было поднять рядом с СОУСом (`8000`, `5432`, `6379`). Внутри Docker-сети backend по-прежнему слушает `8000`, Postgres `5432`, Redis `6379`. С хоста: API `8100`, Postgres `5433`, Redis `6380`.
 
 Пересборка нужна только если менялись `package.json`, `package-lock.json` или `requirements.txt`:
 
@@ -99,7 +101,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8100
 ```
 
 Frontend:
@@ -110,7 +112,7 @@ npm install
 npm run dev
 ```
 
-Vite проксирует `/api` и `/health` на backend (порт 8000).
+Vite проксирует `/api` и `/health` на backend (с хоста это порт 8100).
 
 ## Структура backend
 
