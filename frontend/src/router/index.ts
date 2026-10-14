@@ -13,6 +13,7 @@ import AgentRuntimeView from "@/features/runtime/views/AgentRuntimeView.vue";
 import GlobalRuntimeView from "@/features/runtime/views/GlobalRuntimeView.vue";
 import RuntimeSimulateView from "@/features/runtime/views/RuntimeSimulateView.vue";
 import SkillRunDetailView from "@/features/runtime/views/SkillRunDetailView.vue";
+import ConstructorView from "@/features/constructor/views/ConstructorView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
 import AppShellLayout from "@/shared/layout/AppShellLayout.vue";
 import {
@@ -80,6 +81,12 @@ const router = createRouter({
         {
           path: "",
           redirect: legacyAgentRootRedirect,
+        },
+        {
+          path: "constructor",
+          name: RouteNames.agentConstructor,
+          component: ConstructorView,
+          props: true,
         },
         {
           path: "overview",

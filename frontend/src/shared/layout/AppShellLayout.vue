@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import AppSidebar from "@/shared/layout/AppSidebar.vue";
+import AppFloatingChrome from "@/shared/layout/AppFloatingChrome.vue";
 </script>
 
 <template>
-  <div class="flex h-screen min-h-0 bg-base-200">
-    <aside class="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-100">
-      <AppSidebar />
-    </aside>
+  <div class="h-screen min-h-0 bg-base-200">
+    <AppFloatingChrome />
 
-    <main class="min-h-0 min-w-0 flex-1 overflow-y-auto">
+    <main class="h-full min-h-0 min-w-0 overflow-y-auto pt-[4.75rem]">
       <RouterView />
     </main>
   </div>

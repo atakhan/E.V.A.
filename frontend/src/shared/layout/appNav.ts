@@ -30,6 +30,7 @@ export const appNavItems: AppNavItem[] = [
 ];
 
 const agentWorkspaceRouteNames = new Set<string>([
+  RouteNames.agentConstructor,
   RouteNames.agentOverview,
   RouteNames.agentSkills,
   RouteNames.agentActions,

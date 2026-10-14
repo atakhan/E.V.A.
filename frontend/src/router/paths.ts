@@ -5,6 +5,7 @@ export const RouteNames = {
   toolsLibrary: "tools-library",
   globalRuntime: "global-runtime",
   agentWorkspace: "agent-workspace",
+  agentConstructor: "agent-constructor",
   agentOverview: "agent-overview",
   agentSkills: "agent-skills",
   agentActions: "agent-actions",
@@ -28,6 +29,10 @@ export function globalRuntimePath(): string {
 
 export function toolsLibraryPath(): string {
   return "/tools";
+}
+
+export function agentConstructorPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "constructor");
 }
 
 export function agentOverviewPath(agentSlug: string): string {
@@ -113,6 +118,7 @@ export function legacyModuleSlugToSection(moduleSlug: string): string {
   if (moduleSlug === "tools-and-actions") return "tools";
   if (moduleSlug === "run") return "runtime/simulate";
   if (
+    moduleSlug === "constructor" ||
     moduleSlug === "overview" ||
     moduleSlug === "skills" ||
     moduleSlug === "actions" ||

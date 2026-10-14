@@ -3,12 +3,11 @@ import { computed, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
-import AppSidebar from "@/shared/layout/AppSidebar.vue";
-import WorkspaceSidebar from "@/features/workspace/components/WorkspaceSidebar.vue";
+import AgentFloatingMenu from "@/features/workspace/components/AgentFloatingMenu.vue";
+import AppFloatingChrome from "@/shared/layout/AppFloatingChrome.vue";
 import {
   defaultWorkspaceSectionId,
   findWorkspaceSection,
-  workspaceSections,
 } from "@/features/workspace/config/nav";
 import { agentSectionPath, RouteNames } from "@/router/paths";
 
@@ -25,6 +24,7 @@ const agent = computed(() => getAgentBySlug(props.agentSlug));
 
 const activeSectionId = computed(() => {
   const leaf = String(route.name ?? "");
+  if (leaf === RouteNames.agentConstructor || leaf.includes("constructor")) return "constructor";
   if (leaf === RouteNames.skillCanvas || leaf.includes("skills")) return "skills";
   if (leaf.includes("actions")) return "actions";
   if (leaf.includes("tools")) return "tools";
@@ -39,7 +39,9 @@ const activeSectionId = computed(() => {
   return findWorkspaceSection(pathPart ?? "")?.id ?? defaultWorkspaceSectionId;
 });
 
-const isSkillCanvas = computed(() => route.name === RouteNames.skillCanvas);
+const isFullBleed = computed(
+  () => route.name === RouteNames.skillCanvas || route.name === RouteNames.agentConstructor,
+);
 
 async function selectSection(id: string) {
   if (!agent.value) return;
@@ -51,44 +53,19 @@ async function selectSection(id: string) {
 
 <template>
   <div v-if="agent" class="flex h-screen min-h-0 bg-base-200">
-    <aside class="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-100">
-      <AppSidebar />
-
-      <div class="border-b border-base-300 px-4 py-4">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <h1 class="truncate text-lg font-semibold">{{ agent.name }}</h1>
-            <p class="mt-1 font-mono text-xs text-base-content/50">/{{ agent.slug }}</p>
-            <p
-              v-if="agent.description"
-              class="mt-1 line-clamp-2 text-xs text-base-content/60"
-            >
-              {{ agent.description }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="btn btn-xs btn-square btn-ghost shrink-0"
-            title="Редактировать агента"
-            aria-label="Редактировать агента"
-            @click="editDialog?.open()"
-          >
-            ✎
-          </button>
-        </div>
-      </div>
-
-      <WorkspaceSidebar
-        class="min-h-0 flex-1 overflow-y-auto"
-        :sections="workspaceSections"
-        :active-id="activeSectionId"
+    <AppFloatingChrome>
+      <AgentFloatingMenu
+        :agent-name="agent.name"
+        :agent-slug="agent.slug"
+        :active-section-id="activeSectionId"
         @select="selectSection"
+        @edit="editDialog?.open()"
       />
-    </aside>
+    </AppFloatingChrome>
 
     <main
       class="flex min-h-0 min-w-0 flex-1 flex-col"
-      :class="isSkillCanvas ? 'overflow-hidden' : 'overflow-y-auto p-6 lg:p-8'"
+      :class="isFullBleed ? 'overflow-hidden' : 'overflow-y-auto px-6 pb-8 pt-[5.5rem] lg:px-8'"
     >
       <RouterView />
     </main>
