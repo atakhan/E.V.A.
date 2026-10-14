@@ -43,6 +43,8 @@ export interface ToolDefinition {
   id: string;
   name: string;
   description: string;
+  /** Opens a bidirectional place in the environment (constructor world axis). */
+  world?: boolean;
   commands: ToolCommandDef[];
   events: ToolEventDef[];
   states: string[];

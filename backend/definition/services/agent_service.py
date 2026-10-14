@@ -37,11 +37,14 @@ def _empty_draft_body(agent: AgentRow) -> dict[str, Any]:
         "slug": agent.slug,
         "name": agent.name,
         "description": agent.description,
+        "icon": getattr(agent, "icon", "") or "",
         "createdAt": now,
         "updatedAt": now,
         "skills": [],
         "actions": [],
         "tools": [],
+        "constructor": {"nodes": []},
+        "world": {"addresses": []},
     }
 
 
@@ -51,6 +54,7 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "slug": agent.slug,
         "name": agent.name,
         "description": agent.description,
+        "icon": getattr(agent, "icon", "") or draft_body.get("icon") or "",
         "createdAt": agent.created_at.isoformat(),
         "updatedAt": agent.updated_at.isoformat(),
         "archivedAt": agent.archived_at.isoformat() if agent.archived_at else None,
@@ -58,6 +62,8 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "skills": draft_body.get("skills", []),
         "actions": draft_body.get("actions", []),
         "tools": draft_body.get("tools", []),
+        "constructor": draft_body.get("constructor") or {"nodes": []},
+        "world": draft_body.get("world") or {"addresses": []},
     }
 
 
@@ -67,6 +73,7 @@ def _summary_from_row(row: AgentRow) -> dict[str, Any]:
         "slug": row.slug,
         "name": row.name,
         "description": row.description,
+        "icon": getattr(row, "icon", "") or "",
         "createdAt": row.created_at.isoformat(),
         "updatedAt": row.updated_at.isoformat(),
         "archivedAt": row.archived_at.isoformat() if row.archived_at else None,
@@ -131,6 +138,8 @@ class AgentService:
 
         agent.name = str(payload.get("name", agent.name)).strip() or agent.name
         agent.description = str(payload.get("description", agent.description)).strip()
+        if "icon" in payload:
+            agent.icon = str(payload.get("icon") or "").strip()
         agent.updated_at = datetime.now(timezone.utc)
 
         if agent.draft is None:
@@ -142,12 +151,15 @@ class AgentService:
             "slug": agent.slug,
             "name": agent.name,
             "description": agent.description,
+            "icon": agent.icon,
             "createdAt": agent.created_at.isoformat(),
             "updatedAt": _utcnow_iso(),
             "defaultSkillId": default_skill_id,
             "skills": payload.get("skills", []),
             "actions": payload.get("actions", []),
             "tools": payload.get("tools", []),
+            "constructor": payload.get("constructor") or {"nodes": []},
+            "world": payload.get("world") or {"addresses": []},
         })
         agent.draft.body = body
         agent.draft.updated_at = datetime.now(timezone.utc)

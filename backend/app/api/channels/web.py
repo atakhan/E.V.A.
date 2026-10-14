@@ -16,7 +16,6 @@ from runtime.tool_instance_resolver import find_instance_by_credential
 from runtime.skill_resolver import resolve_skill_for_agent_slug
 from infrastructure.stores.web_client_store import WebClientSessionStore
 from infrastructure.models.tables import AgentRow, ToolCredentialRow
-from tools.web_client import parse_web_client_binding_config
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
 
@@ -123,11 +122,25 @@ async def web_events(
 
     instance_id: str | None = None
     agent_doc = AgentService(session).get_agent_by_slug(agent_slug)
+    address_id: str | None = None
     if agent_doc:
         instance_id = find_instance_by_credential(agent_doc, str(credential_row.id))
+        if instance_id is None:
+            for item in agent_doc.get("tools") or []:
+                if item.get("toolId") == "web_client" and item.get("enabled", True):
+                    instance_id = str(item.get("id") or "") or None
+                    break
+        world = agent_doc.get("world") or {}
+        for address in world.get("addresses") or []:
+            if str(address.get("credentialId") or "") == str(credential_row.id):
+                address_id = str(address.get("id") or "") or None
+                break
 
     payload = dict(body.payload)
     payload.setdefault("conversation_id", body.session_id)
+    payload["web_client_credential_id"] = str(credential_row.id)
+    if address_id:
+        payload["web_client_address_id"] = address_id
     if "text" not in payload and isinstance(payload.get("message"), str):
         payload["text"] = payload["message"]
     payload, _act_meta = normalize_web_act(

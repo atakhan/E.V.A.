@@ -30,9 +30,19 @@ const miniCatalog: ToolDefinition[] = [
   },
 ];
 
-function makeAgent(partial: Partial<Agent> & Pick<Agent, "id" | "slug" | "name">): Agent {
+function makeAgent(partial: {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  tools?: Agent["tools"];
+  skills?: Agent["skills"];
+  actions?: Agent["actions"];
+}): Agent {
   return {
     description: "",
+    icon: "",
     createdAt: "",
     updatedAt: "",
     skills: [],

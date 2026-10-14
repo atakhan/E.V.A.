@@ -16,7 +16,12 @@ const emit = defineEmits<{
   <article class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-3">
       <div>
-        <h2 class="text-lg font-semibold leading-tight">{{ entry.definition.name }}</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-lg font-semibold leading-tight">{{ entry.definition.name }}</h2>
+          <span v-if="entry.definition.world" class="badge badge-sm badge-primary badge-outline">
+            Внешний мир
+          </span>
+        </div>
         <p class="mt-1 font-mono text-xs text-base-content/50">{{ entry.definition.id }}</p>
       </div>
 

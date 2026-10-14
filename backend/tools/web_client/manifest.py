@@ -6,6 +6,7 @@ WEB_CLIENT_TOOL_MANIFEST: dict = {
     "id": "web_client",
     "name": "Web Client",
     "description": "Интеграция с бэкендом веб-приложения: ingress/outbound HTTP API.",
+    "world": True,
     "commands": [
         {
             "id": "send_message",

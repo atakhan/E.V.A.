@@ -6,6 +6,7 @@ TELEGRAM_TOOL_MANIFEST: dict = {
     "id": "telegram",
     "name": "Telegram",
     "description": "Канал сообщений с людьми.",
+    "world": True,
     "commands": [
         {
             "id": "send_message",

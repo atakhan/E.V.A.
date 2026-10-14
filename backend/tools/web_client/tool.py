@@ -14,17 +14,44 @@ class WebClientTool(BaseTool):
     def __init__(
         self,
         *,
-        http: WebClientHttp,
+        http: WebClientHttp | None,
         agent_id: str,
         agent_slug: str,
         credential_id: str | None,
         session,
+        binding_config: dict[str, Any] | None = None,
+        docker_rewrite: bool = False,
+        docker_host: str = "host.docker.internal",
     ) -> None:
         self.http = http
         self.agent_id = agent_id
         self.agent_slug = agent_slug
         self.credential_id = credential_id
         self.session = session
+        self.binding_config = binding_config or {}
+        self.docker_rewrite = docker_rewrite
+        self.docker_host = docker_host
+
+    def _http_for(self, context: dict[str, Any]) -> WebClientHttp | None:
+        vars_ = context.get("vars") or {}
+        credential_id = str(vars_.get("web_client_credential_id") or "").strip()
+        if credential_id and self.session is not None:
+            from tools.credential_resolver import get_credential_secret
+
+            try:
+                secret = get_credential_secret(self.session, self.agent_id, credential_id)
+            except KeyError:
+                secret = {}
+            base_url = str(secret.get("backend_base_url") or "")
+            if base_url:
+                return WebClientHttp(
+                    base_url=base_url,
+                    outbound_api_key=str(secret.get("outbound_api_key") or ""),
+                    config=self.binding_config,
+                    docker_rewrite=self.docker_rewrite,
+                    docker_host=self.docker_host,
+                )
+        return self.http
 
     def cmd_send_message(self, args: dict[str, Any], context: dict[str, Any]) -> ToolResult:
         from infrastructure.stores.web_client_store import WebClientSessionStore
@@ -41,6 +68,9 @@ class WebClientTool(BaseTool):
             return ToolResult(ok=False, error="session_id is required for web_client.send_message")
         if not text:
             return ToolResult(ok=False, error="text is required for web_client.send_message")
+        http = self._http_for(context)
+        if http is None:
+            return ToolResult(ok=False, error="web_client application is not configured")
 
         meta = args.get("meta") if isinstance(args.get("meta"), dict) else {}
         if isinstance(args.get("workspace_update"), dict):
@@ -53,7 +83,7 @@ class WebClientTool(BaseTool):
         if presence:
             meta = {**meta, "presence": presence}
         try:
-            response = self.http.send_message(session_id=session_id, text=text, meta=meta)
+            response = http.send_message(session_id=session_id, text=text, meta=meta)
         except WebClientHttpError as exc:
             return ToolResult(ok=False, error=str(exc))
 
@@ -82,10 +112,13 @@ class WebClientTool(BaseTool):
         )
         if not session_id:
             return ToolResult(ok=False, error="session_id is required for web_client.get_snapshot")
+        http = self._http_for(context)
+        if http is None:
+            return ToolResult(ok=False, error="web_client application is not configured")
 
         local = WebClientSessionStore().get_snapshot(agent_slug=self.agent_slug, session_id=session_id)
         try:
-            remote = self.http.get_snapshot(session_id=session_id)
+            remote = http.get_snapshot(session_id=session_id)
         except WebClientHttpError as exc:
             if local is not None:
                 return ToolResult(ok=True, data={"snapshot": local, "source": "eva_cache"})

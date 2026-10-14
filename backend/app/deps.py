@@ -30,6 +30,7 @@ def _ensure_agent_schema(engine) -> None:
 
     statements = [
         "ALTER TABLE agents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ",
+        "ALTER TABLE agents ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT ''",
         "CREATE INDEX IF NOT EXISTS ix_agents_archived_at ON agents (archived_at)",
     ]
     with engine.begin() as conn:

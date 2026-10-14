@@ -70,7 +70,8 @@ export function useAgents() {
       ...agent,
       name,
       slug: normalizeAgentSlug(slugCandidate),
-      description: patch.description?.trim() ?? agent.description,
+      description: patch.description !== undefined ? patch.description.trim() : agent.description,
+      icon: patch.icon !== undefined ? patch.icon.trim() : agent.icon,
     });
 
     replaceAgent(next);

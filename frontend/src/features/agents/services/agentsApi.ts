@@ -1,4 +1,4 @@
-import type { Agent } from "@/features/agents/types/agent";
+import { agentToWire, type Agent } from "@/features/agents/types/agent";
 import type { AgentValidationReport } from "@/features/agents/utils/validateAgent";
 
 const API_BASE = "/api";
@@ -49,7 +49,7 @@ export async function createAgentApi(input: {
 export async function saveAgentApi(agent: Agent): Promise<Agent> {
   return request(`/agents/${encodeURIComponent(agent.slug)}`, {
     method: "PUT",
-    body: JSON.stringify(agent),
+    body: JSON.stringify(agentToWire(agent)),
   });
 }
 

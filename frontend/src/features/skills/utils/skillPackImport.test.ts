@@ -18,6 +18,7 @@ const emptyAgent: Agent = {
   name: "Test",
   slug: "test",
   description: "",
+  icon: "",
   skills: [],
   actions: [{ id: "parse_request", name: "Parse", description: "", version: "0.1.0", policy: "auto", inputSchema: {}, outputSchema: {}, recipe: [], createdAt: "", updatedAt: "" }],
   tools: [],

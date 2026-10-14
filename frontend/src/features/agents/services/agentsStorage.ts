@@ -12,6 +12,8 @@ import {
   unarchiveAgentApi,
 } from "@/features/agents/services/agentsApi";
 import { normalizeAction } from "@/features/actions/types/normalize";
+import { normalizeAgentWorld } from "@/features/agents/types/world";
+import { normalizeConstructorLayout } from "@/features/constructor/types/constructor";
 import { normalizeToolBinding } from "@/features/tools/types/normalize";
 import type { CanvasDocument } from "@/features/skills/types/canvas";
 import { normalizeSkill, skillFromLegacyCanvas } from "@/features/skills/types/skill";
@@ -182,6 +184,8 @@ function normalizeAgents(rawAgents: unknown[]): Agent[] {
 function migrateAgentRecord(raw: unknown): Agent {
   const record = (raw ?? {}) as Partial<Agent> & {
     modules?: Record<string, unknown>;
+    /** Wire / legacy key for constructor layout. */
+    constructor?: unknown;
   };
 
   const body = createEmptyAgentBody();
@@ -199,6 +203,7 @@ function migrateAgentRecord(raw: unknown): Agent {
     slug: record.slug || "",
     name: record.name || "Агент",
     description: record.description ?? "",
+    icon: typeof record.icon === "string" ? record.icon : "",
     archivedAt: record.archivedAt ?? null,
     defaultSkillId: record.defaultSkillId,
     createdAt: record.createdAt || new Date().toISOString(),
@@ -206,6 +211,10 @@ function migrateAgentRecord(raw: unknown): Agent {
     skills,
     actions: Array.isArray(record.actions) ? record.actions : body.actions,
     tools: Array.isArray(record.tools) ? record.tools : body.tools,
+    constructorLayout: normalizeConstructorLayout(
+      record.constructorLayout ?? record.constructor,
+    ),
+    world: normalizeAgentWorld(record.world),
   };
 }
 
@@ -261,11 +270,13 @@ function migrateLegacyCanvases() {
       slug: suggestUniqueAgentSlug("agent-1", () => true),
       name: "Агент 1",
       description: "",
+      icon: "",
       createdAt: now,
       updatedAt: now,
       skills: canvases.map(skillFromLegacyCanvas),
       actions: [],
       tools: [],
+      constructorLayout: { nodes: [] },
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify([agent]));
@@ -400,6 +411,7 @@ export async function createAgentWithStorage(input: {
     slug,
     name,
     description,
+    icon: "",
     createdAt: now,
     updatedAt: now,
     ...createEmptyAgentBody(),

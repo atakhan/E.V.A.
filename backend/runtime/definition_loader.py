@@ -108,16 +108,16 @@ def _build_tool_for_binding(
 
     if tool_type == "web_client":
         secret = get_web_client_secret_for_binding(session, agent_id, item)
-        if not secret or not secret.get("backend_base_url"):
-            raise KeyError(f"Web Client instance '{instance_id}' enabled but credential backend_base_url not found")
         wc_config = parse_web_client_binding_config(item)
-        http = WebClientHttp(
-            base_url=str(secret["backend_base_url"]),
-            outbound_api_key=str(secret.get("outbound_api_key") or ""),
-            config=wc_config,
-            docker_rewrite=settings.web_client_docker_rewrite,
-            docker_host=settings.web_client_docker_host,
-        )
+        http = None
+        if secret and secret.get("backend_base_url"):
+            http = WebClientHttp(
+                base_url=str(secret["backend_base_url"]),
+                outbound_api_key=str(secret.get("outbound_api_key") or ""),
+                config=wc_config,
+                docker_rewrite=settings.web_client_docker_rewrite,
+                docker_host=settings.web_client_docker_host,
+            )
         return _stamp_instance(
             WebClientTool(
                 http=http,
@@ -125,6 +125,9 @@ def _build_tool_for_binding(
                 agent_slug=agent_body.get("slug", ""),
                 credential_id=credential_id,
                 session=session,
+                binding_config=wc_config,
+                docker_rewrite=settings.web_client_docker_rewrite,
+                docker_host=settings.web_client_docker_host,
             ),
             instance_id=instance_id,
             tool_type=tool_type,

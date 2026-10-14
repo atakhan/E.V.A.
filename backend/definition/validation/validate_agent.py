@@ -265,7 +265,13 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
             continue
         tool_type = item.get("toolId", "")
         instance_id = item.get("id", "")
-        if tool_type in _CREDENTIAL_TYPES and not item.get("credentialId"):
+        address_has_credential = any(
+            str(address.get("toolId") or "") == tool_type and address.get("credentialId")
+            for address in (agent.get("world") or {}).get("addresses") or []
+        )
+        if tool_type in _CREDENTIAL_TYPES and not item.get("credentialId") and not (
+            tool_type == "web_client" and address_has_credential
+        ):
             label = {"telegram": "Telegram", "polza_ai_llm": "PolzaAI_LLM", "web_client": "Web Client"}.get(
                 tool_type, tool_type
             )
