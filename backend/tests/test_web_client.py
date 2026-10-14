@@ -6,6 +6,7 @@ from app.main import app
 from infrastructure.db.session import session_scope
 from tests.scenario_fixtures import publish_minimal_web_chat_agent
 from tools.web_client import WebClientHttp
+from tools.web_client.http import WebClientHttpError
 
 
 @pytest.fixture
@@ -84,6 +85,39 @@ def test_web_client_http_auth_header():
     with patch("tools.web_client.http.httpx.request", return_value=mock_response) as request:
         http.health()
         assert request.call_args.kwargs["headers"]["X-Api-Key"] == "secret"
+
+
+@pytest.mark.integration
+def test_web_client_verify_failure_is_remembered(client: TestClient, ephemeral_agent_slug: str):
+    slug = ephemeral_agent_slug
+    create = client.post(
+        f"/api/agents/{slug}/credentials",
+        json={
+            "toolId": "web_client",
+            "name": "Missing health",
+            "secret": {
+                "backend_base_url": "http://localhost:8765",
+                "outbound_api_key": "dev-outbound-key",
+                "inbound_api_key": "test-inbound-key",
+            },
+        },
+    )
+    assert create.status_code == 201
+    credential_id = create.json()["id"]
+
+    with patch.object(
+        WebClientHttp,
+        "health",
+        side_effect=WebClientHttpError("Not Found", status_code=404),
+    ):
+        verify = client.post(f"/api/agents/{slug}/credentials/{credential_id}/verify")
+    assert verify.status_code == 400
+
+    listed = client.get(f"/api/agents/{slug}/credentials", params={"toolId": "web_client"})
+    assert listed.status_code == 200
+    saved = next(item for item in listed.json() if item["id"] == credential_id)
+    assert saved["meta"]["verified"] is False
+    assert saved["meta"]["health_status"] == 404
 
 
 @pytest.mark.integration

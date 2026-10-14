@@ -10,7 +10,8 @@ export interface ToolCredential {
     balance_amount?: string;
     provider?: string;
     backend_base_url?: string;
-    health_status?: number;
+    health_status?: number | null;
+    health_error?: string | null;
     latency_ms?: number;
   };
   oneTimeSecrets?: {

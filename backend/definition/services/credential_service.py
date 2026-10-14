@@ -213,15 +213,32 @@ class CredentialService:
         try:
             body = client.health()
         except WebClientHttpError as exc:
+            meta = dict(row.meta or {})
+            meta.pop("latency_ms", None)
+            meta.update(
+                {
+                    "verified": False,
+                    "health_status": exc.status_code,
+                    "health_error": str(exc),
+                    "backend_base_url": base_url,
+                }
+            )
+            row.meta = meta
+            # The request session rolls back on the error response. Keep the failed check.
+            self.session.commit()
             raise ValueError(str(exc)) from exc
 
-        row.meta = {
-            **(row.meta or {}),
-            "verified": True,
-            "health_status": body.get("_status_code", 200),
-            "latency_ms": body.get("_duration_ms"),
-            "backend_base_url": base_url,
-        }
+        meta = dict(row.meta or {})
+        meta.pop("health_error", None)
+        meta.update(
+            {
+                "verified": True,
+                "health_status": body.get("_status_code", 200),
+                "latency_ms": body.get("_duration_ms"),
+                "backend_base_url": base_url,
+            }
+        )
+        row.meta = meta
         self.session.flush()
         return self._public_view(row)
 
