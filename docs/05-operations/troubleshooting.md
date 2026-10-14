@@ -36,7 +36,7 @@
 | Симптом | Причина | Действие |
 |---|---|---|
 | Run → `error`: `Tool '<id>' is not registered` | инстанс выключен или тип без реализации (`memory`, `context`, `crm`, `catalog`, `web_search`, `files`, `saby`) — такой инстанс молча не попадает в реестр | включить инстанс; выбрать реализованный тип |
-| Лог worker: `Skipping event — runtime not resolved … '<instance>' enabled but credential … not found` | режим `real` (`EVA_TELEGRAM_MODE`/`EVA_POLZA_MODE`) или `web_client` без привязанного credential — сборка runtime падает целиком, событие пропускается | привязать credential и verify, либо переключить режим в `stub` |
+| Лог worker: `Skipping event — runtime not resolved … '<instance>' enabled but credential … not found` | режим `real` (`EVA_TELEGRAM_MODE`/`EVA_POLZA_MODE`): Telegram или Polza без credential — сборка runtime падает целиком, событие пропускается. У `web_client` отсутствие credential на инстансе сборку больше не роняет: вызов без адреса и без credential инстанса вернёт `web_client application is not configured` | привязать credential и verify, либо переключить режим в `stub` |
 | `Unknown tool reference` / `Ambiguous tool reference` | ссылка `tool` в шаге не разрешается в единственный включённый инстанс | в шаге указать `id` инстанса, а не тип |
 | `Telegram sendMessage failed: …` / `chat_id is required` | нет `chat_id` в args и `conversation_id` в vars; плохой токен | передать `{{vars.conversation_id}}`; verify credential |
 | `Web client network error` / `backend_base_url … not found` | недоступен бэкенд веб-клиента; Docker не видит `localhost` | `EVA_WEB_CLIENT_DOCKER_REWRITE=true` + `host.docker.internal`, либо имя сервиса `web-client-stub`; verify credential |

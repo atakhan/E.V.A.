@@ -93,14 +93,15 @@ domain/         Pydantic-модели: Agent/Skill/Action/Event/SkillRun/ActionR
 src/
   main.ts            → загрузить каталог Tools с API → смонтировать приложение
   router/            маршруты и legacy-редиректы; guard проверяет существование агента
-  shared/            layout (AppShell, sidebar), schema-driven форма по ToolFieldDef, утилиты
+  shared/            layout (AppShell, плавающее меню разделов), schema-driven форма по ToolFieldDef, утилиты
   features/
-    agents/          список, карточка, overview (готовность к публикации), API-клиент, хранилище (localStorage + sync), валидация документа
+    agents/          список, карточка, overview (готовность к публикации), API-клиент, хранилище (localStorage + sync), валидация документа, world.addresses
+    constructor/     стол: адреса, каналы внешнего мира, агент, навыки; каталог каналов
     skills/          FSM-холст (SVG), инспектор, тулбар, геометрия/маршрутизация, YAML import/export, валидация Skill, flatten legacy Behavior Graph
     actions/         список и редактор Action, редактор шагов recipe (schema-driven по каталогу), подсказки шаблонов
-    tools/           библиотека типов, инстансы агента, credentials, панели Polza/Web Client, логи вызовов
+    tools/           библиотека типов (внешний мир / инструменты действий), инстансы агента, credentials, панели Polza/Web Client, логи вызовов
     runtime/         глобальный dashboard, cockpit агента, список/деталь run, timeline, simulate
-    workspace/       оболочка агента: sidebar разделов (Overview, Skills, Actions, Tools, Logs, Runtime)
+    workspace/       оболочка агента: плавающее меню (Конструктор, Overview, Skills, Actions, Tools, Logs, Runtime)
 ```
 
 Данные агента живут в реактивном store (`agents` ref) и зеркалируются в `localStorage` (`eva.agents.v2`); при доступном API черновики синхронизируются `PUT /api/agents/{slug}` с debounce 400 мс. Runtime-экраны ходят в API напрямую без локального кеша.

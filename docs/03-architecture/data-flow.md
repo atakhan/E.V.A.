@@ -68,7 +68,7 @@ sequenceDiagram
   participant RS as RuntimeService
   participant WCT as WebClientTool
   C->>I: Bearer inbound_api_key; {sessionId, type?, skillId?, actorId, focus, intent, entityIds, payload{text}}
-  I->>I: verify key → credential → instance id
+  I->>I: verify key → credential → address with that credentialId<br/>payload += web_client_credential_id, web_client_address_id
   I->>I: normalize_web_act: actor→user_id, focus→metadata, entity_ids→entity_id
   I->>R: upsert snapshot сессии (lastMessage, focus, intent, …)
   I->>I: resolve skill (skillId / initial-state match / default); web.* принимаются без скилла
@@ -84,7 +84,7 @@ sequenceDiagram
   C->>I: GET …/sessions/{id}/outbox (опционально, polling)
 ```
 
-Ключевые преобразования: `sessionId` → `conversation_id`; `actorId` → `payload.actor_id`/`user_id`/`correlation.user_id`; `focus` → `payload.focus` и `metadata.focus`; фраза с намерением → **другой тип события** (rewrite) с `entity_ids`.
+Ключевые преобразования: `sessionId` → `conversation_id`; `actorId` → `payload.actor_id`/`user_id`/`correlation.user_id`; `focus` → `payload.focus` и `metadata.focus`; фраза с намерением → **другой тип события** (rewrite) с `entity_ids`. Совпавший inbound-ключ добавляет в payload `web_client_credential_id` и, если адрес найден, `web_client_address_id`. Исходящий `POST {base}/eva/messages` берёт `base` из этого credential.
 
 ## F4. Шаг автомата и операции внутри run
 

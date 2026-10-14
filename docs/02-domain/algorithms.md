@@ -136,7 +136,7 @@ Severity: `error` блокирует публикацию. Правила (Fact,
 | `invalid_step_input` | error / warning | вход шага не проходит схему команды (warning — неизвестные поля) |
 | `unused_action` | info | Action не используется ни в одном Skill |
 | `no_enabled_tools` | warning | есть recipe, но нет включённых инстансов |
-| `missing_credential` | error | включённый инстанс `telegram` / `polza_ai_llm` / `web_client` без `credentialId` — **только сервер** |
+| `missing_credential` | error | включённый инстанс `telegram` / `polza_ai_llm` / `web_client` без `credentialId` — **только сервер**. Для `web_client` ошибки нет, если адрес этого `toolId` уже несёт `credentialId` |
 | `duplicate_credential` | error | два инстанса `telegram` с одним credential — **только сервер** |
 
 Достижимость считается обходом по `transitions[].to` от `initial`. Правила `missing_credential` и `duplicate_credential` есть только в серверной валидации; UI покажет их после `POST /validate` (Overview), но не в локальном отчёте.

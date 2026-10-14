@@ -60,10 +60,10 @@ curl -X POST http://localhost:8100/api/runtime/demo     # in-memory foreman happ
 
 ### Веб-клиент в dev
 
-1. Credential `web_client`: `backend_base_url=http://localhost:8765` (при `EVA_WEB_CLIENT_DOCKER_REWRITE=true` backend обратится к `host.docker.internal:8765`; внутри compose можно указать `http://web-client-stub:8765`), `outbound_api_key=dev-outbound-key` (как в stub `.env`), inbound-ключ сгенерируется.
+1. На столе конструктора добавить канал Web Client. Плюс слева от канала создаёт адрес-приложение: `backend_base_url=http://localhost:8765` (при `EVA_WEB_CLIENT_DOCKER_REWRITE=true` backend обратится к `host.docker.internal:8765`; внутри compose можно указать `http://web-client-stub:8765`), `outbound_api_key=dev-outbound-key` (как в stub `.env`), inbound-ключ сгенерируется. Тот же набор можно сохранить credential'ом инстанса на странице Tools — исходящий вызов возьмёт его, только если во `vars` нет `web_client_credential_id`.
 2. В `examples/web_client_stub/.env` проставить `EVA_INBOUND_KEY` = inbound-ключ и slug агента в `EVA_INGRESS_URL`.
 3. `POST http://localhost:8765/demo/send-to-eva {"sessionId":"s1","text":"..."}` → stub отправит акт в ingress; ответы агента увидите в stub (`/eva/messages`) и в `GET /api/channels/web/<slug>/sessions/s1/outbox`.
-4. Панель **Tools → Web Client** в UI показывает ingress URL, outbox URL, подсказки для Docker/хоста.
+4. Панель адреса (и страница Tools → Web Client) показывает ingress URL, блок `.env` и проверку связи. Общие пути `/eva/*` редактируются на панели канала.
 
 ### Логи и диагностика
 

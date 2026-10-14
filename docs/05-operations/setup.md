@@ -106,7 +106,7 @@ Stage/prod-значения — `infisical/{stage,prod}/eva-backend.env.example`
 ## Первичная настройка агента (после установки)
 
 1. Открыть `http://localhost:5173` → создать агента (slug, имя).
-2. **Tools:** добавить инстансы из библиотеки; для `telegram`/`polza_ai_llm`/`web_client` создать credential и привязать (иначе валидация даст `missing_credential`). В dev с `EVA_TELEGRAM_MODE=stub`/`EVA_POLZA_MODE=stub` credentials могут быть фиктивными, но инстанс всё равно требует `credentialId`.
+2. **Конструктор или Tools:** включить нужные инстансы. Для `telegram` и `polza_ai_llm` credential обязателен на инстансе (иначе серверная валидация даст `missing_credential`). Для `web_client` достаточно credential на адресе-приложении. В dev с `EVA_TELEGRAM_MODE=stub`/`EVA_POLZA_MODE=stub` credentials Telegram и Polza могут быть фиктивными, но инстанс всё равно требует `credentialId`.
 3. **Actions:** собрать recipe из команд включённых инстансов.
 4. **Skills:** нарисовать FSM; начальное состояние должно ждать стартовое событие (`channel.message.received` для чата, `ui.request.parse_requested` для кнопки «разобрать»).
 5. **Overview:** валидация → **Publish**.

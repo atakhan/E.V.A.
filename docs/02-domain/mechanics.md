@@ -115,7 +115,7 @@
 |---|---|---|
 | Telegram webhook | `POST /api/channels/telegram/{slug}` | `channel.message.received` с `conversation_id = tg:chat:<id>`, `text` |
 | Telegram polling | фоновый `getUpdates` по каждому credential | то же; offset хранится отдельно на credential |
-| Веб-клиент | `POST /api/channels/web/{slug}/events` с Bearer = `inbound_api_key` | событие типа `type` (по умолчанию `channel.message.received`) с `conversation_id = sessionId`, `actor_id→user_id`, `focus`, `intent`, `entity_ids`; снимок акта кешируется |
+| Веб-клиент | `POST /api/channels/web/{slug}/events` с Bearer = `inbound_api_key` | событие типа `type` (по умолчанию `channel.message.received`) с `conversation_id = sessionId`, `actor_id→user_id`, `focus`, `intent`, `entity_ids`, `web_client_credential_id` и при совпадении адреса `web_client_address_id`; снимок акта кешируется |
 | Прямой API | `POST /api/runtime/runs`, `/runs/start`, `/events` | синхронная обработка без шины (dev/test) |
 
-Исходящие: `telegram.send_message` → Bot API (+ событие `channel.message.sent`); `web_client.send_message` → `POST {base}/eva/messages` (+ копия в outbox разговора, доступна клиенту через `GET …/sessions/{id}/outbox`).
+Исходящие: `telegram.send_message` → Bot API (+ событие `channel.message.sent`); `web_client.send_message` → `POST {base}/eva/messages`. База URL берётся из credential адреса (`vars.web_client_credential_id`), а если его нет — из credential инстанса. Пути (`/eva/health`, `/eva/messages`, `/eva/context`) и стиль авторизации — из `config` инстанса. Копия сообщения кладётся в outbox разговора (`GET …/sessions/{id}/outbox`).

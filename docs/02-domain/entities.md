@@ -6,7 +6,9 @@
 
 **Что это.** Единица проектирования и публикации. Агент владеет своими Skills, Actions, инстансами Tools и credentials; у него есть один черновик и список публикаций.
 
-**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `createdAt`, `updatedAt`, `archivedAt`.
+**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `icon` (аватар; пусто — логотип E.V.A.), `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `constructor` (раскладка навыков на столе конструктора: `{ nodes[] }`; во фронтенде поле называется `constructorLayout`), `world.addresses[]`, `createdAt`, `updatedAt`, `archivedAt`.
+
+**`world.addresses[]`.** Места, висящие на канале внешнего мира. Поля: `id`, `toolId`, `name`, необязательный `credentialId`, `config`. У Telegram адрес — чат (`config.chat_id`), токен бота обычно на инстансе. У `web_client` адрес — одно веб-приложение: URL и оба ключа лежат в credential, на который указывает `credentialId`. Сессия веб-приложения адресом не является. Подробности стола — [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md).
 
 **Состояния.**
 
@@ -82,7 +84,7 @@ stateDiagram-v2
 
 ## 5. Tool type и Tool instance
 
-**Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
+**Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `world` (канал внешнего мира; на столе конструктора и в библиотеке отделён от инструментов действий), `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
 
 Каталог (Fact, 12 типов):
 
@@ -107,7 +109,7 @@ stateDiagram-v2
 |---|---|---|
 | `telegram` | `bot_token` | `getMe`; есть `set-webhook` на `EVA_WEBHOOK_BASE` |
 | `polza_ai_llm` | `api_key` | запрос баланса (`GET /balance`) |
-| `web_client` | `backend_base_url`, `outbound_api_key`, `inbound_api_key` (генерируется, показывается один раз) | `GET {base}/eva/health` |
+| `web_client` | `backend_base_url`, `outbound_api_key`, `inbound_api_key` (генерируется, показывается один раз). На столе конструктора секрет вешается на **адрес-приложение**, не на инстанс канала. Инстанс хранит общий контракт путей | `GET {base}/eva/health` |
 
 Поллер Telegram пропускает credentials с `meta.dev_stub = true` или тестовыми токенами.
 
@@ -146,7 +148,7 @@ stateDiagram-v2
 
 **Свойства.** `id` (uuid), `skill_id`, `skill_version` (= версия публикации агента), `current_state`, `status`, `params`, `vars`, `history[]` (пройденные состояния), `error`, `revision` (оптимистичная блокировка), `expires_at` (хранится, **не используется**), `conversation_id` (индекс для поиска ждущих run), `agent_id`/`agent_slug`.
 
-**Служебные ключи `vars`** (с подчёркиванием): `_agent_id`, `_agent_slug`, `_last_event_id`, `_skill_params` (копия params при сохранении), `_needs_human`, `_last_action_run_id`, `_desk` / `_desk_text` (снимок стола). Данные из payload событий и результатов Actions также попадают в `vars` (ключи `text`, `last_message`, `conversation_id` перезаписываются каждым событием; остальные — только если ещё не заданы).
+**Служебные ключи `vars`** (с подчёркиванием): `_agent_id`, `_agent_slug`, `_last_event_id`, `_skill_params` (копия params при сохранении), `_needs_human`, `_last_action_run_id`, `_desk` / `_desk_text` (снимок стола). Входящий акт веб-клиента кладёт в payload, а оттуда в `vars`, `web_client_credential_id` и при найденном адресе `web_client_address_id` — по ним исходящий вызов выбирает приложение. Данные из payload событий и результатов Actions также попадают в `vars` (ключи `text`, `last_message`, `conversation_id` перезаписываются каждым событием; остальные — только если ещё не заданы).
 
 **Статусы (Fact: код).**
 

@@ -19,7 +19,7 @@
 | M11 Таймеры | `runtime/scheduler.py`, `TimerScheduleRow` | — |
 | M12 Наблюдаемость | `PostgresSkillRunStore.append_event_log/list_event_logs/summarize_*`, `definition/services/tool_api_log_service.py`, `runtime/tool_log_context.py`, `runtime/metrics.py`, `app/api/runtime.py` (`get_run_history`, `replay_run`) | `features/runtime/components/SkillRunTimeline.vue`, `features/tools/views/ToolLogsView.vue`, `ToolLogFeed.vue` |
 | M13 Валидация входа команды | `definition/catalog/field_schema.py`, `definition/validation/validate_tool_command_input.py`, `ToolExecutor.execute` (режим из settings) | `shared/schema/fieldSchema.ts`, `SchemaDrivenForm.vue` |
-| M14 Каналы | `app/api/channels/*`, `workers/telegram_poller.py`, `tools/telegram/`, `tools/web_client/` | `WebClientPanel.vue` (ingress/outbox) |
+| M14 Каналы | `app/api/channels/*`, `workers/telegram_poller.py`, `tools/telegram/`, `tools/web_client/` (`tool.py` выбирает HTTP-клиент по `vars.web_client_credential_id`) | стол: `features/constructor/`; форма приложения: `AddressConfigPanel.vue` + `WebClientPanel.vue` (`mode="app"`) |
 
 ## Backend: ключевые классы и функции
 
@@ -207,3 +207,4 @@ poll_once() -> int ; run_poller(interval_sec=2.0)
 | Новое поле Skill Run | `domain/agent.py` → `infrastructure/models/tables.py` → `PostgresSkillRunStore.save_run/_to_domain` → `app/deps.py` (`ALTER TABLE … IF NOT EXISTS`) |
 | Новый маршрут runtime API | `app/api/runtime.py` → `frontend/src/features/runtime/services/runtimeApi.ts` + типы в `types/runtime.ts` |
 | Новый раздел в workspace агента | `features/workspace/config/nav.ts` → `router/index.ts` → `router/paths.ts` |
+| Канал внешнего мира или адрес на столе | [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md); `features/constructor/`, `features/agents/types/world.ts`, `evaluateWorldLink.ts` |

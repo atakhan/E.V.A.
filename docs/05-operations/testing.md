@@ -96,7 +96,7 @@ Tests       2 failed | 48 passed (50)
 
 ### Что покрыто
 
-Геометрия и ортогональная маршрутизация холста, формат подписей переходов, YAML/pack импорт Skills, `validateSkill`, компиляция legacy Behavior Graph, схема полей, индекс библиотеки Tools, sidebar-мета Actions. Компонентных (Vue) и e2e-тестов нет.
+Геометрия и ортогональная маршрутизация холста, формат подписей переходов, YAML/pack импорт Skills, `validateSkill`, компиляция legacy Behavior Graph, схема полей, индекс библиотеки Tools, sidebar-мета Actions, светофор кабеля канала (`features/agents/utils/evaluateWorldLink.test.ts`). Компонентных (Vue) и e2e-тестов нет.
 
 ## Ручная проверка end-to-end
 

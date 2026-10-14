@@ -32,7 +32,7 @@ flowchart LR
 
 | Сущность | Что это | Ключевые свойства |
 |---|---|---|
-| **Agent** | Кто этот агент: композиция поведения и способностей | slug, имя, описание, `defaultSkillId`, skills[], actions[], tools[]; черновик; публикации; архивирован/нет |
+| **Agent** | Кто этот агент: композиция поведения и способностей | slug, имя, описание, `icon`, `defaultSkillId`, skills[], actions[], tools[], `constructor` (раскладка стола), `world.addresses[]`; черновик; публикации; архивирован/нет |
 | **Skill** | Процесс решения класса задач; описан конечным автоматом | id, версия, `initial`, params[], states[] |
 | **State** | Где сейчас процесс | id, `on_enter[]` (actions при входе), `final`, transitions[] |
 | **Transition (handler)** | Реакция состояния на событие | event type, guard (условие), actions[] (id операций), `to` (целевое состояние) |
@@ -40,7 +40,7 @@ flowchart LR
 | **Recipe step** | Один вызов команды инструмента внутри Action | id, tool (ссылка на инстанс или тип), command, input (с шаблонами), `when` |
 | **Tool type** | Запись глобальной библиотеки: что умеет инструмент | id, commands[] со схемами полей, events[], configSchema, credentialKind/Policy |
 | **Tool instance** | Подключение конкретного инструмента к агенту | id, toolId (тип), name, enabled, credentialId, config |
-| **Credential** | Секрет для инстанса (токен бота, API-ключ, адреса/ключи веб-клиента) | id, toolId, name, зашифрованный секрет, meta |
+| **Credential** | Секрет канала или адреса (токен бота, API-ключ, URL и ключи веб-приложения) | id, toolId, name, зашифрованный секрет, meta |
 | **Publication** | Неизменяемый снимок документа агента | версия `X.Y.Z` (patch автоинкремент), тело документа, дата |
 
 ## Сущности исполнения

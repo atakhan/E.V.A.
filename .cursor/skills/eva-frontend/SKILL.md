@@ -16,24 +16,29 @@ Stack: Vue 3 + TypeScript + Vue Router + Tailwind v4 + daisyUI. Path alias `@/` 
 
 ```
 features/
-├── agents/       # CRUD, overview, validateAgent
+├── agents/       # CRUD, overview, validateAgent, world addresses
+├── constructor/  # docking table: addresses, world channels, agent, skills
 ├── skills/       # FSM canvas editor
 ├── actions/      # Action catalog + recipes
-├── tools/        # Tool registry + bindings
-└── workspace/
+├── tools/        # Tool registry + bindings; library splits world vs action tools
+├── runtime/      # cockpit, runs, simulate
+└── workspace/    # floating section menu
 ```
+
+World-axis contract: `docs/03-architecture/constructor-world-axis.md`.
 
 ## Data model
 
 ```ts
-Agent { skills, actions, tools: ToolBinding[], defaultSkillId? }
+Agent { skills, actions, tools: ToolBinding[], defaultSkillId?, constructorLayout?, world?: { addresses } }
 Skill { initial, params, states[] }
 ActionDef { id, version, policy, inputSchema, outputSchema, recipe: { id, tool, command, input, when? }[] }
 ToolBinding { toolId, enabled, configNote }
 ```
 
-Constructor SoT is the FSM (`states[]`). UI: FsmCanvas + SkillInspector.  
+Skill editor source of truth is the FSM (`states[]`). UI: FsmCanvas + SkillInspector.  
 Canvas geometry (orthogonal routing, obstacles, labels): `docs/FSM_CANVAS_GEOMETRY.md`, code `features/skills/utils/geometry/`.
+The agent docking table (`features/constructor/`) is a separate canvas.
 
 ## Validation (constructor)
 
@@ -53,7 +58,7 @@ Platform contracts: `.cursor/skills/eva-specs/SKILL.md` (Actions, Skills, Events
 
 ## Routing
 
-`/agents` · `/runtime` · `/:slug/overview|skills|actions|tools|runtime` · `/:slug/runtime/simulate` · `/:slug/runtime/runs/:runId`
+`/agents` · `/tools` · `/runtime` · `/:slug/constructor|overview|skills|actions|tools|logs|runtime` · `/:slug/runtime/simulate` · `/:slug/runtime/runs/:runId`
 
 ## Dev
 

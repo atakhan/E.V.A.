@@ -28,7 +28,9 @@
 
 Двусторонний HTTP-контракт. E.V.A. — и сервер (ingress, outbox), и клиент (outbound к бэкенду веб-приложения).
 
-**Outbound (E.V.A. → веб-клиент)**, пути настраиваются в `config` инстанса `web_client`:
+**Куда смотрит вызов.** Пути (`healthPath`, `sendMessagePath`, `getSnapshotPath`, `authStyle`, `timeoutSec`) — `config` инстанса `web_client`, общий для всех приложений. `backend_base_url` и оба ключа — credential. На столе конструктора этот credential висит на адресе (`agent.world.addresses[].credentialId`): один канал, несколько приложений. Старый вариант — credential на самом инстансе — остаётся запасным, если в `vars` нет `web_client_credential_id`.
+
+**Outbound (E.V.A. → веб-клиент):**
 
 | Команда | HTTP | Тело / ответ |
 |---|---|---|
@@ -42,7 +44,7 @@
 
 | Маршрут | Назначение |
 |---|---|
-| `POST /api/channels/web/{slug}/events` | акт человека: `{sessionId, type="channel.message.received", skillId?, actorId?, focus?{view, openEntityId, selectedEntityIds}, intent?, entityIds?, payload{text|message, …}}`; `Authorization: Bearer <inbound_api_key>`; ответ `{ok, queued, messageId, eventId}`; 401/404/409/422 |
+| `POST /api/channels/web/{slug}/events` | акт человека: `{sessionId, type="channel.message.received", skillId?, actorId?, focus?{view, openEntityId, selectedEntityIds}, intent?, entityIds?, payload{text|message, …}}`; `Authorization: Bearer <inbound_api_key>`; ключ сопоставляется с credential и с адресом, у которого этот `credentialId`; в payload попадают `web_client_credential_id` и `web_client_address_id`; ответ `{ok, queued, messageId, eventId}`; 401/404/409/422 |
 | `GET /api/channels/web/{slug}/sessions/{sessionId}/outbox` | последние исходящие сообщения агента в эту сессию (Redis, 24 ч) |
 | `GET /api/agents/{slug}/tools/web_client/integration?credentialId` | подсказки интеграции: ingressUrl, outboxUrlTemplate, hint ключа, outbound URLs (включая docker-rewrite), пути |
 | `POST /api/agents/{slug}/tools/web_client/generate-inbound-key` | сгенерировать inbound-ключ |

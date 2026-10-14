@@ -137,6 +137,7 @@ frontend/
     ├── shared/{components,layout,schema,utils}
     └── features/
         ├── agents/{components,composables,services,types,utils,views}
+        ├── constructor/{components,composables,types,views}
         ├── skills/{components,composables,fixtures,types,utils,utils/geometry,views}
         ├── actions/{components,composables,types,utils,views}
         ├── tools/{components,composables,registry,services,types,utils,views}
@@ -156,6 +157,6 @@ frontend/
 ## Тесты
 
 - Backend: `backend/tests/*.py` — 138 тестов (114 unit + 24 integration). Spec-тесты: `test_actions_spec.py`, `test_skills_spec.py`, `test_events_spec.py`; interaction: `test_dispatcher.py`, `test_interaction_routing.py`, `test_phase1_4.py`, `test_web_act.py`; runtime: `test_runtime_gaps.py`, `test_runtime_cockpit_api.py`, `test_skill_resolver.py`, `test_tool_instances.py`; tools: `test_text_tool.py`, `test_telegram_tool.py`, `test_polza_ai_llm.py`, `test_tool_logging.py`; каталог: `test_catalog_completeness.py`, `test_field_schema.py`.
-- Frontend: `src/**/*.test.ts` — 10 файлов, 50 тестов (vitest, environment node): геометрия/маршрутизация, YAML, валидация Skill, импорт пакета, behavior compile, схема полей, библиотека Tools, sidebar meta.
+- Frontend: `src/**/*.test.ts` (vitest, environment node): геометрия/маршрутизация, YAML, валидация Skill, импорт пакета, behavior compile, схема полей, библиотека Tools, sidebar meta, светофор канала (`evaluateWorldLink.test.ts`).
 
 Как запускать — [`05-operations/testing.md`](../05-operations/testing.md).
