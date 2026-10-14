@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FsmState } from "@/features/skills/types/fsm";
 import { autoLayoutStates } from "@/features/skills/utils/geometry/autoLayout";
+import { formatUmlTransitionLabel } from "@/features/skills/utils/fsmLabelFormat";
 import { placeLabelOnRoute } from "@/features/skills/utils/geometry/labels";
 import { resolveRectOverlap } from "@/features/skills/utils/geometry/placement";
 import { routeOrthogonal } from "@/features/skills/utils/geometry/orthogonalRouter";
@@ -9,7 +10,7 @@ import {
   reassignTransitionPorts,
   routeSkillGraph,
 } from "@/features/skills/utils/geometry/routeGraph";
-import { polylineCrossesRect } from "@/features/skills/utils/geometry/rects";
+import { polylineCrossesRect, rectsOverlap } from "@/features/skills/utils/geometry/rects";
 import { validateGraphGeometry } from "@/features/skills/utils/geometry/validate";
 import { sideFromPoint } from "@/features/skills/utils/edgeRouting";
 
@@ -269,5 +270,75 @@ describe("orthogonal FSM routing", () => {
     const edge = laidOut[0].transitions[0];
     expect(edge.fromSide).toBe("bottom");
     expect(edge.toSide).toBe("top");
+  });
+
+  it("keeps wide labels readable on a tight horizontal skill", () => {
+    const queued = state("queued", 0, 0, 200, 88, [
+      transition("draft", "waiting_for_human", {
+        event: "ui.request.parse_requested",
+        actions: ["compose_draft"],
+      }),
+    ]);
+    const waiting = state("waiting_for_human", 280, 0, 200, 88, [
+      transition("approve", "recorded", {
+        event: "human.request.reviewed",
+        guard: "payload.decision == 'approve'",
+        actions: ["record_letter"],
+      }),
+      transition("correct", "waiting_for_human", {
+        event: "human.request.reviewed",
+        guard: "payload.decision == 'correct'",
+        actions: ["note_correction"],
+      }),
+      transition("defer", "waiting_for_human", {
+        event: "human.request.reviewed",
+        guard: "payload.decision == 'defer'",
+        actions: ["defer_letter"],
+      }),
+    ]);
+    const recorded = state("recorded", 560, 0, 200, 88);
+    const states = [queued, waiting, recorded];
+    const routes = routeSkillGraph(states, { flowDirection: "vertical" });
+    const correct = routes.get("waiting_for_human:correct")!;
+    const defer = routes.get("waiting_for_human:defer")!;
+    expect(correct.points).not.toEqual(defer.points);
+    for (const route of [correct, defer]) {
+      expect(polylineCrossesRect(route.points, queued)).toBe(false);
+      expect(polylineCrossesRect(route.points, recorded)).toBe(false);
+    }
+
+    const placedLabels: Array<{ x: number; y: number; width: number; height: number }> = [];
+    for (const source of states) {
+      for (const edge of source.transitions) {
+        const key = `${source.id}:${edge.id}`;
+        const routed = routes.get(key)!;
+        const label = formatUmlTransitionLabel(edge.event, edge.guard, edge.actions, false, 0);
+        const others = [...routes.entries()].filter(([routeKey]) => routeKey !== key).map(([, route]) => route.points);
+        const placed = placeLabelOnRoute(
+          routed.points,
+          { width: label.width, height: label.height },
+          states,
+          placedLabels,
+          others,
+        );
+        const rect = {
+          x: placed.at.x - label.width / 2,
+          y: placed.at.y - label.height / 2,
+          width: label.width,
+          height: label.height,
+        };
+        for (const node of states) {
+          expect(rectsOverlap(rect, node)).toBe(false);
+        }
+        for (const route of others) {
+          expect(polylineCrossesRect(route, rect)).toBe(false);
+        }
+        for (const previous of placedLabels) {
+          expect(rectsOverlap(rect, previous)).toBe(false);
+        }
+        placedLabels.push(rect);
+      }
+    }
+    expect(placedLabels).toHaveLength(4);
   });
 });

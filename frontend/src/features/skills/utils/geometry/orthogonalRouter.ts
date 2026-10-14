@@ -163,7 +163,12 @@ function selfLoopPath(
   const p4 = movePoint(end, toNormal, ROUTE_STUB);
   const points: Point[] = [start, p1];
 
-  if (fromSide === "bottom" && toSide === "top") {
+  if (fromSide === toSide) {
+    const depth = ROUTE_STUB * 3 + parallelIndex * 72;
+    const farStart = movePoint(start, fromNormal, depth);
+    const farEnd = movePoint(end, toNormal, depth);
+    points.push(farStart, farEnd, p4);
+  } else if (fromSide === "bottom" && toSide === "top") {
     const depth = Math.max(loopSize, Math.abs(p4.y - p1.y) + ROUTE_STUB);
     points.push({ x: p1.x, y: p1.y + depth }, { x: p4.x, y: p1.y + depth }, p4);
   } else if (fromSide === "top" && toSide === "bottom") {

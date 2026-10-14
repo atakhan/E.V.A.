@@ -101,13 +101,16 @@ export function defaultAnchorsForPair(
   isSelfLoop: boolean,
 ): { from: SideAnchor; to: SideAnchor } {
   if (isSelfLoop) {
-    const loops: Array<{ from: SideAnchor; to: SideAnchor }> = [
-      { from: { side: "bottom", anchor: 0.25 }, to: { side: "top", anchor: 0.75 } },
-      { from: { side: "right", anchor: 0.25 }, to: { side: "left", anchor: 0.75 } },
-      { from: { side: "top", anchor: 0.25 }, to: { side: "bottom", anchor: 0.75 } },
-      { from: { side: "left", anchor: 0.25 }, to: { side: "right", anchor: 0.75 } },
+    const pairs: Array<[number, number]> = [
+      [0.18, 0.42],
+      [0.58, 0.82],
+      [0.34, 0.66],
     ];
-    return loops[parallelIndex % loops.length];
+    const [fromAnchor, toAnchor] = pairs[parallelIndex % pairs.length];
+    return {
+      from: { side: "bottom", anchor: fromAnchor },
+      to: { side: "bottom", anchor: toAnchor },
+    };
   }
 
   const fromCenter = rectCenter(from);

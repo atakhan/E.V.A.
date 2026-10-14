@@ -285,11 +285,15 @@ const edges = computed(() => {
         selected,
         routed.labelAt.y,
       );
+      const otherRoutes = [...routes.entries()]
+        .filter(([routeKey]) => routeKey !== key)
+        .map(([, route]) => route.points);
       const placed = placeLabelOnRoute(
         routed.points,
         { width: estimate.width, height: estimate.height },
         states.value,
         labelRects,
+        otherRoutes,
       );
       const label = formatUmlTransitionLabel(
         transition.event,
@@ -299,11 +303,13 @@ const edges = computed(() => {
         placed.at.y,
       );
       labelRects.push(labelCollisionRect(placed.at, { width: label.width, height: label.height }));
-      const split = splitPolylineForLabel(
-        routed.points,
-        placed.at,
-        labelLineGapRadius({ width: label.width, height: label.height }),
-      );
+      const split = placed.offset
+        ? { before: routed.points, after: [] as Point[] }
+        : splitPolylineForLabel(
+            routed.points,
+            placed.at,
+            labelLineGapRadius({ width: label.width, height: label.height }),
+          );
 
       result.push({
         key,

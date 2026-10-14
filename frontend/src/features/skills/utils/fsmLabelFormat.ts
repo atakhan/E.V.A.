@@ -24,11 +24,22 @@ export interface UmlTransitionLabel {
   labelLines: { triggerY: number; actionY?: number };
 }
 
-const TRIGGER_CHAR_WIDTH = 6.2;
-const ACTION_CHAR_WIDTH = 5.6;
+const TRIGGER_CHAR_WIDTH = 6.7;
+const ACTION_CHAR_WIDTH = 6.1;
 const LABEL_PADDING = 14;
 const TRIGGER_LINE_HEIGHT = 14;
 const ACTION_LINE_HEIGHT = 11;
+const MAX_LABEL_WIDTH = 280;
+const MAX_LABEL_WIDTH_SELECTED = 360;
+
+function truncateToWidth(text: string, charWidth: number, maxWidth: number): string {
+  const maxChars = Math.max(4, Math.floor((maxWidth - LABEL_PADDING) / charWidth));
+  return truncateLabelText(text, maxChars);
+}
+
+function lineWidth(text: string, charWidth: number): number {
+  return Math.ceil(text.length * charWidth + LABEL_PADDING);
+}
 
 export function formatUmlTransitionLabel(
   event: string,
@@ -39,15 +50,14 @@ export function formatUmlTransitionLabel(
 ): UmlTransitionLabel {
   const eventPart = (event.trim() || "event");
   const guardPart = guard.trim();
-  const guardInTrigger = guardPart
-    ? ` [${selected ? guardPart : truncateLabelText(guardPart, 20)}]`
-    : "";
-  const triggerLine = truncateLabelText(`${eventPart}${guardInTrigger}`, selected ? 48 : 38);
+  const guardInTrigger = guardPart ? ` [${guardPart}]` : "";
+  const maxWidth = selected ? MAX_LABEL_WIDTH_SELECTED : MAX_LABEL_WIDTH;
+  const triggerLine = truncateToWidth(`${eventPart}${guardInTrigger}`, TRIGGER_CHAR_WIDTH, maxWidth);
 
   const actionsSegment = formatUmlActionsSegment(actions);
   const actionLineRaw = actionsSegment ? `/ ${actionsSegment}` : null;
   const actionLine = actionLineRaw
-    ? truncateLabelText(actionLineRaw, selected ? 36 : 24)
+    ? truncateToWidth(actionLineRaw, ACTION_CHAR_WIDTH, maxWidth)
     : null;
 
   const title = actionLineRaw
@@ -55,10 +65,10 @@ export function formatUmlTransitionLabel(
     : `${eventPart}${guardInTrigger}`;
 
   const widths = [
-    triggerLine.length * TRIGGER_CHAR_WIDTH + LABEL_PADDING,
-    actionLine ? actionLine.length * ACTION_CHAR_WIDTH + LABEL_PADDING : 0,
+    lineWidth(triggerLine, TRIGGER_CHAR_WIDTH),
+    actionLine ? lineWidth(actionLine, ACTION_CHAR_WIDTH) : 0,
   ];
-  const width = Math.min(200, Math.max(48, ...widths.filter((item) => item > 0)));
+  const width = Math.max(48, ...widths.filter((item) => item > 0));
 
   let height = TRIGGER_LINE_HEIGHT + 4;
   if (actionLine) height += ACTION_LINE_HEIGHT;
