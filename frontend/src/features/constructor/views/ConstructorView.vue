@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from "vue";
+import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import { useWorldConnections } from "@/features/agents/composables/useWorldConnections";
 import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
+import { evaluateWorldAddress } from "@/features/agents/utils/evaluateWorldAddress";
 import AgentHubCard, {
   type AgentHubPhase,
 } from "@/features/constructor/components/AgentHubCard.vue";
@@ -25,6 +26,7 @@ import {
   WORLD_KIND_X,
 } from "@/features/constructor/types/constructor";
 import { useSkills } from "@/features/skills/composables/useSkills";
+import { fetchCredentials, type ToolCredential } from "@/features/tools/services/credentialsApi";
 import { skillPath } from "@/router/paths";
 
 const props = defineProps<{
@@ -56,6 +58,8 @@ const selectedAddressId = ref<string | null>(null);
 const agentPhase = ref<AgentHubPhase>("circle");
 const viewport = ref({ panX: 0, panY: 0, zoom: 1 });
 const canvasRef = useTemplateRef<InstanceType<typeof InfiniteCanvas>>("canvas");
+const credentials = ref<ToolCredential[]>([]);
+const credentialsReady = ref(false);
 
 const agent = computed(() => getAgentBySlug(props.agentSlug));
 
@@ -66,6 +70,32 @@ const selectedKindLink = computed(() => {
 
 const selectedAddress = computed(() =>
   selectedAddressId.value ? getAddress(selectedAddressId.value) ?? null : null,
+);
+
+const selectedAddressEvaluation = computed(() => {
+  const address = selectedAddress.value;
+  if (!address) return null;
+  const credential = credentials.value.find((item) => item.id === address.credentialId) ?? null;
+  return evaluateWorldAddress(address, credential, { credentialsReady: credentialsReady.value });
+});
+
+async function loadCredentials() {
+  try {
+    credentials.value = await fetchCredentials(props.agentSlug);
+  } catch {
+    credentials.value = [];
+  } finally {
+    credentialsReady.value = true;
+  }
+}
+
+watch(
+  () => props.agentSlug,
+  () => {
+    credentialsReady.value = false;
+    void loadCredentials();
+  },
+  { immediate: true },
 );
 
 const canvasNodes = computed(() =>
@@ -128,10 +158,16 @@ const canvasWorldAddresses = computed((): CanvasWorldAddress[] => {
     if (!slot) continue;
     const addresses = addressesFor(tool.id);
     addresses.forEach((address, addressIndex) => {
+      const credential = credentials.value.find((item) => item.id === address.credentialId) ?? null;
+      const evaluation = evaluateWorldAddress(address, credential, {
+        credentialsReady: credentialsReady.value,
+      });
       items.push({
         id: address.id,
         toolId: tool.id,
         name: address.name,
+        status: evaluation.status,
+        reason: evaluation.reason,
         x: WORLD_ADDRESS_X,
         y: slot.addressYs[addressIndex] ?? slot.kindY,
       });
@@ -335,11 +371,14 @@ function onUpdateAddress(
     />
 
     <AddressConfigPanel
-      v-if="selectedAddress && agentPhase !== 'details'"
+      v-if="selectedAddress && selectedAddressEvaluation && agentPhase !== 'details'"
       :agent-slug="agentSlug"
       :address-id="selectedAddress.id"
+      :status="selectedAddressEvaluation.status"
+      :reason="selectedAddressEvaluation.reason"
       @close="closeAddressConfig"
       @update="onUpdateAddress"
+      @credentials-changed="loadCredentials"
       @remove="onRemoveAddress(selectedAddress.id)"
     />
 

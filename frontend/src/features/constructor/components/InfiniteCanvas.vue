@@ -26,6 +26,8 @@ export interface CanvasWorldAddress {
   id: string;
   toolId: string;
   name: string;
+  status: WorldLinkStatus;
+  reason: string;
   x: number;
   y: number;
 }
@@ -138,6 +140,13 @@ function cableClass(status: WorldLinkStatus): string {
   return "stroke-base-content/25";
 }
 
+function addressBorderClass(status: WorldLinkStatus): string {
+  if (status === "green") return "border-success";
+  if (status === "yellow") return "border-warning";
+  if (status === "red") return "border-error";
+  return "border-base-300/70";
+}
+
 const addSkillPath = computed(() => curvePath(props.addSkillSlot.x, props.addSkillSlot.y));
 
 const skillPaths = computed(() =>
@@ -166,9 +175,11 @@ const addressLinks = computed(() => {
       return {
         id: address.id,
         d: `M ${address.x} ${address.y} L ${kind.x} ${kind.y}`,
+        status: address.status,
+        reason: address.reason,
       };
     })
-    .filter((item): item is { id: string; d: string } => item !== null);
+    .filter((item): item is { id: string; d: string; status: WorldLinkStatus; reason: string } => item !== null);
 });
 
 function clamp(value: number, min: number, max: number): number {
@@ -295,11 +306,12 @@ defineExpose({
           :key="`addr-${link.id}`"
           :d="link.d"
           fill="none"
-          class="stroke-base-content/20"
-          stroke-width="1.5"
-          stroke-dasharray="4 4"
+          :class="cableClass(link.status)"
+          stroke-width="2.5"
           stroke-linecap="round"
-        />
+        >
+          <title>{{ link.reason }}</title>
+        </path>
         <path
           v-for="cable in connectedKindCables"
           :key="`cable-hit-${cable.id}`"
@@ -424,19 +436,18 @@ defineExpose({
         v-for="address in worldAddresses"
         :key="address.id"
         data-canvas-ui
-        class="group pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-xl border bg-base-100/90 px-2 text-center text-[11px] font-medium shadow-sm transition hover:border-primary/50"
-        :class="
-          selectedAddressId === address.id
-            ? 'border-primary ring-2 ring-primary/40'
-            : 'border-base-300/70'
-        "
+        class="group pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-xl border-2 bg-base-100/90 px-2 text-center text-[11px] font-medium shadow-sm"
+        :class="[
+          addressBorderClass(address.status),
+          selectedAddressId === address.id ? 'ring-2 ring-primary/40' : '',
+        ]"
         :style="{
           left: `${address.x - WORLD_ADDRESS_WIDTH / 2}px`,
           top: `${address.y - WORLD_ADDRESS_HEIGHT / 2}px`,
           width: `${WORLD_ADDRESS_WIDTH}px`,
           height: `${WORLD_ADDRESS_HEIGHT}px`,
         }"
-        :title="'Клик — настроить адрес'"
+        :title="address.reason"
         @pointerdown.stop
         @click="emit('selectAddress', address.id)"
       >

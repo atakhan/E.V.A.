@@ -53,6 +53,16 @@ For Web Client, a credential left on the channel instance does **not** count. On
 
 Yellow does not create a skill.
 
+## Address color
+
+The line from an address to its channel, and the address card, use the same three colors. Derived by `evaluateWorldAddress`. Not stored on the address.
+
+- **yellow** — not filled yet. A web client application has no credential, or the credential exists but the connection has not been checked. A Telegram address has no `chat_id`
+- **red** — filled, but not usable. The last web client health check failed (for example HTTP 404), or the address points at a credential that no longer exists
+- **green** — usable. The web client check returned success, or the Telegram chat id is set
+
+A failed check is written onto the credential (`verified: false`, `health_status`) before the verify request returns an error, so the address stays red after the panel closes. The channel cable does not change color because one application failed.
+
 ## What is configured where
 
 **Telegram**

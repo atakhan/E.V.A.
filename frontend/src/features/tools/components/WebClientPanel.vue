@@ -197,6 +197,7 @@ async function verify() {
         : "Связь есть";
   } catch (error) {
     emit("error", error instanceof Error ? error.message : "Проверка не удалась");
+    emit("refreshCredentials");
   } finally {
     localBusy.value = false;
   }

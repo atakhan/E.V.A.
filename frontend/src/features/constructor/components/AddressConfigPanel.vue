@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import type { WorldAddressStatus } from "@/features/agents/utils/evaluateWorldAddress";
 import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
 import WebClientPanel from "@/features/tools/components/WebClientPanel.vue";
@@ -11,6 +12,8 @@ import {
 const props = defineProps<{
   agentSlug: string;
   addressId: string;
+  status: WorldAddressStatus;
+  reason: string;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +25,7 @@ const emit = defineEmits<{
       config?: Record<string, unknown>;
     },
   ];
+  credentialsChanged: [];
   remove: [];
 }>();
 
@@ -60,6 +64,7 @@ async function loadCredentials() {
   } catch {
     credentials.value = [];
   }
+  emit("credentialsChanged");
 }
 
 watch(
@@ -120,6 +125,17 @@ function configString(fieldId: string): string {
     </header>
 
     <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+      <div
+        class="rounded-xl border px-3 py-2 text-xs text-base-content/80"
+        :class="{
+          'border-error/40 bg-error/10': status === 'red',
+          'border-warning/40 bg-warning/10': status === 'yellow',
+          'border-success/40 bg-success/10': status === 'green',
+        }"
+      >
+        <p>{{ reason }}</p>
+      </div>
+
       <p class="text-xs text-base-content/55">
         {{
           address?.toolId === "web_client"
