@@ -143,10 +143,11 @@ POST /api/runtime/demo                                        → in-memory fore
 
 ```text
 GET /api/runtime/summary                 → skill_runs GROUP BY agent/status + публикации + archived
-GET /api/runtime/agents/{slug}/summary   → то же для агента
+GET /api/runtime/agents/{slug}/summary   → то же для агента + draftChanges: части, которые черновик меняет относительно последней публикации
 GET /api/runtime/runs?agentSlug&skillId&status&activeOnly&limit&offset
-GET /api/runtime/runs/{id}               → строка skill_runs (history, status, state)
+GET /api/runtime/runs/{id}               → строка skill_runs (history, status, state, params, vars без ключей на '_')
 GET /api/runtime/runs/{id}/history       → skill_run_events[] + action_runs[] { tool_executions[] }
+GET /api/runtime/agents/{slug}/memory    → история событий агента + рабочее состояние прогонов (сначала running/waiting)
 GET /api/agents/{slug}/tool-logs?toolId&credentialId&status&limit  → tool_api_logs
 POST /api/runtime/runs/{id}/cancel       → status cancelled; action_runs active → cancelled
 POST /api/runtime/runs/{id}/replay?offset → повторная подача journal events в runtime (без защит)

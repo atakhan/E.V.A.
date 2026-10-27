@@ -117,7 +117,16 @@ def test_runtime_summary(client: TestClient):
 
         agent_summary = client.get(f"/api/runtime/agents/{slug}/summary")
         assert agent_summary.status_code == 200, agent_summary.text
-        assert agent_summary.json()["isPublished"] is True
+        agent_payload = agent_summary.json()
+        assert agent_payload["isPublished"] is True
+        assert agent_payload["latestPublishedAt"]
+        assert agent_payload["draftChanges"] == []
+
+        draft = client.get(f"/api/agents/{slug}").json()
+        draft["skills"][0]["name"] = "Cockpit skill v2"
+        assert client.put(f"/api/agents/{slug}", json=draft).status_code == 200
+        changed = client.get(f"/api/runtime/agents/{slug}/summary").json()
+        assert changed["draftChanges"] == ["skills"]
     finally:
         client.delete(f"/api/agents/{slug}")
 
@@ -219,5 +228,18 @@ def test_get_run_includes_extended_fields(client: TestClient):
         assert payload["publicationVersion"]
         assert payload["createdAt"]
         assert payload["updatedAt"]
+        assert all(not str(key).startswith("_") for key in payload["vars"])
+        assert all(not str(key).startswith("_") for key in payload["params"])
+
+        memory = client.get(f"/api/runtime/agents/{slug}/memory")
+        assert memory.status_code == 200, memory.text
+        remembered = memory.json()
+        assert any(item["skillRunId"] == run_id for item in remembered["runs"])
+        assert any(item["skillRunId"] == run_id for item in remembered["events"])
+        assert all(
+            not str(key).startswith("_")
+            for item in remembered["runs"]
+            for key in {**item["vars"], **item["params"]}
+        )
     finally:
         client.delete(f"/api/agents/{slug}")

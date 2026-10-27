@@ -20,7 +20,7 @@ Skills/Actions/Tool instances хранятся как один `body` (JSONB) в
 
 - Входящие payload-поля, correlation, результаты **всех** шагов всех операций, снимок стола (`_desk`), служебные метки (`_agent_slug`, `_last_event_id`, `_needs_human`, `_skill_params`) живут в одном словаре `SkillRun.vars` → JSONB `skill_runs.vars`.
 - Ключи `text`, `last_message`, `conversation_id` перезаписываются каждым событием; остальные — только если отсутствуют (`setdefault`-семантика в `_route_single`). Результаты операций перезаписывают всегда.
-- Подчёркивание в начале = служебный ключ; `build_action_input` их отфильтровывает, в `payload` шага они тоже не попадают.
+- Подчёркивание в начале = служебный ключ; `build_action_input` их отфильтровывает, в `payload` шага они тоже не попадают. Тот же фильтр у чтения: `visible_run_memory` в `runtime/skill_run_query.py` отдаёт в API `params` и `vars` без ключей на `_`.
 - `params` при сохранении копируются в `vars._skill_params` и восстанавливаются оттуда при чтении.
 
 Практический вывод: имена выходных полей команд (`text`, `parsed`, `structured`, `sent`, `snapshot`) становятся глобальными переменными run; две операции с одинаковыми ключами выхода затирают друг друга.
@@ -58,7 +58,7 @@ Skills/Actions/Tool instances хранятся как один `body` (JSONB) в
 
 ## 12. Инстансы Tools: сборка по типу
 
-`definition_loader._build_tool_for_binding` — `if/elif` по `tool_type` с пятью ветками; типы без ветки возвращают `None` и молча не регистрируются. Режимы `stub` подменяют реализацию целиком (для `polza_ai_llm` — `LlmStubTool` с расширенным списком команд). Инстансу «штампуются» атрибуты `id`, `tool_type`, `credential_id` поверх экземпляра класса (а не через конструктор).
+`definition_loader._build_tool_for_binding` — `if/elif` по `tool_type` с пятью ветками; типы без ветки возвращают `None` и молча не регистрируются. Манифесты таких типов несут `implemented: False`; `tests/test_catalog_completeness.py::test_implemented_flag_matches_runtime_factory` падает, если флаг и ветки фабрики разошлись. Режимы `stub` подменяют реализацию целиком (для `polza_ai_llm` — `LlmStubTool` с расширенным списком команд). Инстансу «штампуются» атрибуты `id`, `tool_type`, `credential_id` поверх экземпляра класса (а не через конструктор).
 
 ## 13. Валидация входа команды — три режима
 

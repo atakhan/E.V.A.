@@ -135,6 +135,7 @@ Severity: `error` блокирует публикацию. Правила (Fact,
 | `unknown_tool_instance` / `ambiguous_tool_reference` / `disabled_tool_instance` / `unknown_tool` / `unknown_command` | error | по A3 и каталогу |
 | `invalid_step_input` | error / warning | вход шага не проходит схему команды (warning — неизвестные поля) |
 | `unused_action` | info | Action не используется ни в одном Skill |
+| `unimplemented_tool` | error | включённый инстанс типа с `implemented: false` в манифесте: у runtime нет кода для этого типа |
 | `no_enabled_tools` | warning | есть recipe, но нет включённых инстансов |
 | `missing_credential` | error | включённый инстанс `telegram` / `polza_ai_llm` / `web_client` без `credentialId` — **только сервер**. Для `web_client` ошибки нет, если адрес этого `toolId` уже несёт `credentialId` |
 | `duplicate_credential` | error | два инстанса `telegram` с одним credential — **только сервер** |

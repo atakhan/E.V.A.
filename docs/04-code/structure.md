@@ -137,11 +137,12 @@ frontend/
     ├── shared/{components,layout,schema,utils}
     └── features/
         ├── agents/{components,composables,services,types,utils,views}
-        ├── constructor/{components,composables,types,views}
+        ├── constructor/{components,composables,types,utils,views}
         ├── skills/{components,composables,fixtures,types,utils,utils/geometry,views}
         ├── actions/{components,composables,types,utils,views}
         ├── tools/{components,composables,registry,services,types,utils,views}
         ├── runtime/{components,composables,services,types,utils,views}
+        ├── memory/{components,composables,utils,views}
         └── workspace/{components,config,views}
 ```
 

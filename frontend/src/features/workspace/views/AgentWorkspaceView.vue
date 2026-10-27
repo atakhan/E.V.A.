@@ -29,6 +29,7 @@ const activeSectionId = computed(() => {
   if (leaf.includes("actions")) return "actions";
   if (leaf.includes("tools")) return "tools";
   if (leaf.includes("logs")) return "logs";
+  if (leaf.includes("memory")) return "memory";
   if (leaf.includes("runtime") || leaf === RouteNames.agentRuntimeSimulate || leaf === RouteNames.skillRunDetail) {
     return "runtime";
   }

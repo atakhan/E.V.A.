@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from definition.behavior.materialize import flatten_agent_document
+from definition.mappers.action_mapper import normalize_action_document
+from definition.mappers.skill_mapper import skill_from_document
 from definition.validation.validate_agent import validate_agent
 from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow
 
@@ -78,6 +81,32 @@ def _summary_from_row(row: AgentRow) -> dict[str, Any]:
         "updatedAt": row.updated_at.isoformat(),
         "archivedAt": row.archived_at.isoformat() if row.archived_at else None,
     }
+
+
+# What runtime reads from a publication, by part of the agent document.
+# Editor layout (constructor nodes, FSM state boxes, viewports) and timestamps are left out.
+# World addresses too: ingress reads them from the draft, so they apply without publishing.
+_RUNTIME_PARTS: dict[str, Callable[[dict[str, Any]], Any]] = {
+    "defaultSkillId": lambda body: body.get("defaultSkillId") or None,
+    "skills": lambda body: [skill_from_document(skill).model_dump() for skill in body.get("skills") or []],
+    "actions": lambda body: [
+        normalize_action_document(action).model_dump() for action in body.get("actions") or []
+    ],
+    "tools": lambda body: body.get("tools") or [],
+}
+
+
+def changed_runtime_parts(draft: dict[str, Any], published: dict[str, Any]) -> list[str]:
+    changed: list[str] = []
+    for part, project in _RUNTIME_PARTS.items():
+        try:
+            same = project(draft) == project(published)
+        except (AttributeError, KeyError, TypeError, ValueError):
+            # Validation refuses to publish what runtime cannot read, so it differs.
+            same = False
+        if not same:
+            changed.append(part)
+    return changed
 
 
 def _bump_patch(version: str) -> str:
@@ -270,6 +299,14 @@ class AgentService:
             .order_by(AgentPublicationRow.published_at.desc())
             .limit(1)
         )
+
+    def draft_changes(self, slug: str) -> list[str] | None:
+        """Parts runtime reads that differ between the draft and the latest publication; None before the first one."""
+        publication = self.get_latest_publication(slug)
+        draft = self.get_agent_by_slug(slug)
+        if publication is None or draft is None:
+            return None
+        return changed_runtime_parts(draft, publication.body)
 
     def get_publication(self, slug: str, version: str) -> AgentPublicationRow | None:
         agent = self.session.scalar(select(AgentRow).where(AgentRow.slug == slug))

@@ -12,6 +12,7 @@ export const RouteNames = {
   agentTools: "agent-tools",
   agentToolInstance: "agent-tool-instance",
   agentLogs: "agent-logs",
+  agentMemory: "agent-memory",
   agentRuntime: "agent-runtime",
   agentRuntimeSimulate: "agent-runtime-simulate",
   skillRunDetail: "skill-run-detail",
@@ -86,6 +87,10 @@ export function agentLogsPath(
   return suffix ? `${base}?${suffix}` : base;
 }
 
+export function agentMemoryPath(agentSlug: string): string {
+  return agentSectionPath(agentSlug, "memory");
+}
+
 export function agentRuntimePath(agentSlug: string): string {
   return agentSectionPath(agentSlug, "runtime");
 }
@@ -124,6 +129,7 @@ export function legacyModuleSlugToSection(moduleSlug: string): string {
     moduleSlug === "actions" ||
     moduleSlug === "tools" ||
     moduleSlug === "logs" ||
+    moduleSlug === "memory" ||
     moduleSlug === "runtime"
   ) {
     return moduleSlug;

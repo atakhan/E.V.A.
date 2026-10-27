@@ -45,6 +45,8 @@ class ToolDefinitionApi(BaseModel):
     description: str = ""
     # World-facing tool: opens a bidirectional place in the environment.
     world: bool = False
+    # False: manifest only — runtime has no implementation, an enabled instance cannot execute.
+    implemented: bool = True
     commands: list[ToolCommandDefApi] = Field(default_factory=list)
     events: list[ToolEventDefApi] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)

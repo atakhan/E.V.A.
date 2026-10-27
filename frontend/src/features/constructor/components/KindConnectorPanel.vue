@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
+import { toolUsage, type ToolUsage } from "@/features/agents/utils/agentDependencies";
 import type { WorldLinkStatus } from "@/features/agents/utils/evaluateWorldLink";
+import LinkStatusNote from "@/features/constructor/components/LinkStatusNote.vue";
+import ToolUsageList from "@/features/constructor/components/ToolUsageList.vue";
 import PolzaAiPanel from "@/features/tools/components/PolzaAiPanel.vue";
 import ToolInstanceConfigForm from "@/features/tools/components/ToolInstanceConfigForm.vue";
 import { useTools } from "@/features/tools/composables/useTools";
@@ -24,9 +28,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  selectSkill: [skillId: string];
 }>();
 
 const { getInstancesByType, updateInstance } = useTools();
+
+const usage = computed((): ToolUsage => {
+  const agent = getAgentBySlug(props.agentSlug);
+  if (!agent) return { actions: [], skills: [] };
+  return toolUsage(agent, { kind: "type", typeId: props.toolId });
+});
 
 const credentials = ref<ToolCredential[]>([]);
 const credentialError = ref<string | null>(null);
@@ -176,18 +187,7 @@ async function verifyTelegramCredential() {
     </header>
 
     <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
-      <div
-        class="rounded-xl border px-3 py-2 text-xs text-base-content/80"
-        :class="{
-          'border-error/40 bg-error/10': status === 'red',
-          'border-warning/40 bg-warning/10': status === 'yellow',
-          'border-success/40 bg-success/10': status === 'green',
-          'border-base-300 bg-base-200/50': status === 'off',
-        }"
-        :title="status"
-      >
-        <p>{{ reason }}</p>
-      </div>
+      <LinkStatusNote :status="status" :reason="reason" />
 
       <p class="text-xs text-base-content/55">
         Настройка канала связи. Адреса (конкретные места) задаются отдельно слева от канала.
@@ -289,6 +289,12 @@ async function verifyTelegramCredential() {
         </div>
 
         <p v-if="credentialError" class="text-sm text-error">{{ credentialError }}</p>
+
+        <ToolUsageList
+          :agent-slug="agentSlug"
+          :usage="usage"
+          @select-skill="emit('selectSkill', $event)"
+        />
       </template>
 
       <p v-else class="text-sm text-error">Канал не найден</p>

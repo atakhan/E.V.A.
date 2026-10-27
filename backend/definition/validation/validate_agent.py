@@ -265,6 +265,18 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
             continue
         tool_type = item.get("toolId", "")
         instance_id = item.get("id", "")
+        tool_def = get_tool_definition(tool_type)
+        if tool_def and tool_def.get("implemented") is False:
+            issues.append(
+                _issue(
+                    f"tool.{instance_id}.unimplemented",
+                    "error",
+                    "unimplemented_tool",
+                    f"Tool «{tool_def.get('name', tool_type)}» без реализации в runtime — "
+                    f"выключите instance «{item.get('name', instance_id)}»",
+                    tools_href,
+                )
+            )
         address_has_credential = any(
             str(address.get("toolId") or "") == tool_type and address.get("credentialId")
             for address in (agent.get("world") or {}).get("addresses") or []

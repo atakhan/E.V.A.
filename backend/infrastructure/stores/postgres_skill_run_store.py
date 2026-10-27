@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -132,6 +134,45 @@ class PostgresSkillRunStore(SkillRunStore):
             ).all()
         )
 
+    def list_agent_events(self, agent_slug: str, limit: int) -> list[tuple[SkillRunEventRow, str]]:
+        rows = self.session.execute(
+            select(SkillRunEventRow, SkillRunRow.skill_id)
+            .join(SkillRunRow, SkillRunRow.id == SkillRunEventRow.run_id)
+            .where(SkillRunRow.agent_slug == agent_slug)
+            .order_by(SkillRunEventRow.created_at.desc())
+            .limit(limit)
+        ).all()
+        return [(event, skill_id) for event, skill_id in rows]
+
+    def list_memory_runs(self, agent_slug: str, limit: int) -> list[SkillRunRow]:
+        """Active runs first (most recently updated), then recent finished ones, up to `limit`."""
+        active = list(
+            self.session.scalars(
+                select(SkillRunRow)
+                .where(
+                    SkillRunRow.agent_slug == agent_slug,
+                    SkillRunRow.status.in_(ACTIVE_STATUSES),
+                )
+                .order_by(SkillRunRow.updated_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        remaining = limit - len(active)
+        if remaining <= 0:
+            return active
+        finished = list(
+            self.session.scalars(
+                select(SkillRunRow)
+                .where(
+                    SkillRunRow.agent_slug == agent_slug,
+                    SkillRunRow.status.not_in(ACTIVE_STATUSES),
+                )
+                .order_by(SkillRunRow.updated_at.desc())
+                .limit(remaining)
+            ).all()
+        )
+        return active + finished
+
     def cancel_active_runs_for_agent(self, agent_slug: str) -> int:
         rows = self.session.scalars(
             select(SkillRunRow.id).where(
@@ -246,21 +287,23 @@ class PostgresSkillRunStore(SkillRunStore):
         totals.completed_24h = int(completed_24h or 0)
 
         latest_pubs = self.session.execute(
-            select(AgentRow.slug, AgentPublicationRow.version)
+            select(AgentRow.slug, AgentPublicationRow.version, AgentPublicationRow.published_at)
             .join(AgentPublicationRow, AgentPublicationRow.agent_id == AgentRow.id)
             .order_by(AgentPublicationRow.published_at.desc())
         ).all()
-        latest_by_slug: dict[str, str] = {}
-        for slug, version in latest_pubs:
+        latest_by_slug: dict[str, tuple[str, datetime]] = {}
+        for slug, version, published_at in latest_pubs:
             if slug not in active_slugs:
                 continue
             if slug not in latest_by_slug:
-                latest_by_slug[slug] = version
+                latest_by_slug[slug] = (version, published_at)
 
         for slug in set(agents.keys()) | set(latest_by_slug.keys()):
             entry = agents.setdefault(slug, AgentRunCounts(agent_slug=slug))
-            entry.latest_publication_version = latest_by_slug.get(slug)
-            entry.is_published = slug in latest_by_slug
+            latest = latest_by_slug.get(slug)
+            entry.latest_publication_version = latest[0] if latest else None
+            entry.latest_published_at = latest[1] if latest else None
+            entry.is_published = latest is not None
 
         return sorted(agents.values(), key=lambda item: item.agent_slug), totals
 
@@ -288,14 +331,15 @@ class PostgresSkillRunStore(SkillRunStore):
             elif status == SkillRunStatus.cancelled.value:
                 entry.cancelled = count
 
-        latest = self.session.scalar(
-            select(AgentPublicationRow.version)
+        latest = self.session.execute(
+            select(AgentPublicationRow.version, AgentPublicationRow.published_at)
             .join(AgentRow, AgentRow.id == AgentPublicationRow.agent_id)
             .where(AgentRow.slug == agent_slug)
             .order_by(AgentPublicationRow.published_at.desc())
             .limit(1)
-        )
-        entry.latest_publication_version = latest
+        ).first()
+        entry.latest_publication_version = latest.version if latest else None
+        entry.latest_published_at = latest.published_at if latest else None
         entry.is_published = latest is not None
         return entry
 

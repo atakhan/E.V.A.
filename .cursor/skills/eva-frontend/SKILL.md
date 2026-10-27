@@ -16,8 +16,9 @@ Stack: Vue 3 + TypeScript + Vue Router + Tailwind v4 + daisyUI. Path alias `@/` 
 
 ```
 features/
-├── agents/       # CRUD, overview, validateAgent, world addresses
-├── constructor/  # docking table: addresses, world channels, agent, skills
+├── agents/       # CRUD, overview, validateAgent, world addresses, agentDependencies
+├── constructor/  # docking table: addresses, channels, agent status, skills, plugins below, memory above
+├── memory/       # read-only event history and run working state (table zone + /:slug/memory)
 ├── skills/       # FSM canvas editor
 ├── actions/      # Action catalog + recipes
 ├── tools/        # Tool registry + bindings; library splits world vs action tools
@@ -25,7 +26,9 @@ features/
 └── workspace/    # floating section menu
 ```
 
-World-axis contract: `docs/03-architecture/constructor-world-axis.md`.
+Table contract (world axis, plugins, links, agent status): `docs/03-architecture/constructor-world-axis.md`.
+
+Skill → Action → tool links are derived, never stored: `agents/utils/agentDependencies.ts` (`skillDependencies`, `toolUsage`). Reuse it instead of walking recipes again. Catalog types with `implemented: false` cannot be added or enabled (`isToolImplemented`).
 
 ## Data model
 
@@ -58,7 +61,7 @@ Platform contracts: `.cursor/skills/eva-specs/SKILL.md` (Actions, Skills, Events
 
 ## Routing
 
-`/agents` · `/tools` · `/runtime` · `/:slug/constructor|overview|skills|actions|tools|logs|runtime` · `/:slug/runtime/simulate` · `/:slug/runtime/runs/:runId`
+`/agents` · `/tools` · `/runtime` · `/:slug/constructor|overview|skills|actions|tools|logs|memory|runtime` · `/:slug/runtime/simulate` · `/:slug/runtime/runs/:runId`
 
 ## Dev
 

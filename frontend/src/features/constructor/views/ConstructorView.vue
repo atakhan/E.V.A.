@@ -1,25 +1,36 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, ref, toRef, useTemplateRef, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAgents } from "@/features/agents/composables/useAgents";
+import { usePluginConnections } from "@/features/agents/composables/usePluginConnections";
 import { useWorldConnections } from "@/features/agents/composables/useWorldConnections";
 import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
+import { skillDependencies, toolUsage } from "@/features/agents/utils/agentDependencies";
 import { evaluateWorldAddress } from "@/features/agents/utils/evaluateWorldAddress";
 import AgentHubCard, {
   type AgentHubPhase,
 } from "@/features/constructor/components/AgentHubCard.vue";
 import InfiniteCanvas, {
+  type CanvasHighlight,
+  type CanvasPlugin,
   type CanvasWorldAddress,
   type CanvasWorldKind,
 } from "@/features/constructor/components/InfiniteCanvas.vue";
 import AddressConfigPanel from "@/features/constructor/components/AddressConfigPanel.vue";
 import KindConnectorPanel from "@/features/constructor/components/KindConnectorPanel.vue";
-import WorldKindCatalogSheet from "@/features/constructor/components/WorldKindCatalogSheet.vue";
+import PluginPanel from "@/features/constructor/components/PluginPanel.vue";
+import ToolCatalogSheet from "@/features/constructor/components/ToolCatalogSheet.vue";
 import SkillDetailPanel from "@/features/constructor/components/SkillDetailPanel.vue";
 import SkillPickerDialog from "@/features/constructor/components/SkillPickerDialog.vue";
+import { useAgentHubStatus } from "@/features/constructor/composables/useAgentHubStatus";
 import { useConstructor } from "@/features/constructor/composables/useConstructor";
+import { describeMemoryCard } from "@/features/memory/utils/memoryCard";
+import MemoryPanel from "@/features/memory/components/MemoryPanel.vue";
+import { useAgentMemory } from "@/features/memory/composables/useAgentMemory";
 import {
+  addPluginSlotForCount,
   layoutWorldKindColumn,
+  pluginNodeCenter,
   WORLD_ADDRESS_X,
   WORLD_KIND_CLUSTER_GAP,
   WORLD_KIND_HEIGHT,
@@ -36,7 +47,9 @@ const props = defineProps<{
 const router = useRouter();
 const { updateAgent } = useAgents();
 const { createSkill, getSkill, deleteSkill } = useSkills();
-const { nodes, placeSkill, addSkillSlot } = useConstructor(() => props.agentSlug);
+const { nodes, placeSkill, addSkillSlot, findNodeBySkillId } = useConstructor(
+  () => props.agentSlug,
+);
 const {
   worldTools,
   connectedToolIds,
@@ -49,12 +62,33 @@ const {
   getAddress,
   addressesFor,
 } = useWorldConnections(() => props.agentSlug);
+const {
+  pluginTools,
+  pluginInstances,
+  connectedPluginTypeIds,
+  pluginStatus,
+  connectPlugin,
+  disconnectPlugin,
+} = usePluginConnections(() => props.agentSlug);
+const {
+  status: hubStatus,
+  loading: hubStatusLoading,
+  error: hubStatusError,
+} = useAgentHubStatus(toRef(props, "agentSlug"));
+const {
+  memory,
+  loading: memoryLoading,
+  error: memoryError,
+} = useAgentMemory(toRef(props, "agentSlug"));
 
 const pickerOpen = ref(false);
 const kindCatalogOpen = ref(false);
+const pluginCatalogOpen = ref(false);
 const selectedNodeId = ref<string | null>(null);
 const selectedKindToolId = ref<string | null>(null);
 const selectedAddressId = ref<string | null>(null);
+const selectedPluginId = ref<string | null>(null);
+const memoryOpen = ref(false);
 const agentPhase = ref<AgentHubPhase>("circle");
 const viewport = ref({ panX: 0, panY: 0, zoom: 1 });
 const canvasRef = useTemplateRef<InstanceType<typeof InfiniteCanvas>>("canvas");
@@ -67,6 +101,10 @@ const selectedKindLink = computed(() => {
   if (!selectedKindToolId.value) return null;
   return linkStatus(selectedKindToolId.value);
 });
+
+const selectedPluginLink = computed(() =>
+  selectedPluginId.value ? pluginStatus(selectedPluginId.value) : null,
+);
 
 const selectedAddress = computed(() =>
   selectedAddressId.value ? getAddress(selectedAddressId.value) ?? null : null,
@@ -109,6 +147,12 @@ const selectedSkill = computed(() => {
   const node = nodes.value.find((item) => item.id === selectedNodeId.value);
   if (!node) return null;
   return getSkill(props.agentSlug, node.skillId) ?? null;
+});
+
+const selectedSkillDependencies = computed(() => {
+  const current = agent.value;
+  const skill = selectedSkill.value;
+  return current && skill ? skillDependencies(current, skill) : null;
 });
 
 const connectedWorldTools = computed(() =>
@@ -176,14 +220,81 @@ const canvasWorldAddresses = computed((): CanvasWorldAddress[] => {
   return items;
 });
 
+const canvasPlugins = computed((): CanvasPlugin[] =>
+  pluginInstances.value.map((instance, index) => {
+    const evaluation = pluginStatus(instance.id);
+    const center = pluginNodeCenter(index);
+    return {
+      instanceId: instance.id,
+      typeId: instance.toolId,
+      name: instance.name,
+      status: evaluation.status,
+      reason: evaluation.reason,
+      x: center.x,
+      y: center.y,
+    };
+  }),
+);
+
+const addPluginSlot = computed(() => addPluginSlotForCount(pluginInstances.value.length));
+
+const memoryLines = computed(() =>
+  describeMemoryCard(memory.value, {
+    loading: memoryLoading.value,
+    failed: Boolean(memoryError.value),
+  }),
+);
+
+const highlight = computed((): CanvasHighlight | null => {
+  const current = agent.value;
+  if (!current || agentPhase.value === "details") return null;
+
+  const skill = selectedSkill.value;
+  const deps = selectedSkillDependencies.value;
+  if (skill && deps) {
+    return {
+      skillIds: [skill.id],
+      kindToolIds: deps.channels.map((item) => item.typeId),
+      pluginIds: deps.plugins.map((item) => item.instanceId),
+    };
+  }
+
+  if (selectedPluginId.value) {
+    const usage = toolUsage(current, { kind: "instance", instanceId: selectedPluginId.value });
+    return {
+      skillIds: usage.skills.map((item) => item.skill.id),
+      kindToolIds: [],
+      pluginIds: [selectedPluginId.value],
+    };
+  }
+
+  if (selectedKindToolId.value) {
+    const usage = toolUsage(current, { kind: "type", typeId: selectedKindToolId.value });
+    return {
+      skillIds: usage.skills.map((item) => item.skill.id),
+      kindToolIds: [selectedKindToolId.value],
+      pluginIds: [],
+    };
+  }
+
+  return null;
+});
+
+function clearSelection() {
+  selectedNodeId.value = null;
+  selectedKindToolId.value = null;
+  selectedAddressId.value = null;
+  selectedPluginId.value = null;
+  memoryOpen.value = false;
+}
+
 function openPicker() {
   pickerOpen.value = true;
 }
 
 function openKindConnector(toolId: string) {
+  clearSelection();
   selectedKindToolId.value = toolId;
-  selectedAddressId.value = null;
-  selectedNodeId.value = null;
   if (agentPhase.value !== "details") agentPhase.value = "circle";
 }
 
@@ -192,9 +303,8 @@ function closeKindConnector() {
 }
 
 function openAddressConfig(addressId: string) {
+  clearSelection();
   selectedAddressId.value = addressId;
-  selectedKindToolId.value = null;
-  selectedNodeId.value = null;
   if (agentPhase.value !== "details") agentPhase.value = "circle";
 }
 
@@ -202,14 +312,38 @@ function closeAddressConfig() {
   selectedAddressId.value = null;
 }
 
+function openPlugin(instanceId: string) {
+  clearSelection();
+  selectedPluginId.value = instanceId;
+  if (agentPhase.value !== "details") agentPhase.value = "circle";
+}
+
+function closePlugin() {
+  selectedPluginId.value = null;
+}
+
+function openMemory() {
+  clearSelection();
+  memoryOpen.value = true;
+  if (agentPhase.value !== "details") agentPhase.value = "circle";
+}
+
+function closeMemory() {
+  memoryOpen.value = false;
+}
+
 async function focusNode(nodeId: string) {
+  clearSelection();
   selectedNodeId.value = nodeId;
-  selectedKindToolId.value = null;
-  selectedAddressId.value = null;
   agentPhase.value = "circle";
   await nextTick();
   const node = nodes.value.find((item) => item.id === nodeId);
   if (node) canvasRef.value?.centerOnNode(node);
+}
+
+function focusSkill(skillId: string) {
+  const node = findNodeBySkillId(skillId);
+  if (node) void focusNode(node.id);
 }
 
 function onSelectSkill(skillId: string) {
@@ -232,16 +366,13 @@ async function onCreateSkill() {
 }
 
 function onSelectNode(nodeId: string) {
+  clearSelection();
   selectedNodeId.value = nodeId;
-  selectedKindToolId.value = null;
-  selectedAddressId.value = null;
   if (agentPhase.value !== "details") agentPhase.value = "circle";
 }
 
 function onClearSelection() {
-  selectedNodeId.value = null;
-  selectedKindToolId.value = null;
-  selectedAddressId.value = null;
+  clearSelection();
   if (agentPhase.value === "card") agentPhase.value = "circle";
 }
 
@@ -250,9 +381,7 @@ function onViewport(payload: { panX: number; panY: number; zoom: number }) {
 }
 
 function openAgentCard() {
-  selectedNodeId.value = null;
-  selectedKindToolId.value = null;
-  selectedAddressId.value = null;
+  clearSelection();
   agentPhase.value = "card";
 }
 
@@ -261,9 +390,7 @@ function closeAgentCard() {
 }
 
 function openAgentDetails() {
-  selectedNodeId.value = null;
-  selectedKindToolId.value = null;
-  selectedAddressId.value = null;
+  clearSelection();
   agentPhase.value = "details";
 }
 
@@ -308,6 +435,28 @@ function onDisconnectKind(toolId: string) {
   if (selectedAddress.value?.toolId === toolId) closeAddressConfig();
 }
 
+function onInsertPlugin(typeId: string) {
+  const result = connectPlugin(typeId);
+  if (!result.ok || !result.instanceId) return;
+  pluginCatalogOpen.value = false;
+  openPlugin(result.instanceId);
+}
+
+function onDisconnectPlugin(instanceId: string) {
+  const current = agent.value;
+  if (!current) return;
+  const name = current.tools.find((tool) => tool.id === instanceId)?.name ?? instanceId;
+  const callers = toolUsage(current, { kind: "instance", instanceId }).actions.map(
+    (item) => item.action.name,
+  );
+  const warning = callers.length
+    ? `\n\nЕго вызывают: ${callers.join(", ")}. Без плагина агент не опубликуется.`
+    : "";
+  if (!confirm(`Отключить плагин «${name}»?${warning}`)) return;
+  disconnectPlugin(instanceId);
+  if (selectedPluginId.value === instanceId) closePlugin();
+}
+
 function onAddAddress(toolId: string) {
   const address = addAddress(toolId, toolId === "web_client" ? "Приложение" : undefined);
   if (address) openAddressConfig(address.id);
@@ -340,10 +489,17 @@ function onUpdateAddress(
       :selected-node-id="selectedNodeId"
       :selected-kind-tool-id="selectedKindToolId"
       :selected-address-id="selectedAddressId"
+      :selected-plugin-id="selectedPluginId"
       :add-skill-slot="addSkillSlot"
       :add-kind-slot="addKindSlot"
+      :add-plugin-slot="addPluginSlot"
       :world-kinds="canvasWorldKinds"
       :world-addresses="canvasWorldAddresses"
+      :plugins="canvasPlugins"
+      :highlight="highlight"
+      :memory-selected="memoryOpen"
+      :memory-history-line="memoryLines.historyLine"
+      :memory-state-line="memoryLines.stateLine"
       @create-skill="openPicker"
       @select-node="onSelectNode"
       @clear-selection="onClearSelection"
@@ -354,12 +510,19 @@ function onUpdateAddress(
       @add-address="onAddAddress"
       @select-address="onSelectAddress"
       @remove-address="onRemoveAddress"
+      @add-plugin="pluginCatalogOpen = true"
+      @select-plugin="openPlugin"
+      @disconnect-plugin="onDisconnectPlugin"
+      @select-memory="openMemory"
     />
 
     <AgentHubCard
       v-if="agent"
       :phase="agentPhase"
       :agent="agent"
+      :status="hubStatus"
+      :status-loading="hubStatusLoading"
+      :status-error="hubStatusError"
       :pan-x="viewport.panX"
       :pan-y="viewport.panY"
       :zoom="viewport.zoom"
@@ -389,22 +552,63 @@ function onUpdateAddress(
       :status="selectedKindLink.status"
       :reason="selectedKindLink.reason"
       @close="closeKindConnector"
+      @select-skill="focusSkill"
+    />
+
+    <PluginPanel
+      v-else-if="selectedPluginId && selectedPluginLink && agentPhase !== 'details'"
+      :agent-slug="agentSlug"
+      :instance-id="selectedPluginId"
+      :status="selectedPluginLink.status"
+      :reason="selectedPluginLink.reason"
+      @close="closePlugin"
+      @disconnect="onDisconnectPlugin(selectedPluginId)"
+      @select-skill="focusSkill"
     />
 
     <SkillDetailPanel
-      v-else-if="selectedSkill && agentPhase !== 'details'"
+      v-else-if="selectedSkill && selectedSkillDependencies && agentPhase !== 'details'"
+      :agent-slug="agentSlug"
       :skill="selectedSkill"
+      :dependencies="selectedSkillDependencies"
       @close="onClearSelection"
       @open-editor="openSkillEditor"
       @remove="deleteSelectedSkill"
+      @select-kind="openKindConnector"
+      @select-plugin="openPlugin"
     />
 
-    <WorldKindCatalogSheet
+    <MemoryPanel
+      v-else-if="memoryOpen && agentPhase !== 'details'"
+      :agent-slug="agentSlug"
+      :memory="memory"
+      :loading="memoryLoading"
+      :error="memoryError"
+      @close="closeMemory"
+    />
+
+    <ToolCatalogSheet
       :open="kindCatalogOpen"
-      :tools="worldTools.map((tool) => ({ id: tool.id, name: tool.name, description: tool.description }))"
+      eyebrow="Внешний мир"
+      title="Добавить канал"
+      description="Каналы связи с внешним миром, доступные в E.V.A. Выбранный канал сразу встанет на стол. Подключение настраивается по кабелю."
+      empty-text="В E.V.A. пока нет плагинов внешнего мира."
+      :tools="worldTools"
       :connected-ids="connectedToolIds"
       @close="kindCatalogOpen = false"
       @pick="onInsertKind"
+    />
+
+    <ToolCatalogSheet
+      :open="pluginCatalogOpen"
+      eyebrow="Плагины"
+      title="Добавить плагин"
+      description="Инструменты, которые вызывают Actions агента: модели, обработка текста и другое. Плагин встанет под агентом, а навыки будут пользоваться им через Actions."
+      empty-text="В каталоге E.V.A. пока нет плагинов."
+      :tools="pluginTools"
+      :connected-ids="connectedPluginTypeIds"
+      @close="pluginCatalogOpen = false"
+      @pick="onInsertPlugin"
     />
 
     <SkillPickerDialog

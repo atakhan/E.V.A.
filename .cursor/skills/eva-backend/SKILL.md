@@ -66,6 +66,12 @@ from tools.web_client import WebClientTool, WebClientHttp, parse_web_client_bind
 
 When adding a new tool: create `tools/<name>/manifest.py` + `tool.py`, register in `builtin_tools.py` aggregator and `definition_loader.py`. Frontend catalog loads from `GET /api/tools/catalog`.
 
+A manifest without a runtime builder carries `"implemented": False` (see `definition/catalog/manifests/stubs.py`). `tests/test_catalog_completeness.py` fails when the flag and `definition_loader` disagree; validation reports an enabled unimplemented instance as `unimplemented_tool`.
+
+What counts as a draft change against the latest publication is `_RUNTIME_PARTS` in `definition/services/agent_service.py`. A new document field that runtime reads from the publication belongs there.
+
+`visible_run_memory` in `runtime/skill_run_query.py` is what a person may read from a run: `params` (lifted from `vars._skill_params`) and `vars` without keys that start with `_`. `GET /api/runtime/runs/{id}` and `GET /api/runtime/agents/{slug}/memory` both use it.
+
 ## Runtime model
 
 ```text

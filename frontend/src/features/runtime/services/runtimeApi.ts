@@ -1,4 +1,5 @@
 import type {
+  AgentMemory,
   AgentPublicationSummary,
   AgentRuntimeSummary,
   RuntimeMetrics,
@@ -85,6 +86,10 @@ export async function getRuntimeSummary(): Promise<RuntimeSummary> {
 
 export async function getAgentRuntimeSummary(slug: string): Promise<AgentRuntimeSummary> {
   return request(`/runtime/agents/${encodeURIComponent(slug)}/summary`);
+}
+
+export async function getAgentMemory(slug: string): Promise<AgentMemory> {
+  return request(`/runtime/agents/${encodeURIComponent(slug)}/memory`);
 }
 
 export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {

@@ -45,6 +45,8 @@ export interface ToolDefinition {
   description: string;
   /** Opens a bidirectional place in the environment (constructor world axis). */
   world?: boolean;
+  /** `false` — manifest only: runtime has no implementation, an enabled instance cannot execute. */
+  implemented?: boolean;
   commands: ToolCommandDef[];
   events: ToolEventDef[];
   states: string[];

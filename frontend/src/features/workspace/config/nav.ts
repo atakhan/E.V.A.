@@ -44,6 +44,12 @@ export const workspaceSections: WorkspaceSection[] = [
     description: "История вызовов Tools: команды, запросы, ответы и ошибки.",
   },
   {
+    id: "memory",
+    slug: "memory",
+    title: "Память",
+    description: "История событий агента и рабочее состояние его прогонов.",
+  },
+  {
     id: "runtime",
     slug: "runtime",
     title: "Runtime",

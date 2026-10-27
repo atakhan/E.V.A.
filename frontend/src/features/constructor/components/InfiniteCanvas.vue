@@ -3,6 +3,15 @@ import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch 
 import type { WorldLinkStatus } from "@/features/agents/utils/evaluateWorldLink";
 import {
   ADD_SKILL_SLOT,
+  ADD_SLOT_HEIGHT,
+  addPluginSlotForCount,
+  AGENT_SIZE,
+  MEMORY_CENTER_Y,
+  MEMORY_NODE_HEIGHT,
+  MEMORY_NODE_WIDTH,
+  MEMORY_X,
+  PLUGIN_NODE_HEIGHT,
+  PLUGIN_NODE_WIDTH,
   WORLD_ADDRESS_HEIGHT,
   WORLD_ADDRESS_WIDTH,
   WORLD_KIND_HEIGHT,
@@ -11,6 +20,23 @@ import {
   WORLD_PORT_SIZE,
   type ConstructorSkillNode,
 } from "@/features/constructor/types/constructor";
+
+export interface CanvasPlugin {
+  instanceId: string;
+  typeId: string;
+  name: string;
+  status: WorldLinkStatus;
+  reason: string;
+  x: number;
+  y: number;
+}
+
+/** What stays in focus while something is selected; everything else is dimmed. */
+export interface CanvasHighlight {
+  skillIds: string[];
+  kindToolIds: string[];
+  pluginIds: string[];
+}
 
 export interface CanvasWorldKind {
   toolId: string;
@@ -42,6 +68,13 @@ const props = withDefaults(
     addKindSlot?: { x: number; y: number };
     worldKinds?: CanvasWorldKind[];
     worldAddresses?: CanvasWorldAddress[];
+    plugins?: CanvasPlugin[];
+    addPluginSlot?: { x: number; y: number };
+    selectedPluginId?: string | null;
+    memorySelected?: boolean;
+    memoryHistoryLine?: string;
+    memoryStateLine?: string;
+    highlight?: CanvasHighlight | null;
   }>(),
   {
     nodes: () => [],
@@ -52,6 +85,13 @@ const props = withDefaults(
     addKindSlot: () => ({ x: -300, y: 0 }),
     worldKinds: () => [],
     worldAddresses: () => [],
+    plugins: () => [],
+    addPluginSlot: () => addPluginSlotForCount(0),
+    selectedPluginId: null,
+    memorySelected: false,
+    memoryHistoryLine: "",
+    memoryStateLine: "",
+    highlight: null,
   },
 );
 
@@ -66,12 +106,16 @@ const emit = defineEmits<{
   addAddress: [toolId: string];
   removeAddress: [addressId: string];
   selectAddress: [addressId: string];
+  selectPlugin: [instanceId: string];
+  addPlugin: [];
+  disconnectPlugin: [instanceId: string];
+  selectMemory: [];
 }>();
 
 const GRID_SIZE = 20;
-const AGENT_SIZE = 88;
 const ADD_BTN_WIDTH = 168;
-const ADD_BTN_HEIGHT = 48;
+const ADD_BTN_HEIGHT = ADD_SLOT_HEIGHT;
+const AGENT_RIM = AGENT_SIZE / 2 + 4;
 
 const panX = ref(0);
 const panY = ref(0);
@@ -118,6 +162,46 @@ const addButtonStyle = computed(() => ({
   height: `${ADD_BTN_HEIGHT}px`,
 }));
 
+const addPluginButtonStyle = computed(() => ({
+  left: `${props.addPluginSlot.x - PLUGIN_NODE_WIDTH / 2}px`,
+  top: `${props.addPluginSlot.y - ADD_BTN_HEIGHT / 2}px`,
+  width: `${PLUGIN_NODE_WIDTH}px`,
+  height: `${ADD_BTN_HEIGHT}px`,
+}));
+
+/** Plugins hang on one bus under the agent: solid through plugins, dashed to the add slot. */
+const pluginBus = computed(() => {
+  const x = props.addPluginSlot.x;
+  const last = props.plugins[props.plugins.length - 1];
+  const addTop = props.addPluginSlot.y - ADD_BTN_HEIGHT / 2;
+  if (!last) return { solid: null, dashed: `M ${x} ${AGENT_RIM} L ${x} ${addTop}` };
+  return {
+    solid: `M ${x} ${AGENT_RIM} L ${x} ${last.y}`,
+    dashed: `M ${x} ${last.y + PLUGIN_NODE_HEIGHT / 2} L ${x} ${addTop}`,
+  };
+});
+
+function dimSkill(skillId: string): boolean {
+  return props.highlight !== null && !props.highlight.skillIds.includes(skillId);
+}
+
+function dimKind(toolId: string): boolean {
+  return props.highlight !== null && !props.highlight.kindToolIds.includes(toolId);
+}
+
+function dimPlugin(instanceId: string): boolean {
+  return props.highlight !== null && !props.highlight.pluginIds.includes(instanceId);
+}
+
+function dimMemory(): boolean {
+  return props.highlight !== null;
+}
+
+const memoryBus = computed(() => {
+  const bottom = MEMORY_CENTER_Y + MEMORY_NODE_HEIGHT / 2;
+  return `M ${MEMORY_X} ${-AGENT_RIM} L ${MEMORY_X} ${bottom}`;
+});
+
 function curvePath(toX: number, toY: number): string {
   const len = Math.hypot(toX, toY) || 1;
   const rim = AGENT_SIZE / 2 + 4;
@@ -152,6 +236,7 @@ const addSkillPath = computed(() => curvePath(props.addSkillSlot.x, props.addSki
 const skillPaths = computed(() =>
   props.nodes.map((node) => ({
     id: node.id,
+    skillId: node.skillId,
     d: curvePath(node.x + node.width / 2, node.y + node.height / 2),
   })),
 );
@@ -174,12 +259,13 @@ const addressLinks = computed(() => {
       if (!kind?.connected) return null;
       return {
         id: address.id,
+        toolId: address.toolId,
         d: `M ${address.x} ${address.y} L ${kind.x} ${kind.y}`,
         status: address.status,
         reason: address.reason,
       };
     })
-    .filter((item): item is { id: string; d: string; status: WorldLinkStatus; reason: string } => item !== null);
+    .filter((item) => item !== null);
 });
 
 function clamp(value: number, min: number, max: number): number {
@@ -306,7 +392,8 @@ defineExpose({
           :key="`addr-${link.id}`"
           :d="link.d"
           fill="none"
-          :class="cableClass(link.status)"
+          class="transition-opacity duration-200"
+          :class="[cableClass(link.status), dimKind(link.toolId) ? 'opacity-25' : '']"
           stroke-width="2.5"
           stroke-linecap="round"
         >
@@ -329,17 +416,18 @@ defineExpose({
           :key="`cable-${cable.id}`"
           :d="cable.d"
           fill="none"
-          :class="cableClass(cable.status)"
+          :class="[cableClass(cable.status), dimKind(cable.id) ? 'opacity-25' : '']"
           stroke-width="3"
           stroke-linecap="round"
-          class="pointer-events-none"
+          class="pointer-events-none transition-opacity duration-200"
         />
         <path
           v-for="link in skillPaths"
           :key="link.id"
           :d="link.d"
           fill="none"
-          class="stroke-base-content/25"
+          class="stroke-base-content/25 transition-opacity duration-200"
+          :class="dimSkill(link.skillId) ? 'opacity-30' : ''"
           stroke-width="2"
           stroke-dasharray="6 6"
           stroke-linecap="round"
@@ -350,6 +438,30 @@ defineExpose({
           class="stroke-base-content/35"
           stroke-width="2"
           stroke-dasharray="6 6"
+          stroke-linecap="round"
+        />
+        <path
+          v-if="pluginBus.solid"
+          :d="pluginBus.solid"
+          fill="none"
+          class="stroke-base-content/30"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+        <path
+          :d="pluginBus.dashed"
+          fill="none"
+          class="stroke-base-content/35"
+          stroke-width="2"
+          stroke-dasharray="6 6"
+          stroke-linecap="round"
+        />
+        <path
+          :d="memoryBus"
+          fill="none"
+          class="stroke-base-content/30 transition-opacity duration-200"
+          :class="dimMemory() ? 'opacity-25' : ''"
+          stroke-width="2.5"
           stroke-linecap="round"
         />
       </svg>
@@ -381,7 +493,8 @@ defineExpose({
         v-for="kind in worldKinds"
         :key="kind.toolId"
         data-canvas-ui
-        class="pointer-events-auto absolute"
+        class="pointer-events-auto absolute transition-opacity duration-200"
+        :class="dimKind(kind.toolId) ? 'opacity-35' : ''"
         :style="{
           left: `${kind.x - WORLD_KIND_WIDTH / 2}px`,
           top: `${kind.y - WORLD_KIND_HEIGHT / 2}px`,
@@ -436,10 +549,11 @@ defineExpose({
         v-for="address in worldAddresses"
         :key="address.id"
         data-canvas-ui
-        class="group pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-xl border-2 bg-base-100/90 px-2 text-center text-[11px] font-medium shadow-sm"
+        class="group pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-xl border-2 bg-base-100/90 px-2 text-center text-[11px] font-medium shadow-sm transition-opacity duration-200"
         :class="[
           addressBorderClass(address.status),
           selectedAddressId === address.id ? 'ring-2 ring-primary/40' : '',
+          dimKind(address.toolId) ? 'opacity-35' : '',
         ]"
         :style="{
           left: `${address.x - WORLD_ADDRESS_WIDTH / 2}px`,
@@ -462,6 +576,92 @@ defineExpose({
           ✕
         </button>
       </div>
+
+      <!-- Memory above the agent -->
+      <button
+        type="button"
+        data-canvas-ui
+        class="pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
+        :class="[
+          memorySelected ? 'ring-2 ring-primary/40' : '',
+          dimMemory() ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${MEMORY_X - MEMORY_NODE_WIDTH / 2}px`,
+          top: `${MEMORY_CENTER_Y - MEMORY_NODE_HEIGHT / 2}px`,
+          width: `${MEMORY_NODE_WIDTH}px`,
+          height: `${MEMORY_NODE_HEIGHT}px`,
+        }"
+        :title="[memoryHistoryLine, memoryStateLine].filter(Boolean).join(' · ')"
+        @pointerdown.stop
+        @click="emit('selectMemory')"
+      >
+        <span class="w-full truncate text-xs font-semibold">Память</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+          {{ memoryHistoryLine }}
+        </span>
+        <span v-if="memoryStateLine" class="w-full truncate text-[10px] text-base-content/55">
+          {{ memoryStateLine }}
+        </span>
+      </button>
+
+      <!-- Plugins (non-world tools) under the agent -->
+      <div
+        v-for="plugin in plugins"
+        :key="plugin.instanceId"
+        data-canvas-ui
+        class="group pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
+        :class="[
+          addressBorderClass(plugin.status),
+          selectedPluginId === plugin.instanceId ? 'ring-2 ring-primary/40' : '',
+          dimPlugin(plugin.instanceId) ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${plugin.x - PLUGIN_NODE_WIDTH / 2}px`,
+          top: `${plugin.y - PLUGIN_NODE_HEIGHT / 2}px`,
+          width: `${PLUGIN_NODE_WIDTH}px`,
+          height: `${PLUGIN_NODE_HEIGHT}px`,
+        }"
+        :title="`${plugin.reason} · клик — настроить плагин`"
+        @pointerdown.stop
+        @click="emit('selectPlugin', plugin.instanceId)"
+      >
+        <span class="w-full truncate text-xs font-semibold">{{ plugin.name }}</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/45">
+          {{ plugin.typeId }}
+        </span>
+        <button
+          type="button"
+          class="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-base-300 bg-base-100 text-[10px] text-base-content/45 opacity-0 shadow-sm transition hover:border-error/50 hover:text-error group-hover:opacity-100"
+          title="Отключить плагин"
+          aria-label="Отключить плагин"
+          @click.stop="emit('disconnectPlugin', plugin.instanceId)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <button
+        type="button"
+        data-canvas-ui
+        class="pointer-events-auto absolute flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-base-content/35 bg-base-100/40 text-sm font-medium text-base-content/70 backdrop-blur-sm transition hover:border-primary/60 hover:bg-base-100/80 hover:text-base-content"
+        :style="addPluginButtonStyle"
+        title="Добавить плагин"
+        @click="emit('addPlugin')"
+        @pointerdown.stop
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="size-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Добавить плагин
+      </button>
 
       <button
         type="button"
@@ -490,11 +690,12 @@ defineExpose({
         type="button"
         data-canvas-ui
         class="pointer-events-auto absolute flex items-center justify-center rounded-2xl border px-4 text-center text-sm font-semibold shadow-md transition"
-        :class="
+        :class="[
           selectedNodeId === node.id
             ? 'border-primary bg-base-100 text-base-content ring-2 ring-primary/40'
-            : 'border-base-300/70 bg-base-100/95 text-base-content hover:border-primary/50'
-        "
+            : 'border-base-300/70 bg-base-100/95 text-base-content hover:border-primary/50',
+          dimSkill(node.skillId) ? 'opacity-35' : '',
+        ]"
         :style="{
           left: `${node.x}px`,
           top: `${node.y}px`,

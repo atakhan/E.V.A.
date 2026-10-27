@@ -15,7 +15,7 @@ from infrastructure.stores.postgres_skill_run_store import PostgresSkillRunStore
 from infrastructure.stores.postgres_tool_execution_store import PostgresToolExecutionStore
 from runtime.definition_loader import load_runtime_catalog
 from runtime.runtime_factory import build_runtime_service
-from runtime.skill_run_query import SkillRunListFilters, run_detail_from_row
+from runtime.skill_run_query import SkillRunListFilters, run_detail_from_row, run_memory_from_row
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
 
@@ -384,4 +384,32 @@ def agent_runtime_summary(slug: str, session: Session = Depends(_db_session)) ->
     summary = store.summarize_agent(slug)
     if summary is None:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return {"ok": True, **summary.to_api()}
+    return {"ok": True, **summary.to_api(), "draftChanges": AgentService(session).draft_changes(slug)}
+
+
+@router.get("/agents/{slug}/memory")
+def agent_memory(
+    slug: str,
+    events_limit: int = Query(default=40, ge=1, le=200, alias="eventsLimit"),
+    runs_limit: int = Query(default=15, ge=1, le=100, alias="runsLimit"),
+    session: Session = Depends(_db_session),
+) -> dict[str, Any]:
+    """Event history and working state a person can read. Service keys stay on the server."""
+    store = PostgresSkillRunStore(session)
+    if store.summarize_agent(slug) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    events = [
+        {
+            "id": event.id,
+            "skillRunId": event.run_id,
+            "skillId": skill_id,
+            "eventType": event.event_type,
+            "payload": event.payload or {},
+            "fromState": event.from_state,
+            "toState": event.to_state,
+            "createdAt": event.created_at.isoformat(),
+        }
+        for event, skill_id in store.list_agent_events(slug, events_limit)
+    ]
+    runs = [run_memory_from_row(row) for row in store.list_memory_runs(slug, runs_limit)]
+    return {"ok": True, "events": events, "runs": runs}

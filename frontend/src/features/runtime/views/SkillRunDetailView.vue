@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import SkillRunActions from "@/features/runtime/components/SkillRunActions.vue";
 import SkillRunStatusBadge from "@/features/runtime/components/SkillRunStatusBadge.vue";
 import SkillRunTimeline from "@/features/runtime/components/SkillRunTimeline.vue";
+import MemoryRecord from "@/features/memory/components/MemoryRecord.vue";
 import { useSkillRunDetail } from "@/features/runtime/composables/useSkillRunDetail";
 import ToolLogFeed from "@/features/tools/components/ToolLogFeed.vue";
 import { agentRuntimePath } from "@/router/paths";
@@ -91,6 +92,14 @@ async function handleCancel() {
             >
               {{ state }}
             </span>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Рабочее состояние</p>
+          <div class="mt-2 space-y-3">
+            <MemoryRecord title="params" :record="run.params ?? {}" />
+            <MemoryRecord title="vars" :record="run.vars ?? {}" />
           </div>
         </div>
 

@@ -6,7 +6,7 @@
 
 | Доменная механика ([`02-domain/mechanics.md`](../02-domain/mechanics.md)) | Backend | Frontend |
 |---|---|---|
-| M1 Черновик/валидация/публикация | `definition/services/agent_service.py` (`upsert_draft`, `validate_draft`, `publish`, `_bump_patch`), `definition/validation/*`, `definition/behavior/materialize.py` | `features/agents/services/agentsStorage.ts`, `agentsApi.ts`, `utils/validateAgent.ts`, `features/skills/utils/validateSkill.ts`, `composables/useAgentOverview.ts` |
+| M1 Черновик/валидация/публикация | `definition/services/agent_service.py` (`upsert_draft`, `validate_draft`, `publish`, `_bump_patch`, `draft_changes`), `definition/validation/*`, `definition/behavior/materialize.py` | `features/agents/services/agentsStorage.ts`, `agentsApi.ts`, `utils/validateAgent.ts`, `features/skills/utils/validateSkill.ts`, `composables/useAgentOverview.ts` |
 | M2 Пин версии | `runtime/runtime_factory.py` (`resolve_publication`), `workers/runtime_worker.py` (`_pinned_version_for_event`), `SkillRun.skill_version` | — (cockpit показывает `publicationVersion`) |
 | M3 Маршрутизация | `runtime/runtime_service.py` (`_resolve_targets`, `_event_targets_run`), `runtime/skill_routing.py`, `runtime/skill_resolver.py` | — |
 | M4 Диспетчер | `runtime/dispatcher.py` (`classify_act`), применение: `RuntimeService._apply_dispatch`, `runtime_worker._prepared_event` | — |
@@ -199,7 +199,7 @@ poll_once() -> int ; run_poller(interval_sec=2.0)
 
 | Задача | Точки изменения |
 |---|---|
-| Новый тип Tool | `tools/<name>/{manifest,tool,__init__}.py` → `definition/catalog/builtin_tools.py` → `runtime/definition_loader._build_tool_for_binding` (+ credential helper в `tools/credential_resolver.py`, если нужен секрет; verify в `CredentialService`; `_CREDENTIAL_TYPES` в `validate_agent.py`) |
+| Новый тип Tool | `tools/<name>/{manifest,tool,__init__}.py` → `definition/catalog/builtin_tools.py` → `runtime/definition_loader._build_tool_for_binding` (+ credential helper в `tools/credential_resolver.py`, если нужен секрет; verify в `CredentialService`; `_CREDENTIAL_TYPES` в `validate_agent.py`). Манифест без реализации — `implemented: False` |
 | Новый встроенный тип события | `definition/catalog/builtin_events.py` (`BUILTIN_EVENT_TYPES`, фабрика) → при необходимости `frontend/src/features/skills/utils/skillEvents.ts` |
 | Новый оператор/функция guard | `runtime/guards.py` (`_GUARD_RE`, `evaluate_guard`, `build_guard_scope`) → `validate_skill.py` использует `is_valid_guard_syntax`; фронтенд `validateSkill.ts` дублирует проверку синтаксиса |
 | Новое правило валидации | `definition/validation/validate_agent.py` или `validate_skill.py` **и** `frontend/.../validateAgent.ts` / `validateSkill.ts` (два порта) |
@@ -208,3 +208,5 @@ poll_once() -> int ; run_poller(interval_sec=2.0)
 | Новый маршрут runtime API | `app/api/runtime.py` → `frontend/src/features/runtime/services/runtimeApi.ts` + типы в `types/runtime.ts` |
 | Новый раздел в workspace агента | `features/workspace/config/nav.ts` → `router/index.ts` → `router/paths.ts` |
 | Канал внешнего мира или адрес на столе | [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md); `features/constructor/`, `features/agents/types/world.ts`, `evaluateWorldLink.ts` |
+| Плагин на столе, связи навык → плагин | `features/agents/utils/agentDependencies.ts`, `evaluatePluginLink.ts`, `composables/usePluginConnections.ts`; `features/constructor/components/PluginPanel.vue`, `SkillDetailPanel.vue` |
+| Что считать изменением черновика относительно публикации | `_RUNTIME_PARTS` в `definition/services/agent_service.py` (`changed_runtime_parts`, `draft_changes`); центр стола: `features/constructor/utils/agentHubStatus.ts` |

@@ -1,12 +1,27 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { agentIconSrc, type Agent } from "@/features/agents/types/agent";
+import type { AgentHubStatus, AgentHubTone } from "@/features/constructor/utils/agentHubStatus";
+import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { agentOverviewPath, agentRuntimePath } from "@/router/paths";
 import { formatDateTime } from "@/shared/utils/formatDate";
 
 export type AgentHubPhase = "circle" | "card" | "details";
 
+const TONE_DOT: Record<AgentHubTone, string> = {
+  neutral: "bg-base-content/30",
+  success: "bg-success",
+  warning: "bg-warning",
+};
+
+const CARD_RUN_STATUSES = new Set(["running", "waiting", "error"]);
+
 const props = defineProps<{
   phase: AgentHubPhase;
+  /** `null` while loading or when runtime is unreachable. */
+  status: AgentHubStatus | null;
+  statusLoading?: boolean;
+  statusError?: string | null;
   agent: Pick<
     Agent,
     | "name"
@@ -91,10 +106,28 @@ watch(
 
 const iconSrc = computed(() => agentIconSrc(props.agent));
 const canResetIcon = computed(() => Boolean(props.agent.icon.trim()));
-const skillCount = computed(() => props.agent.skills.length);
-const actionCount = computed(() => props.agent.actions.length);
-const toolCount = computed(() => props.agent.tools.filter((tool) => tool.enabled).length);
-const canvasSkillCount = computed(() => props.agent.skills.length);
+const enabledTools = computed(() => props.agent.tools.filter((tool) => tool.enabled));
+const channelCount = computed(
+  () => enabledTools.value.filter((tool) => getToolDefinition(tool.toolId)?.world).length,
+);
+const configurationCounts = computed(() => [
+  { label: "Навыки", count: props.agent.skills.length },
+  { label: "Actions", count: props.agent.actions.length },
+  { label: "Каналы", count: channelCount.value },
+  { label: "Плагины", count: enabledTools.value.length - channelCount.value },
+]);
+const hasRunningRuns = computed(
+  () => props.status?.runs.some((run) => run.status === "running" && run.count > 0) ?? false,
+);
+const cardRunLine = computed(
+  () =>
+    props.status?.runs
+      .filter((run) => CARD_RUN_STATUSES.has(run.status))
+      .map((run) => `${run.label} ${run.count}`)
+      .join(" · ") ?? "",
+);
+const overviewHref = computed(() => agentOverviewPath(props.agent.slug));
+const runtimeHref = computed(() => agentRuntimePath(props.agent.slug));
 
 const showFullscreenLayout = computed(
   () => props.phase === "details" || flipHold.value === "expand",
@@ -464,50 +497,117 @@ function onKeydown(event: KeyboardEvent) {
               </p>
             </template>
 
-            <template v-if="shellMode === 'details'">
-              <p class="text-xs text-base-content/45">
-                Создан {{ formatDateTime(agent.createdAt) }} · обновлён
-                {{ formatDateTime(agent.updatedAt) }}
-              </p>
-              <dl class="mt-2 grid w-full max-w-xl grid-cols-2 gap-3 text-left sm:grid-cols-4">
-                <div class="rounded-2xl border border-base-300 bg-base-200/40 px-4 py-3">
-                  <dt class="text-xs text-base-content/50">Навыки</dt>
-                  <dd class="mt-1 text-xl font-semibold">{{ skillCount }}</dd>
-                </div>
-                <div class="rounded-2xl border border-base-300 bg-base-200/40 px-4 py-3">
-                  <dt class="text-xs text-base-content/50">На холсте</dt>
-                  <dd class="mt-1 text-xl font-semibold">{{ canvasSkillCount }}</dd>
-                </div>
-                <div class="rounded-2xl border border-base-300 bg-base-200/40 px-4 py-3">
-                  <dt class="text-xs text-base-content/50">Actions</dt>
-                  <dd class="mt-1 text-xl font-semibold">{{ actionCount }}</dd>
-                </div>
-                <div class="rounded-2xl border border-base-300 bg-base-200/40 px-4 py-3">
-                  <dt class="text-xs text-base-content/50">Tools</dt>
-                  <dd class="mt-1 text-xl font-semibold">{{ toolCount }}</dd>
-                </div>
-              </dl>
-            </template>
+            <div v-if="shellMode === 'details'" class="mt-2 grid w-full gap-4 text-left md:grid-cols-2">
+              <section class="rounded-2xl border border-base-300 p-4" aria-labelledby="agent-hub-configuration">
+                <h3 id="agent-hub-configuration" class="font-semibold">Конфигурация</h3>
+                <p class="text-xs text-base-content/50">Что задано</p>
+                <dl class="mt-3 grid grid-cols-2 gap-2">
+                  <div
+                    v-for="item in configurationCounts"
+                    :key="item.label"
+                    class="rounded-xl bg-base-200/50 px-3 py-2"
+                  >
+                    <dt class="text-xs text-base-content/50">{{ item.label }}</dt>
+                    <dd class="text-lg font-semibold">{{ item.count }}</dd>
+                  </div>
+                </dl>
+                <p class="mt-3 text-xs text-base-content/45">
+                  Создан {{ formatDateTime(agent.createdAt) }} · обновлён
+                  {{ formatDateTime(agent.updatedAt) }}
+                </p>
+              </section>
 
-            <button
-              v-if="shellMode === 'card' && !editing"
-              type="button"
-              class="btn btn-sm btn-primary mt-1 w-full"
-              @click="emit('openDetails')"
-            >
-              Подробнее
-            </button>
+              <section class="rounded-2xl border border-base-300 p-4" aria-labelledby="agent-hub-execution">
+                <h3 id="agent-hub-execution" class="font-semibold">Исполнение</h3>
+                <p class="text-xs text-base-content/50">Что происходит</p>
+                <template v-if="status">
+                  <p class="mt-3 flex items-center gap-2 text-sm font-medium">
+                    <span class="size-2 shrink-0 rounded-full" :class="TONE_DOT[status.tone]" aria-hidden="true" />
+                    {{ status.headline }}
+                  </p>
+                  <p v-if="status.publishedAt" class="mt-0.5 text-xs text-base-content/50">
+                    Опубликован {{ formatDateTime(status.publishedAt) }}
+                  </p>
+                  <p v-if="status.unpublishedParts.length" class="mt-1 text-xs text-warning">
+                    Изменено после публикации: {{ status.unpublishedParts.join(", ") }}
+                  </p>
+                  <p v-if="!status.published" class="mt-1 text-xs text-base-content/60">
+                    Runtime исполняет только опубликованную версию.
+                  </p>
+                  <dl class="mt-3 grid grid-cols-3 gap-2">
+                    <div v-for="run in status.runs" :key="run.status" class="rounded-xl bg-base-200/50 px-3 py-2">
+                      <dt class="text-xs text-base-content/50">{{ run.label }}</dt>
+                      <dd
+                        class="text-lg font-semibold"
+                        :class="run.status === 'error' && run.count ? 'text-error' : ''"
+                      >
+                        {{ run.count }}
+                      </dd>
+                    </div>
+                  </dl>
+                </template>
+                <p v-else class="mt-3 text-sm text-base-content/60">
+                  {{
+                    statusError
+                      ? `Нет связи с runtime: ${statusError}`
+                      : statusLoading
+                        ? "Загрузка…"
+                        : "Runtime не отвечает"
+                  }}
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <RouterLink :to="overviewHref" class="btn btn-sm">Готовность и публикация</RouterLink>
+                  <RouterLink :to="runtimeHref" class="btn btn-sm">Прогоны</RouterLink>
+                </div>
+              </section>
+            </div>
+
+            <div v-if="shellMode === 'card' && !editing" class="mt-1 flex w-full flex-col gap-2 text-left">
+              <div v-if="status" class="rounded-xl border border-base-300 bg-base-200/40 px-3 py-2">
+                <p class="flex items-center gap-2 text-xs font-medium">
+                  <span class="size-2 shrink-0 rounded-full" :class="TONE_DOT[status.tone]" aria-hidden="true" />
+                  {{ status.headline }}
+                </p>
+                <p v-if="status.unpublishedParts.length" class="mt-0.5 text-xs text-warning">
+                  Изменено: {{ status.unpublishedParts.join(", ") }}
+                </p>
+                <p class="mt-1 text-xs text-base-content/60">{{ cardRunLine }}</p>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <RouterLink :to="overviewHref" class="btn btn-xs">Готовность</RouterLink>
+                <RouterLink :to="runtimeHref" class="btn btn-xs">Прогоны</RouterLink>
+              </div>
+              <button type="button" class="btn btn-sm btn-primary w-full" @click="emit('openDetails')">
+                Подробнее
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <p
-      class="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] max-w-[160px] -translate-x-1/2 truncate rounded-box border border-base-300/50 bg-base-100/90 px-2.5 py-1 text-center text-xs font-semibold shadow-sm backdrop-blur-sm transition-opacity duration-200"
+    <span
+      v-if="status"
+      class="pointer-events-none absolute bottom-1.5 right-1.5 flex size-3.5 transition-opacity duration-200"
+      :class="shellMode === 'circle' ? 'opacity-100' : 'opacity-0'"
+      :title="status.headline"
+      aria-hidden="true"
+    >
+      <span
+        v-if="hasRunningRuns"
+        class="absolute inset-0 animate-ping rounded-full opacity-60"
+        :class="TONE_DOT[status.tone]"
+      />
+      <span class="relative size-3.5 rounded-full ring-2 ring-base-100" :class="TONE_DOT[status.tone]" />
+    </span>
+
+    <div
+      class="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] max-w-[200px] -translate-x-1/2 rounded-box border border-base-300/50 bg-base-100/90 px-2.5 py-1 text-center shadow-sm backdrop-blur-sm transition-opacity duration-200"
       :class="shellMode === 'circle' ? 'opacity-100' : 'opacity-0'"
     >
-      {{ agent.name }}
-    </p>
+      <p class="truncate text-xs font-semibold">{{ agent.name }}</p>
+      <p v-if="status" class="truncate text-[10px] text-base-content/60">{{ status.compactLine }}</p>
+    </div>
   </div>
 </template>
 

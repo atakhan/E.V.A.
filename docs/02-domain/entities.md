@@ -84,7 +84,7 @@ stateDiagram-v2
 
 ## 5. Tool type и Tool instance
 
-**Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `world` (канал внешнего мира; на столе конструктора и в библиотеке отделён от инструментов действий), `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
+**Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `world` (канал внешнего мира; на столе конструктора и в библиотеке отделён от инструментов действий), `implemented` (по умолчанию `true`; `false` — у runtime нет кода для типа), `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
 
 Каталог (Fact, 12 типов):
 
@@ -95,7 +95,7 @@ stateDiagram-v2
 | `telegram` | send_message | channel.message.received | Bot API; в режиме stub — память |
 | `text` | trim, normalize, truncate, match, extract, find_all, contains, replace, remove_lines, split, join | — | локальная обработка строк |
 | `web_client` | send_message, get_snapshot | channel.message.received, web.state.changed | HTTP к бэкенду веб-клиента |
-| `memory`, `context`, `crm`, `catalog`, `web_search`, `files`, `saby` | по манифесту | по манифесту | **нет реализации** — инстанс не регистрируется, шаг recipe упадёт «Tool не зарегистрирован» |
+| `memory`, `context`, `crm`, `catalog`, `web_search`, `files`, `saby` | по манифесту | по манифесту | **нет реализации**, `implemented: false` — UI не даёт добавить или включить инстанс, включённый инстанс — ошибка валидации `unimplemented_tool`. В старой публикации инстанс не регистрируется, шаг recipe упадёт «Tool не зарегистрирован» |
 
 **Tool instance** — подключение типа к агенту: `id` (по умолчанию = toolId), `toolId`, `name`, `enabled`, `credentialId`, `config` (по `configSchema`, значения по умолчанию подмешиваются), legacy `configNote` (JSON-строка). Recipe step ссылается на **instance id**; ссылка на **type id** разрешается, только если у агента ровно один включённый инстанс этого типа.
 
@@ -148,7 +148,7 @@ stateDiagram-v2
 
 **Свойства.** `id` (uuid), `skill_id`, `skill_version` (= версия публикации агента), `current_state`, `status`, `params`, `vars`, `history[]` (пройденные состояния), `error`, `revision` (оптимистичная блокировка), `expires_at` (хранится, **не используется**), `conversation_id` (индекс для поиска ждущих run), `agent_id`/`agent_slug`.
 
-**Служебные ключи `vars`** (с подчёркиванием): `_agent_id`, `_agent_slug`, `_last_event_id`, `_skill_params` (копия params при сохранении), `_needs_human`, `_last_action_run_id`, `_desk` / `_desk_text` (снимок стола). Входящий акт веб-клиента кладёт в payload, а оттуда в `vars`, `web_client_credential_id` и при найденном адресе `web_client_address_id` — по ним исходящий вызов выбирает приложение. Данные из payload событий и результатов Actions также попадают в `vars` (ключи `text`, `last_message`, `conversation_id` перезаписываются каждым событием; остальные — только если ещё не заданы).
+**Служебные ключи `vars`** (с подчёркиванием): `_agent_id`, `_agent_slug`, `_last_event_id`, `_skill_params` (копия params при сохранении), `_needs_human`, `_last_action_run_id`, `_desk` / `_desk_text` (снимок стола). `GET /api/runtime/runs/{id}` и сводка памяти отдают `params` и `vars` без этих ключей: params поднимаются из `_skill_params`. Входящий акт веб-клиента кладёт в payload, а оттуда в `vars`, `web_client_credential_id` и при найденном адресе `web_client_address_id` — по ним исходящий вызов выбирает приложение. Данные из payload событий и результатов Actions также попадают в `vars` (ключи `text`, `last_message`, `conversation_id` перезаписываются каждым событием; остальные — только если ещё не заданы).
 
 **Статусы (Fact: код).**
 

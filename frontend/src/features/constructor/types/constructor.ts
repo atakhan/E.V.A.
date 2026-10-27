@@ -36,6 +36,35 @@ export const WORLD_KIND_CLUSTER_GAP = 36;
 export const WORLD_PORT_GAP = 14;
 export const WORLD_PORT_SIZE = 18;
 
+/** Diameter of the agent hub circle at the origin. */
+export const AGENT_SIZE = 88;
+/** Height of the dashed "add" slots at the end of each column. */
+export const ADD_SLOT_HEIGHT = 48;
+
+/**
+ * Plugins (non-world tools) stack in a column under the agent: narrow enough to stay
+ * between the world column on the left and the skill column on the right.
+ */
+export const PLUGIN_X = 0;
+export const PLUGIN_FIRST_Y = 168;
+export const PLUGIN_NODE_WIDTH = 176;
+export const PLUGIN_NODE_HEIGHT = 56;
+/** Center-to-center pitch of the plugin column. */
+export const PLUGIN_ROW_GAP = 80;
+
+/**
+ * Memory sits above the agent, on the same vertical axis as the plugin column.
+ * One card: event history and working state are read inside it, not as separate nodes.
+ */
+export const MEMORY_X = 0;
+export const MEMORY_NODE_WIDTH = 208;
+export const MEMORY_NODE_HEIGHT = 84;
+export const MEMORY_CENTER_Y = -156;
+
+export function memoryNodeCenter(): { x: number; y: number } {
+  return { x: MEMORY_X, y: MEMORY_CENTER_Y };
+}
+
 export interface WorldKindColumnSlot {
   kindY: number;
   /** Parallel to the kind's address list order. */
@@ -82,6 +111,14 @@ export function addSkillSlotForCount(skillCount: number): { x: number; y: number
     x: SKILL_ORBIT_RADIUS,
     y: lastCenterY + pitch,
   };
+}
+
+export function pluginNodeCenter(index: number): { x: number; y: number } {
+  return { x: PLUGIN_X, y: PLUGIN_FIRST_Y + index * PLUGIN_ROW_GAP };
+}
+
+export function addPluginSlotForCount(pluginCount: number): { x: number; y: number } {
+  return pluginNodeCenter(pluginCount);
 }
 
 /** Vertical stack centered on y=0 for `count` rows. */

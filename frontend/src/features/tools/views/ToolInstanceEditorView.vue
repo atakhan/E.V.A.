@@ -12,7 +12,7 @@ import {
   type ToolCredential,
 } from "@/features/tools/services/credentialsApi";
 import type { ToolInstance } from "@/features/tools/types/tool";
-import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { getToolDefinition, isToolImplemented } from "@/features/tools/registry/builtinTools";
 import { serializePolzaConfigNote } from "@/features/tools/utils/polzaConfig";
 import { serializeWebClientConfigNote } from "@/features/tools/utils/webClientConfig";
 import { agentToolsPath } from "@/router/paths";
@@ -35,6 +35,7 @@ const instance = computed(() => getInstance(props.agentSlug, props.instanceId));
 const typeDef = computed(() =>
   instance.value ? getToolDefinition(instance.value.toolId) : null,
 );
+const typeUnimplemented = computed(() => Boolean(typeDef.value && !isToolImplemented(typeDef.value)));
 const telegramCredentials = computed(() =>
   credentials.value.filter((item) => item.toolId === "telegram"),
 );
@@ -177,6 +178,7 @@ function removeAndGoBack() {
           type="checkbox"
           class="toggle toggle-sm"
           :checked="instance.enabled"
+          :disabled="typeUnimplemented && !instance.enabled"
           @change="
             setInstanceEnabled(
               agentSlug,
@@ -189,6 +191,11 @@ function removeAndGoBack() {
       <button type="button" class="btn btn-ghost btn-sm text-error" @click="removeAndGoBack">
         Удалить
       </button>
+    </div>
+
+    <div v-if="typeUnimplemented" role="alert" class="alert alert-warning text-sm">
+      Тип «{{ typeDef?.name }}» есть только в каталоге — у runtime нет его реализации.
+      {{ instance.enabled ? "Выключите instance: с ним агент не опубликуется." : "Включить instance нельзя." }}
     </div>
 
     <div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">

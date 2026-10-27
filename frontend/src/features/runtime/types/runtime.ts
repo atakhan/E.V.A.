@@ -10,6 +10,10 @@ export interface RuntimeRunResponse {
   conversationId?: string | null;
   error?: string | null;
   history: string[];
+  /** Working inputs declared on the skill. Service keys are omitted. */
+  params?: Record<string, unknown>;
+  /** Run variables without keys that start with `_`. */
+  vars?: Record<string, unknown>;
   toolCalls: Array<Record<string, unknown>>;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -44,8 +48,14 @@ export interface AgentRuntimeSummary {
   completed: number;
   cancelled: number;
   latestPublicationVersion: string | null;
+  latestPublishedAt: string | null;
   isPublished: boolean;
   archived?: boolean;
+  /**
+   * Agent summary only. Parts runtime reads that the draft changes compared to the latest
+   * publication (`skills`, `actions`, `tools`, `defaultSkillId`); `null` before the first one.
+   */
+  draftChanges?: string[] | null;
 }
 
 export interface RuntimeSummaryTotals {
@@ -108,6 +118,35 @@ export interface AgentPublicationSummary {
   id: string;
   version: string;
   publishedAt: string;
+}
+
+export interface AgentMemoryEvent {
+  id: string;
+  skillRunId: string;
+  skillId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  fromState: string | null;
+  toState: string | null;
+  createdAt: string;
+}
+
+export interface AgentMemoryRun {
+  skillRunId: string;
+  skillId: string;
+  status: string;
+  currentState: string;
+  params: Record<string, unknown>;
+  vars: Record<string, unknown>;
+  conversationId: string | null;
+  error: string | null;
+  updatedAt: string;
+}
+
+export interface AgentMemory {
+  ok: boolean;
+  events: AgentMemoryEvent[];
+  runs: AgentMemoryRun[];
 }
 
 export type SkillRunStatusFilter = "active" | "waiting" | "completed" | "error" | "cancelled" | "all";

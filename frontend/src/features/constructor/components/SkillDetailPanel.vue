@@ -1,16 +1,46 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import type {
+  SkillDependencies,
+  ToolDependencyStatus,
+} from "@/features/agents/utils/agentDependencies";
 import type { Skill } from "@/features/skills/types/skill";
+import { agentActionPath } from "@/router/paths";
 import { formatDateTime } from "@/shared/utils/formatDate";
 
-defineProps<{
+const props = defineProps<{
+  agentSlug: string;
   skill: Skill;
+  dependencies: SkillDependencies;
 }>();
 
 const emit = defineEmits<{
   close: [];
   openEditor: [];
   remove: [];
+  selectKind: [toolId: string];
+  selectPlugin: [instanceId: string];
 }>();
+
+const STATUS_LABEL: Record<ToolDependencyStatus, string> = {
+  ok: "",
+  disabled: "выключен",
+  unknown: "не найден",
+  ambiguous: "неоднозначная ссылка",
+  unimplemented: "нет реализации",
+};
+
+const hasDependencies = computed(
+  () =>
+    props.dependencies.actions.length > 0 ||
+    props.dependencies.channels.length > 0 ||
+    props.dependencies.plugins.length > 0,
+);
+
+/** Plugins with an enabled instance are on the table, even if they cannot execute. */
+function pluginOnTable(status: ToolDependencyStatus): boolean {
+  return status === "ok" || status === "unimplemented";
+}
 </script>
 
 <template>
@@ -38,6 +68,88 @@ const emit = defineEmits<{
         {{ skill.description }}
       </p>
       <p v-else class="text-base-content/50">Без описания</p>
+
+      <section class="space-y-3">
+        <p class="text-xs font-medium text-base-content/50">Что нужно навыку</p>
+
+        <p v-if="!hasDependencies" class="text-xs text-base-content/50">
+          Навык пока не вызывает Actions и не ждёт событий каналов.
+        </p>
+
+        <div v-if="dependencies.channels.length" class="space-y-1">
+          <p class="text-[11px] uppercase tracking-wide text-base-content/45">Каналы</p>
+          <ul class="flex flex-wrap gap-1.5">
+            <li v-for="item in dependencies.channels" :key="item.instanceId || item.typeId">
+              <button
+                type="button"
+                class="btn btn-xs gap-1.5"
+                :disabled="item.status !== 'ok'"
+                :title="item.events.length ? `ждёт ${item.events.join(', ')}` : undefined"
+                @click="emit('selectKind', item.typeId)"
+              >
+                <span
+                  class="size-1.5 rounded-full"
+                  :class="item.status === 'ok' ? 'bg-success' : 'bg-error'"
+                  aria-hidden="true"
+                />
+                {{ item.name }}
+                <span v-if="STATUS_LABEL[item.status]" class="font-normal text-error">
+                  {{ STATUS_LABEL[item.status] }}
+                </span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="dependencies.plugins.length" class="space-y-1">
+          <p class="text-[11px] uppercase tracking-wide text-base-content/45">Плагины</p>
+          <ul class="flex flex-wrap gap-1.5">
+            <li v-for="item in dependencies.plugins" :key="item.instanceId || item.typeId">
+              <button
+                type="button"
+                class="btn btn-xs gap-1.5"
+                :disabled="!pluginOnTable(item.status)"
+                @click="emit('selectPlugin', item.instanceId)"
+              >
+                <span
+                  class="size-1.5 rounded-full"
+                  :class="item.status === 'ok' ? 'bg-success' : 'bg-error'"
+                  aria-hidden="true"
+                />
+                {{ item.name }}
+                <span v-if="STATUS_LABEL[item.status]" class="font-normal text-error">
+                  {{ STATUS_LABEL[item.status] }}
+                </span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="dependencies.actions.length" class="space-y-1">
+          <p class="text-[11px] uppercase tracking-wide text-base-content/45">Actions</p>
+          <ul class="space-y-1.5">
+            <li v-for="item in dependencies.actions" :key="item.actionId" class="text-xs">
+              <template v-if="item.action">
+                <RouterLink
+                  :to="agentActionPath(agentSlug, item.actionId)"
+                  class="link link-hover font-medium"
+                >
+                  {{ item.action.name }}
+                </RouterLink>
+                <p v-if="item.commands.length" class="font-mono text-[10px] text-base-content/50">
+                  <span
+                    v-for="(use, index) in item.commands"
+                    :key="use.stepId || index"
+                    :class="use.status === 'ok' ? '' : 'text-error'"
+                  >{{ index > 0 ? " → " : "" }}{{ use.instanceId || "?" }}.{{ use.command }}</span>
+                </p>
+                <p v-else class="text-[10px] text-base-content/45">без шагов</p>
+              </template>
+              <p v-else class="text-error">Нет Action «{{ item.actionId }}»</p>
+            </li>
+          </ul>
+        </div>
+      </section>
 
       <dl class="space-y-2 text-xs">
         <div class="flex justify-between gap-3">

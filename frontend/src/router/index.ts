@@ -13,6 +13,7 @@ import AgentRuntimeView from "@/features/runtime/views/AgentRuntimeView.vue";
 import GlobalRuntimeView from "@/features/runtime/views/GlobalRuntimeView.vue";
 import RuntimeSimulateView from "@/features/runtime/views/RuntimeSimulateView.vue";
 import SkillRunDetailView from "@/features/runtime/views/SkillRunDetailView.vue";
+import MemoryView from "@/features/memory/views/MemoryView.vue";
 import ConstructorView from "@/features/constructor/views/ConstructorView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
 import AppShellLayout from "@/shared/layout/AppShellLayout.vue";
@@ -134,6 +135,12 @@ const router = createRouter({
           path: "logs",
           name: RouteNames.agentLogs,
           component: ToolLogsView,
+          props: true,
+        },
+        {
+          path: "memory",
+          name: RouteNames.agentMemory,
+          component: MemoryView,
           props: true,
         },
         {

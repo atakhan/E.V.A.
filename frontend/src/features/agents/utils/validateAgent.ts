@@ -2,7 +2,7 @@ import type { Agent } from "@/features/agents/types/agent";
 import { isValidActionVersion } from "@/features/actions/types/normalize";
 import { getCommandInputFields } from "@/features/actions/utils/commandInputSchema";
 import { validateFields } from "@/shared/schema/fieldSchema";
-import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { getToolDefinition, isToolImplemented } from "@/features/tools/registry/builtinTools";
 import { resolveRecipeTool } from "@/features/tools/utils/resolveToolInstance";
 import { validateSkill } from "@/features/skills/utils/validateSkill";
 import {
@@ -221,6 +221,20 @@ export function validateAgent(agent: Agent): AgentValidationReport {
         code: "unused_action",
         message: `Action «${action.name}» нигде не используется в Skills`,
         href: actionHref,
+      });
+    }
+  }
+
+  for (const instance of agent.tools) {
+    if (!instance.enabled) continue;
+    const def = getToolDefinition(instance.toolId);
+    if (def && !isToolImplemented(def)) {
+      issues.push({
+        id: `tool.${instance.id}.unimplemented`,
+        severity: "error",
+        code: "unimplemented_tool",
+        message: `Tool «${def.name}» без реализации в runtime — выключите instance «${instance.name}»`,
+        href: agentToolsPath(agent.slug),
       });
     }
   }
