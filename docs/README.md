@@ -8,18 +8,18 @@
 
 | Слой | Документы | Вопрос, на который отвечает |
 |---|---|---|
-| **01 Concept** | [`vision.md`](./01-concept/vision.md) · [`goals.md`](./01-concept/goals.md) · [`research-questions.md`](./01-concept/research-questions.md) · [`direction.md`](./01-concept/direction.md) · [`spatial-model.md`](./01-concept/spatial-model.md) | Зачем проект существует, что в области, что вне, что открыто; **куда двигаться дальше**; пространственная модель конструктора — исследование, не контракт |
+| **01 Concept** | [`vision.md`](./01-concept/vision.md) · [`axioms.md`](./01-concept/axioms.md) · [`axioms-plan.md`](./01-concept/axioms-plan.md) · [`goals.md`](./01-concept/goals.md) · [`research-questions.md`](./01-concept/research-questions.md) · [`direction.md`](./01-concept/direction.md) · [`spatial-model.md`](./01-concept/spatial-model.md) | Зачем проект существует, что в области, что вне, что открыто; **аксиомы конструктора агента** и план их внедрения; **куда двигаться дальше**; пространственная модель конструктора — исследование, не контракт |
 | **02 Domain** | [`overview.md`](./02-domain/overview.md) · [`entities.md`](./02-domain/entities.md) · [`mechanics.md`](./02-domain/mechanics.md) · [`algorithms.md`](./02-domain/algorithms.md) · [`rules.md`](./02-domain/rules.md) | Из чего состоит модель: Agent / Skill / Action / Tool / Event / Skill Run; как они себя ведут; какие правила держатся |
 | **03 Architecture** | [`overview.md`](./03-architecture/overview.md) · [`components.md`](./03-architecture/components.md) · [`data-flow.md`](./03-architecture/data-flow.md) · [`integrations.md`](./03-architecture/integrations.md) · [`constructor-world-axis.md`](./03-architecture/constructor-world-axis.md) | Как модель реализована системой: процессы, слои, потоки, внешние контракты; стол конструктора (адреса → каналы → агент → навыки) |
 | **04 Code** | [`structure.md`](./04-code/structure.md) · [`modules.md`](./04-code/modules.md) · [`implementation.md`](./04-code/implementation.md) | Где что лежит, ключевые классы, особенности реализации, где менять |
 | **05 Operations** | [`setup.md`](./05-operations/setup.md) · [`development.md`](./05-operations/development.md) · [`testing.md`](./05-operations/testing.md) · [`deployment.md`](./05-operations/deployment.md) · [`troubleshooting.md`](./05-operations/troubleshooting.md) | Как установить, настроить, запустить, тестировать, собрать, развернуть, чинить |
 | **06 Experiments** | [`README.md`](./06-experiments/README.md) | Архитектурные эксперименты: Behavior Graph (снят), слой Interaction (2.5/6), foreman happy path |
-| **07 Decisions** | [`README.md`](./07-decisions/README.md) | 23 решения: контекст → альтернативы → выбор → причина → последствия |
+| **07 Decisions** | [`README.md`](./07-decisions/README.md) | 24 решения: контекст → альтернативы → выбор → причина → последствия |
 | **Review** | [`REVIEW.md`](./REVIEW.md) | Противоречия документации и кода, дефекты, мёртвый код, неизвестные места |
 
 ## С чего начать
 
-**Новичку (понять проект без кода):** [`01-concept/vision.md`](./01-concept/vision.md) → [`02-domain/overview.md`](./02-domain/overview.md) → [`02-domain/mechanics.md`](./02-domain/mechanics.md) (M1–M8) → [`06-experiments/README.md`](./06-experiments/README.md) E3 как сквозной пример.
+**Новичку (понять проект без кода):** [`01-concept/vision.md`](./01-concept/vision.md) → [`01-concept/axioms.md`](./01-concept/axioms.md) → [`02-domain/overview.md`](./02-domain/overview.md) → [`02-domain/mechanics.md`](./02-domain/mechanics.md) (M1–M8) → [`06-experiments/README.md`](./06-experiments/README.md) E3 как сквозной пример.
 
 **Разработчику (начать работать с кодом):** [`05-operations/setup.md`](./05-operations/setup.md) → [`05-operations/development.md`](./05-operations/development.md) → [`03-architecture/overview.md`](./03-architecture/overview.md) → [`04-code/structure.md`](./04-code/structure.md) → [`04-code/modules.md`](./04-code/modules.md) (таблица «Где менять, если нужно…»).
 
@@ -27,7 +27,7 @@
 
 **Эксплуатации:** [`05-operations/deployment.md`](./05-operations/deployment.md) и [`05-operations/troubleshooting.md`](./05-operations/troubleshooting.md).
 
-**ИИ-агенту:** читать [`02-domain/rules.md`](./02-domain/rules.md) (инварианты, которые нельзя ломать), [`04-code/modules.md`](./04-code/modules.md), [`04-code/implementation.md`](./04-code/implementation.md) и [`REVIEW.md`](./REVIEW.md) перед изменениями; шпаргалки в `.cursor/skills/eva-*` частично устарели (см. REVIEW §1).
+**ИИ-агенту:** читать [`01-concept/axioms.md`](./01-concept/axioms.md) (основа модели; принципы интерфейса — гипотеза), [`02-domain/rules.md`](./02-domain/rules.md) (инварианты, которые нельзя ломать), [`04-code/modules.md`](./04-code/modules.md), [`04-code/implementation.md`](./04-code/implementation.md) и [`REVIEW.md`](./REVIEW.md) перед изменениями; шпаргалки в `.cursor/skills/eva-*` частично устарели (см. REVIEW §1).
 
 ## Соглашения
 

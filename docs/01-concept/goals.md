@@ -25,6 +25,7 @@
 - Каналы: Telegram (webhook и long polling), внешний веб-клиент (ingress/outbox HTTP-контракт), прямой API для тестов.
 - LLM как Tool через Polza.ai (OpenAI-совместимый API) и локальная заглушка.
 - Слой взаимодействия человек ↔ агент: диспетчер актов, фокус, снимок стола, присутствие.
+- Системные компоненты агента: контроллер задач и память со своим контроллером ([`axioms.md`](./axioms.md), аксиомы 3, 12–15; решение D24). Пока не реализованы — порядок внедрения в [`axioms-plan.md`](./axioms-plan.md).
 
 ## Вне области (явно, по источникам)
 
@@ -34,12 +35,12 @@
 | Runtime как ERP / система учёта; хранение бизнес-данных в runtime | RUNTIME_SPEC §2; INTERACTION_SPEC R1.4 — стол живёт в веб-клиенте, платформа читает snapshot и шлёт патчи |
 | Универсальный NLU «один скилл на всё» | INTERACTION_SPEC §15; `INTERACTION_FUNDAMENTAL_PROBLEM.md` §4 — выбор работы = классификация акта, не понимание текста |
 | LLM выбирает Action внутри FSM | `ARCHITECTURE_DOCS_ALIGNMENT.md` decision #6 — FSM выбирает action id по event/guard; LLM — Tool в recipe |
-| Planner (приоритизация и планирование очереди работ) | agent_architecture §23, §29 — отложен за пределы v0.1 |
+| Planner (приоритизация и планирование очереди работ) | agent_architecture §23, §29 — отложен за пределы v0.1. **Пересмотрено D24:** список задач формирует контроллер задач, алгоритм открыт |
 | Multi-tenant изоляция, квоты | agent_architecture §29 — открыто |
 | Distributed tracing, replay в production | RUNTIME_IMPLEMENTATION_STATUS — ❌ / admin-only |
 | Параллельные группы шагов recipe | RUNTIME_SPEC §24 — ❌ deferred |
 | Composition Action-in-Action | ACTIONS_SPEC §24 — используйте FSM Skill |
-| Отдельные сущности Session / Context Manager / Task Manager | agent_architecture §16–§18 — покрываются Agent / Skill Run / Conversation / Tools |
+| Отдельные сущности Session / Context Manager / Task Manager | agent_architecture §16–§18 — покрываются Agent / Skill Run / Conversation / Tools. **Пересмотрено D24:** контроллеры задач и памяти — системные компоненты агента; Session по-прежнему не вводится, контекст взаимодействия — тип памяти |
 
 ## Ограничения, которые задаёт сам проект
 
@@ -54,7 +55,7 @@
 | Предположение | Тип | Комментарий |
 |---|---|---|
 | Поведение агента можно выразить конечным автоматом с детерминированными guards | Fact (дизайн) | Guards — безопасный мини-язык сравнений, не произвольный код |
-| LLM — источник структурированных результатов внутри Action, а не «мозг», управляющий процессом | Fact (дизайн) | `polza_ai_llm.run_structured`, `parse_request` |
+| LLM — источник структурированных результатов внутри Action, а не «мозг», управляющий процессом | Fact (дизайн) | `polza_ai_llm.run_structured`, `parse_request`. С D24 LLM работает и в контроллере задач — выбирает навык; ход процесса внутри навыка по-прежнему ведёт автомат |
 | Один агент = один документ (skills + actions + tools) в JSONB; масштабы — десятки агентов, не тысячи | Inference | Нет пагинации агентов, фронтенд грузит все агенты при старте |
 | Redis Streams достаточно как транспорт событий на MVP; транспорт заменим без смены доменной модели | Fact (дизайн) | `backend_architecture_v1.md` §17 |
 | Внешний веб-клиент готов реализовать контракт `/eva/health`, `/eva/messages`, `/eva/context` и присылать акты с `focus`/`intent` | Fact (контракт) + Unknown (готовность реального клиента) | Эталон — `examples/web_client_stub` |
