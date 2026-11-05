@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import AgentFloatingMenu from "@/features/workspace/components/AgentFloatingMenu.vue";
-import AppFloatingChrome from "@/shared/layout/AppFloatingChrome.vue";
 import {
   defaultWorkspaceSectionId,
   findWorkspaceSection,
@@ -54,7 +53,7 @@ async function selectSection(id: string) {
 
 <template>
   <div v-if="agent" class="flex h-screen min-h-0 bg-base-200">
-    <AppFloatingChrome>
+    <div class="pointer-events-none fixed left-[4.25rem] top-4 z-40">
       <AgentFloatingMenu
         :agent-name="agent.name"
         :agent-slug="agent.slug"
@@ -62,7 +61,7 @@ async function selectSection(id: string) {
         @select="selectSection"
         @edit="editDialog?.open()"
       />
-    </AppFloatingChrome>
+    </div>
 
     <main
       class="flex min-h-0 min-w-0 flex-1 flex-col"

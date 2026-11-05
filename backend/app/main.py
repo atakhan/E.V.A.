@@ -10,6 +10,7 @@ from app.api.credentials import router as credentials_router
 from app.api.channels.telegram import router as telegram_router
 from app.api.channels.web import router as web_channel_router
 from app.api.polza import router as polza_router
+from app.api.projects import router as projects_router
 from app.api.runtime import router as runtime_router
 from app.api.runtime_demo import router as runtime_demo_router
 from app.api.tool_logs import router as tool_logs_router
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(agents_router)
+app.include_router(projects_router)
 app.include_router(credentials_router)
 app.include_router(tools_router)
 app.include_router(polza_router)

@@ -21,3 +21,17 @@ export function mergeConfigDefaults(
 export function validateInstanceConfig(toolTypeId: string, config: Record<string, unknown>): string[] {
   return validateFields(getConfigSchema(toolTypeId), config, "config.").errors;
 }
+
+/** Schema form emits only known fields. Extra keys, such as an SSH command library, stay. */
+export function mergeSchemaConfig(
+  current: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  schema: { id: string }[],
+): Record<string, unknown> {
+  const known = new Set(schema.map((field) => field.id));
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(current)) {
+    if (!known.has(key)) extra[key] = value;
+  }
+  return { ...extra, ...patch };
+}

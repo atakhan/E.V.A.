@@ -11,6 +11,7 @@ from runtime.event_router import RuntimeCatalog
 from runtime.tool_instance_resolver import credential_by_instance, enabled_instances, normalize_tool_instance
 from tools.credential_resolver import (
     get_polza_api_key_for_binding,
+    get_ssh_private_key_for_binding,
     get_telegram_token_for_binding,
     get_web_client_secret_for_binding,
 )
@@ -18,6 +19,9 @@ from tools.instance_config import merge_config_defaults, parse_instance_config
 from tools.llm import LlmStubTool
 from tools.polza import PolzaAiLlmTool
 from tools.registry import ToolRegistry
+from tools.project import ProjectChannelTool
+from tools.project.directory import SqlAgentDirectory
+from tools.ssh_commands import SshCommandsTool
 from tools.telegram import TelegramStubTool, TelegramTool
 from tools.text import TextTool
 from tools.web_client import (
@@ -105,6 +109,35 @@ def _build_tool_for_binding(
 
     if tool_type == "text":
         return _stamp_instance(TextTool(), instance_id=instance_id, tool_type=tool_type, credential_id=credential_id)
+
+    if tool_type == "project":
+        connectors = [
+            str(address.get("config", {}).get("projectSlug") or "").strip()
+            for address in (agent_body.get("world") or {}).get("addresses") or []
+            if isinstance(address, dict) and address.get("toolId") == "project"
+        ]
+        directory = SqlAgentDirectory(session) if session is not None else None
+        return _stamp_instance(
+            ProjectChannelTool(
+                agent_slug=str(agent_body.get("slug") or ""),
+                connectors=[item for item in connectors if item],
+                directory=directory,
+            ),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
+
+    if tool_type == "ssh_commands":
+        private_key = ""
+        if credential_id and session is not None:
+            private_key = get_ssh_private_key_for_binding(session, agent_id, item) or ""
+        return _stamp_instance(
+            SshCommandsTool(config=config, private_key=private_key),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
 
     if tool_type == "web_client":
         secret = get_web_client_secret_for_binding(session, agent_id, item)

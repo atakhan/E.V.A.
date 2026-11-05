@@ -15,6 +15,8 @@ export type { AgentWorld, WorldAddress } from "@/features/agents/types/world";
 /** Default avatar when agent.icon is empty. */
 export const DEFAULT_AGENT_ICON = "/eva-logo.png";
 
+export type AgentKind = "library" | "runtime" | "fork";
+
 export interface Agent {
   id: string;
   slug: string;
@@ -25,6 +27,12 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
+  /** `runtime` belongs to a project and stays out of the agent library. `fork` is a project's own copy of a library agent. */
+  kind?: AgentKind;
+  /** Set on the project runtime agent and on a project fork. */
+  projectSlug?: string;
+  /** Library agent this fork was copied from. */
+  originSlug?: string;
   defaultSkillId?: string;
   skills: Skill[];
   actions: ActionDef[];

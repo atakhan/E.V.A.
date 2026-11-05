@@ -128,7 +128,14 @@ class RuntimeService:
         run.vars.setdefault("_agent_slug", self.context.agent_slug)
 
         for key, value in event_copy.payload.items():
-            if key not in run.vars or key in ("text", "last_message", "conversation_id"):
+            if key not in run.vars or key in (
+                "text",
+                "last_message",
+                "conversation_id",
+                "matter",
+                "waits",
+                "reply_allowed",
+            ):
                 run.vars[key] = value
         if "text" in event_copy.payload:
             run.vars["last_message"] = event_copy.payload["text"]

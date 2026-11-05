@@ -6,7 +6,7 @@
 
 **Что это.** Единица проектирования и публикации. Агент владеет своими Skills, Actions, инстансами Tools и credentials; у него есть один черновик и список публикаций.
 
-**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `icon` (аватар; пусто — логотип E.V.A.), `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `constructor` (раскладка навыков на столе конструктора: `{ nodes[] }`; во фронтенде поле называется `constructorLayout`), `world.addresses[]`, `createdAt`, `updatedAt`, `archivedAt`.
+**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `icon` (аватар; пусто — логотип E.V.A.), `kind` (`library` — корневой агент библиотеки; `fork` — копия корневого агента внутри одного проекта, со своим `originSlug` и `projectSlug`, в библиотеке не показывается; `runtime` — системный агент одного проекта), `projectSlug` (у `runtime` и `fork`), `originSlug` (только у `fork`: slug корневого агента), `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `constructor` (раскладка навыков на столе конструктора: `{ nodes[] }`; во фронтенде поле называется `constructorLayout`), `world.addresses[]`, `createdAt`, `updatedAt`, `archivedAt`.
 
 **`world.addresses[]`.** Места, висящие на канале внешнего мира. Поля: `id`, `toolId`, `name`, необязательный `credentialId`, `config`. У Telegram адрес — чат (`config.chat_id`), токен бота обычно на инстансе. У `web_client` адрес — одно веб-приложение: URL и оба ключа лежат в credential, на который указывает `credentialId`. Сессия веб-приложения адресом не является. Подробности стола — [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md).
 
@@ -26,7 +26,7 @@ stateDiagram-v2
   Draft --> [*]: delete
 ```
 
-- **Draft** — всегда существует после создания (пустое тело: `skills/actions/tools = []`).
+- **Draft** — всегда существует после создания. У библиотечного агента сразу есть системный навык «Общение с агентом». У рантайма проекта — он и «Общение с человеком».
 - **Published** — есть ≥1 публикации. Публикация — неизменяемый снимок `body`; версия начинается с `0.1.0`, далее автоинкремент patch. Runtime использует последнюю публикацию для новых run и **закреплённую** версию для существующих.
 - **Archived** — агент скрыт из списка, запрещены редактирование/публикация/новые run (HTTP 409); при архивации все активные run (`running`/`waiting`) отменяются. Публикации сохраняются.
 
@@ -38,7 +38,7 @@ stateDiagram-v2
 
 **Что это.** Процесс класса задач, описанный конечным автоматом. Один Skill — один автомат.
 
-**Свойства.** `id`, `name`, `description`, `version` (SemVer, по умолчанию `0.1.0`), `initial` (id начального состояния; если пуст — первое состояние), `params[]` (`name`, `type` ∈ string/number/boolean/object/array, `required`), `states[]`, геометрия холста (`x/y/width/height` состояний, `viewport`, `flowDirection`).
+**Свойства.** `id`, `name`, `description`, `version` (SemVer, по умолчанию `0.1.0`), `systemRole` (`talk_to_agent` | `talk_to_human` у системных навыков общения; иначе нет), `accepts` (какое дело навык принимает от другого агента; пусто — не участвует), `answers` (есть ли ответ в той же нити), `initial` (id начального состояния; если пуст — первое состояние), `params[]` (`name`, `type` ∈ string/number/boolean/object/array, `required`), `states[]`, геометрия холста (`x/y/width/height` состояний, `viewport`, `flowDirection`). «Общение с человеком» по умолчанию есть только у рантайма проекта. Канал «Проект» доставляет сообщение только навыку, чьё `accepts` совпало с делом, и только если ожидание ответа не противоречит `answers`.
 
 **Params vs vars.** `params` — объявленные входы процесса (намерение при старте); `vars` — изменяемое состояние конкретного run. **Fact:** `params` наполняются из payload стартового события и correlation-полей; `required` в коде не проверяется при старте (валидации отсутствия нет) — см. REVIEW.
 
@@ -86,7 +86,7 @@ stateDiagram-v2
 
 **Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `world` (канал внешнего мира; на столе конструктора и в библиотеке отделён от инструментов действий), `implemented` (по умолчанию `true`; `false` — у runtime нет кода для типа), `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
 
-Каталог (Fact, 12 типов):
+Каталог (Fact, 13 типов):
 
 | Тип | Команды | События | Исполнение в runtime |
 |---|---|---|---|
@@ -94,6 +94,7 @@ stateDiagram-v2
 | `polza_ai_llm` | run, run_structured, parse_request | — | Polza.ai Chat Completions; в режиме stub — заглушка |
 | `telegram` | send_message | channel.message.received | Bot API; в режиме stub — память |
 | `text` | trim, normalize, truncate, match, extract, find_all, contains, replace, remove_lines, split, join | — | локальная обработка строк |
+| `ssh_commands` | run | — | SSH: `run` выполняет команду из библиотеки инстанса (`config.commands`). Хост в config, ключ в credential |
 | `web_client` | send_message, get_snapshot | channel.message.received, web.state.changed | HTTP к бэкенду веб-клиента |
 | `memory`, `context`, `crm`, `catalog`, `web_search`, `files`, `saby` | по манифесту | по манифесту | **нет реализации**, `implemented: false` — UI не даёт добавить или включить инстанс, включённый инстанс — ошибка валидации `unimplemented_tool`. В старой публикации инстанс не регистрируется, шаг recipe упадёт «Tool не зарегистрирован» |
 
@@ -110,6 +111,7 @@ stateDiagram-v2
 | `telegram` | `bot_token` | `getMe`; есть `set-webhook` на `EVA_WEBHOOK_BASE` |
 | `polza_ai_llm` | `api_key` | запрос баланса (`GET /balance`) |
 | `web_client` | `backend_base_url`, `outbound_api_key`, `inbound_api_key` (генерируется, показывается один раз). На столе конструктора секрет вешается на **адрес-приложение**, не на инстанс канала. Инстанс хранит общий контракт путей | `GET {base}/eva/health` |
+| `ssh_commands` | `private_key` (без пароля). Хост, порт и пользователь — в config инстанса, не в секрете | нет |
 
 Поллер Telegram пропускает credentials с `meta.dev_stub = true` или тестовыми токенами.
 

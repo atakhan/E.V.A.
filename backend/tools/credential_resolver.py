@@ -37,6 +37,19 @@ def get_polza_api_key_for_binding(
     return str(key) if key else None
 
 
+def get_ssh_private_key_for_binding(
+    session: Session,
+    agent_id: str,
+    binding: dict[str, Any],
+) -> str | None:
+    credential_id = binding.get("credentialId")
+    if not credential_id:
+        return None
+    secret = get_credential_secret(session, agent_id, credential_id)
+    key = secret.get("private_key")
+    return str(key) if key else None
+
+
 def get_web_client_secret_for_binding(
     session: Session,
     agent_id: str,

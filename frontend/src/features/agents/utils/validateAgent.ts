@@ -4,6 +4,7 @@ import { getCommandInputFields } from "@/features/actions/utils/commandInputSche
 import { validateFields } from "@/shared/schema/fieldSchema";
 import { getToolDefinition, isToolImplemented } from "@/features/tools/registry/builtinTools";
 import { resolveRecipeTool } from "@/features/tools/utils/resolveToolInstance";
+import { readSshLibrary, SSH_COMMANDS_TOOL_ID, SSH_RUN_COMMAND } from "@/features/tools/utils/sshLibrary";
 import { validateSkill } from "@/features/skills/utils/validateSkill";
 import {
   agentActionsPath,
@@ -208,6 +209,27 @@ export function validateAgent(agent: Agent): AgentValidationReport {
             severity: "warning",
             code: "invalid_step_input",
             message: `Action «${action.name}», шаг «${label}»: ${warn}`,
+            href: actionHref,
+          });
+        }
+      }
+
+      const commandId = step.input.command_id;
+      if (
+        typeId === SSH_COMMANDS_TOOL_ID &&
+        step.command === SSH_RUN_COMMAND &&
+        typeof commandId === "string" &&
+        commandId &&
+        !commandId.includes("{{")
+      ) {
+        const bound = agent.tools.find((item) => item.id === resolved.instanceId);
+        const known = readSshLibrary(bound?.config).some((item) => item.id === commandId);
+        if (!known) {
+          issues.push({
+            id: `action.${action.id}.step.${step.id}.unknown-ssh-command`,
+            severity: "warning",
+            code: "unknown_ssh_command",
+            message: `Action «${action.name}»: в библиотеке SSH нет команды «${commandId}»`,
             href: actionHref,
           });
         }

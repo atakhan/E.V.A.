@@ -24,6 +24,10 @@ const props = defineProps<{
   toolId: string;
   status: WorldLinkStatus;
   reason: string;
+  /** Sits in the channel constructor instead of covering the canvas. */
+  embedded?: boolean;
+  /** The pencil mode edits the instance name. */
+  hideName?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -164,8 +168,12 @@ async function verifyTelegramCredential() {
 </script>
 
 <template>
-  <aside
-    class="absolute inset-y-0 right-0 z-30 flex w-[22rem] flex-col border-l border-base-300/60 bg-base-100 shadow-xl sm:w-96"
+  <div
+    :class="
+      embedded
+        ? 'flex max-h-[min(32rem,70vh)] w-full flex-col overflow-hidden rounded-2xl border border-base-300/70 bg-base-100 shadow-xl'
+        : 'absolute inset-y-0 right-0 z-30 flex w-[22rem] flex-col border-l border-base-300/60 bg-base-100 shadow-xl sm:w-96'
+    "
     data-canvas-ui
   >
     <header class="flex items-start justify-between gap-2 border-b border-base-300 px-4 py-3">
@@ -177,6 +185,7 @@ async function verifyTelegramCredential() {
         <p class="mt-0.5 font-mono text-[10px] text-base-content/45">{{ toolId }}</p>
       </div>
       <button
+        v-if="!embedded"
         type="button"
         class="btn btn-xs btn-square btn-ghost shrink-0"
         aria-label="Закрыть"
@@ -194,7 +203,7 @@ async function verifyTelegramCredential() {
       </p>
 
       <template v-if="instance">
-        <label class="form-control w-full">
+        <label v-if="!hideName" class="form-control w-full">
           <span class="label-text text-xs">Имя instance</span>
           <input
             class="input input-bordered input-sm w-full"
@@ -300,10 +309,10 @@ async function verifyTelegramCredential() {
       <p v-else class="text-sm text-error">Канал не найден</p>
     </div>
 
-    <footer class="border-t border-base-300 p-3">
+    <footer v-if="!embedded" class="border-t border-base-300 p-3">
       <button type="button" class="btn btn-sm btn-ghost w-full" @click="emit('close')">
         Готово
       </button>
     </footer>
-  </aside>
+  </div>
 </template>

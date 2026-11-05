@@ -2,6 +2,8 @@ import { defaultWorkspaceSectionSlug } from "@/features/workspace/config/nav";
 
 export const RouteNames = {
   agents: "agents",
+  projects: "projects",
+  projectDesk: "project-desk",
   toolsLibrary: "tools-library",
   globalRuntime: "global-runtime",
   agentWorkspace: "agent-workspace",
@@ -22,6 +24,19 @@ export const RouteNames = {
 
 export function agentsPath(): string {
   return "/agents";
+}
+
+export function projectsPath(): string {
+  return "/projects";
+}
+
+export function projectPath(projectSlug: string): string {
+  return `/projects/${encodeURIComponent(projectSlug)}`;
+}
+
+/** Agent constructor opened on the project desk, same surface as the project. */
+export function projectAgentPath(projectSlug: string, agentSlug: string): string {
+  return `${projectPath(projectSlug)}/${encodeURIComponent(agentSlug)}`;
 }
 
 export function globalRuntimePath(): string {

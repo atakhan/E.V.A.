@@ -121,10 +121,14 @@ export function useAgents() {
   }
 
   const activeAgents = computed(() => agents.value.filter((agent) => !agent.archivedAt));
+  const libraryAgents = computed(() =>
+    activeAgents.value.filter((agent) => agent.kind !== "runtime" && agent.kind !== "fork"),
+  );
 
   return {
     agents,
     activeAgents,
+    libraryAgents,
     apiAvailable,
     getAgentById,
     getAgentBySlug,

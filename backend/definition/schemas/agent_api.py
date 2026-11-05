@@ -156,6 +156,9 @@ class SkillApi(BaseModel):
     created_at: str = Field(alias="createdAt", default="")
     updated_at: str = Field(alias="updatedAt", default="")
     initial: str | None = None
+    system_role: str | None = Field(default=None, alias="systemRole")
+    accepts: str = ""
+    answers: bool = False
     params: list[SkillParamApi] = Field(default_factory=list)
     states: list[FsmStateApi] = Field(default_factory=list)
     viewport: dict[str, float] = Field(default_factory=lambda: {"panX": 0, "panY": 0, "zoom": 1})
@@ -194,6 +197,9 @@ class AgentApi(BaseModel):
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
     archived_at: str | None = Field(default=None, alias="archivedAt")
+    kind: str = "library"
+    project_slug: str | None = Field(default=None, alias="projectSlug")
+    origin_slug: str | None = Field(default=None, alias="originSlug")
     default_skill_id: str | None = Field(default=None, alias="defaultSkillId")
     skills: list[SkillApi] = Field(default_factory=list)
     actions: list[ActionDefApi] = Field(default_factory=list)

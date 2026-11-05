@@ -93,13 +93,16 @@ export async function createCredential(
         backendBaseUrl: string;
         outboundApiKey: string;
         inboundApiKey?: string;
-      },
+      }
+    | { toolId: "ssh_commands"; name: string; privateKey: string },
 ): Promise<ToolCredential> {
   let secret: Record<string, string>;
   if (input.toolId === "telegram") {
     secret = { bot_token: input.botToken };
   } else if (input.toolId === "polza_ai_llm") {
     secret = { api_key: input.apiKey };
+  } else if (input.toolId === "ssh_commands") {
+    secret = { private_key: input.privateKey.trim() };
   } else {
     secret = {
       backend_base_url: input.backendBaseUrl.trim(),

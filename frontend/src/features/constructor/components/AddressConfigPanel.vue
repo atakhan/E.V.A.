@@ -14,6 +14,8 @@ const props = defineProps<{
   addressId: string;
   status: WorldAddressStatus;
   reason: string;
+  /** Sits in the address constructor instead of covering the canvas. */
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -35,6 +37,7 @@ const PLACE_FIELDS: Record<
   Array<{ id: string; label: string; placeholder?: string }>
 > = {
   telegram: [{ id: "chat_id", label: "Chat ID", placeholder: "-100…" }],
+  project: [{ id: "projectSlug", label: "Проект", placeholder: "pochta-ofisa" }],
 };
 
 const credentials = ref<ToolCredential[]>([]);
@@ -100,8 +103,12 @@ function configString(fieldId: string): string {
 </script>
 
 <template>
-  <aside
-    class="absolute inset-y-0 right-0 z-30 flex w-[22rem] flex-col border-l border-base-300/60 bg-base-100 shadow-xl sm:w-96"
+  <div
+    :class="
+      embedded
+        ? 'flex max-h-[min(32rem,70vh)] w-full flex-col overflow-hidden rounded-2xl border border-base-300/70 bg-base-100 shadow-xl'
+        : 'absolute inset-y-0 right-0 z-30 flex w-[22rem] flex-col border-l border-base-300/60 bg-base-100 shadow-xl sm:w-96'
+    "
     data-canvas-ui
   >
     <header class="flex items-start justify-between gap-2 border-b border-base-300 px-4 py-3">
@@ -115,6 +122,7 @@ function configString(fieldId: string): string {
         </p>
       </div>
       <button
+        v-if="!embedded"
         type="button"
         class="btn btn-xs btn-square btn-ghost shrink-0"
         aria-label="Закрыть"
@@ -203,12 +211,12 @@ function configString(fieldId: string): string {
     </div>
 
     <footer class="flex flex-col gap-2 border-t border-base-300 p-3">
-      <button type="button" class="btn btn-sm btn-ghost w-full" @click="emit('close')">
+      <button v-if="!embedded" type="button" class="btn btn-sm btn-ghost w-full" @click="emit('close')">
         Готово
       </button>
       <button type="button" class="btn btn-sm btn-ghost text-error w-full" @click="emit('remove')">
         Удалить адрес
       </button>
     </footer>
-  </aside>
+  </div>
 </template>

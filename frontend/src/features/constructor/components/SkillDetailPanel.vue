@@ -50,7 +50,9 @@ function pluginOnTable(status: ToolDependencyStatus): boolean {
   >
     <header class="flex items-start justify-between gap-2 border-b border-base-300 px-4 py-3">
       <div class="min-w-0">
-        <p class="text-xs uppercase tracking-wide text-base-content/50">Навык</p>
+        <p class="text-xs uppercase tracking-wide text-base-content/50">
+          {{ skill.systemRole ? "Системный навык" : "Навык" }}
+        </p>
         <h2 class="mt-0.5 truncate text-base font-semibold">{{ skill.name }}</h2>
       </div>
       <button

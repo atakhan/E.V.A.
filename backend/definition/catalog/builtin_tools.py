@@ -11,6 +11,8 @@ from definition.catalog.manifests.stubs import (
 )
 from tools.llm.manifest import LLM_TOOL_MANIFEST, POLZA_AI_LLM_TOOL_MANIFEST
 from tools.telegram.manifest import TELEGRAM_TOOL_MANIFEST
+from tools.project.manifest import PROJECT_TOOL_MANIFEST
+from tools.ssh_commands.manifest import SSH_COMMANDS_TOOL_MANIFEST
 from tools.text.manifest import TEXT_TOOL_MANIFEST
 from tools.web_client.manifest import WEB_CLIENT_TOOL_MANIFEST
 
@@ -20,8 +22,10 @@ BUILTIN_TOOLS: list[dict] = [
     MEMORY_TOOL_MANIFEST,
     CONTEXT_TOOL_MANIFEST,
     TEXT_TOOL_MANIFEST,
+    SSH_COMMANDS_TOOL_MANIFEST,
     WEB_CLIENT_TOOL_MANIFEST,
     TELEGRAM_TOOL_MANIFEST,
+    PROJECT_TOOL_MANIFEST,
     CRM_TOOL_MANIFEST,
     CATALOG_TOOL_MANIFEST,
     WEB_SEARCH_TOOL_MANIFEST,

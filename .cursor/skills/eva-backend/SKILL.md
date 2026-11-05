@@ -48,6 +48,11 @@ tools/
 │   ├── tool.py             # TextTool
 │   ├── regex_utils.py
 │   └── validators.py
+├── ssh_commands/
+│   ├── manifest.py         # ssh_commands catalog + run
+│   ├── library.py          # per-instance command library
+│   ├── runner.py           # OpenSSH client
+│   └── tool.py             # SshCommandsTool
 └── web_client/
     ├── config.py
     ├── http.py

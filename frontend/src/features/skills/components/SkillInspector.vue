@@ -11,6 +11,8 @@ const props = defineProps<{
   agentSlug: string;
   skillVersion?: string;
   skillDescription?: string;
+  skillAccepts?: string;
+  skillAnswers?: boolean;
   validationIssues?: AgentIssue[];
   validationOpen?: boolean;
 }>();
@@ -18,6 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:skillVersion": [value: string];
   "update:skillDescription": [value: string];
+  "update:skillAccepts": [value: string];
+  "update:skillAnswers": [value: boolean];
   "update:validationOpen": [value: boolean];
   selectIssue: [issue: AgentIssue];
 }>();
@@ -358,6 +362,28 @@ function availableToAdd(list: string[]): ActionDef[] {
             @input="emit('update:skillDescription', ($event.target as HTMLTextAreaElement).value)"
           />
         </label>
+
+        <label class="form-control w-full">
+          <span class="label-text">Принимаю от агента</span>
+          <input
+            class="input input-bordered input-sm w-full"
+            :value="skillAccepts ?? ''"
+            placeholder="описание падения"
+            @input="emit('update:skillAccepts', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm"
+            :checked="skillAnswers === true"
+            @change="emit('update:skillAnswers', ($event.target as HTMLInputElement).checked)"
+          />
+          Отвечаю в этой же нити
+        </label>
+        <p class="text-xs text-base-content/50">
+          Пустое «принимаю» значит, что навык не участвует в разговоре агентов. Если дело указано, начальное состояние должно слушать agent.message.received.
+        </p>
 
         <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">

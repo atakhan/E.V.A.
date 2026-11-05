@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import AgentsListView from "@/features/agents/views/AgentsListView.vue";
+import ProjectsListView from "@/features/projects/views/ProjectsListView.vue";
+import ProjectDeskView from "@/features/projects/views/ProjectDeskView.vue";
 import AgentOverviewView from "@/features/agents/views/AgentOverviewView.vue";
 import ActionsListView from "@/features/actions/views/ActionsListView.vue";
 import ToolsListView from "@/features/tools/views/ToolsListView.vue";
@@ -35,7 +37,18 @@ const router = createRouter({
       children: [
         {
           path: "",
-          redirect: "/agents",
+          redirect: "/projects",
+        },
+        {
+          path: "projects",
+          name: RouteNames.projects,
+          component: ProjectsListView,
+        },
+        {
+          path: "projects/:projectSlug/:agentSlug?",
+          name: RouteNames.projectDesk,
+          component: ProjectDeskView,
+          props: true,
         },
         {
           path: "agents",

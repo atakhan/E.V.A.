@@ -18,6 +18,18 @@ BUILTIN_EVENT_TYPES: dict[str, dict[str, Any]] = {
         "description": "Исходящее сообщение пользователю",
         "required_payload": ["conversation_id", "text"],
     },
+    "agent.message.received": {
+        "version": "1.0",
+        "source": "project",
+        "description": "Другой агент передал дело",
+        "required_payload": ["conversation_id", "text", "matter"],
+    },
+    "agent.message.declined": {
+        "version": "1.0",
+        "source": "project",
+        "description": "Дело не принято",
+        "required_payload": ["conversation_id", "reason"],
+    },
     "supplier.reply.received": {
         "version": "1.0",
         "source": "supplier",

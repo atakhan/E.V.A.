@@ -31,7 +31,7 @@ Idle channels are not drawn. The column shows only connected channels and an **�
 
 The same panel opens later from a click on the cable or on the channel block. Removing a channel, an address, or a skill asks for confirmation first.
 
-Side panels (channel, address, plugin, skill) are full height, flush to the right edge.
+Side panels (channel, address, skill) are full height, flush to the right edge. A plugin opens a sheet over the canvas. The sheet leaves only a top strip, down to the middle of the E.V.A. logo.
 
 ## What a channel is, in the product and in the code
 
@@ -86,14 +86,14 @@ Several applications are several addresses on the one Web Client channel (for ex
 
 A plugin is a catalog tool without `world`. The column under the agent shows every enabled instance of such a tool, one block per instance, on a bus from the agent. «Добавить плагин» opens the same kind of sheet as channels (`ToolCatalogSheet`).
 
-The sheet lists every non-world type. A type with `implemented: false` is greyed out with «Нет реализации»: runtime has no code for it. A type already on the table says «Уже на столе». Picking a type re-enables a dormant instance of it or creates one, then opens the plugin panel.
+The sheet lists every non-world type. A type with `implemented: false` is greyed out with «Нет реализации»: runtime has no code for it. A type already on the table says «Уже на столе». Picking a type re-enables a dormant instance of it or creates one, then opens the plugin settings sheet.
 
 Plugin color, derived by `evaluatePluginLink`, not stored:
 
 - **red** — the type is missing from the catalog, has no runtime implementation, or needs a credential that is not set
 - **green** — ready. A plugin that no Action calls is still green: a plugin without a skill is a normal state (axiom 10)
 
-The plugin panel holds the instance name and config, the Polza credential block for `polza_ai_llm`, the commands with the Actions that call each one, and «Где используется»: skills and Actions. «Отключить плагин» sets `enabled: false` and asks first, naming the Actions that still call it.
+The plugin settings sheet holds the instance name and config, the Polza credential block for `polza_ai_llm`, the commands with the Actions that call each one, and «Где используется»: skills and Actions. SSH Commands uses the same sheet for the connection, the command library, and the actions a skill can call. «Отключить плагин» sets `enabled: false` and asks first, naming the Actions that still call it.
 
 ## Links between zones
 

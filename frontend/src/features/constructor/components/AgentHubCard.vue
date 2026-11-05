@@ -4,6 +4,7 @@ import { agentIconSrc, type Agent } from "@/features/agents/types/agent";
 import type { AgentHubStatus, AgentHubTone } from "@/features/constructor/utils/agentHubStatus";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
 import { agentOverviewPath, agentRuntimePath } from "@/router/paths";
+import { DESK_ASIDE_MS, DESK_EASE, DESK_MOVE_MS } from "@/features/projects/utils/deskMotion";
 import { formatDateTime } from "@/shared/utils/formatDate";
 
 export type AgentHubPhase = "circle" | "card" | "details";
@@ -38,6 +39,20 @@ const props = defineProps<{
   panX: number;
   panY: number;
   zoom: number;
+  /** False while the project desk is still carrying the icon to the center. */
+  visible?: boolean;
+  /** 1 matches the hub. Smaller while the icon is still the desk size. */
+  glyphScale?: number;
+  /** Animate left, top, and scale. Turn on only after the start pose has painted. */
+  glide?: boolean;
+  glideEase?: string;
+  glideMs?: number;
+  /** Negative values join a flight that already started, in milliseconds. */
+  glideDelay?: number;
+  /** Name and status under the circle. Hidden while the icon is still leaving the desk. */
+  showMeta?: boolean;
+  /** Step aside while a channel occupies the center. */
+  parked?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -150,14 +165,21 @@ const rootStyle = computed(() => {
       zIndex: "40",
     };
   }
-  return {
-    left: `${props.panX}px`,
-    top: `${props.panY}px`,
-    width: "auto",
-    height: "auto",
-    transform: `translate(-50%, -50%) scale(${props.zoom})`,
-    zIndex: "20",
-  };
+    const ms = props.glideMs ?? DESK_MOVE_MS;
+    const ease = props.glideEase || DESK_EASE;
+    const delay = props.glideDelay ?? 0;
+    return {
+      left: `${props.panX}px`,
+      top: `${props.panY}px`,
+      width: "auto",
+      height: "auto",
+      transform: `translate(-50%, -50%) scale(${props.zoom * (props.glyphScale ?? 1)})`,
+      transition:
+        props.glide && !showFullscreenLayout.value
+          ? `left ${ms}ms ${ease} ${delay}ms, top ${ms}ms ${ease} ${delay}ms, transform ${ms}ms ${ease} ${delay}ms`
+          : "none",
+      zIndex: "20",
+    };
 });
 
 async function runFlip(direction: "expand" | "collapse") {
@@ -285,18 +307,27 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <div
     class="agent-hub-root pointer-events-none absolute"
+    :class="visible === false ? 'opacity-0' : 'opacity-100'"
     :style="rootStyle"
     data-canvas-ui
   >
     <div
+      :class="parked ? 'pointer-events-none opacity-0' : 'opacity-100'"
+      :style="{ transition: `opacity ${DESK_ASIDE_MS}ms ease` }"
+      :aria-hidden="parked ? 'true' : undefined"
+    >
+    <div
       ref="shell"
-      class="agent-hub-shell pointer-events-auto relative flex flex-col overflow-hidden border-2 bg-base-100 outline-none"
+      class="agent-hub-shell relative flex flex-col overflow-hidden bg-base-100 outline-none"
       :class="{
+        'pointer-events-none': visible === false || parked,
+        'pointer-events-auto': visible !== false && !parked,
         'is-flipping': flipHold !== 'none',
-        'agent-hub-shell--circle cursor-pointer border-base-300/80 shadow-lg hover:border-primary/50 hover:ring-2 hover:ring-primary/20':
+        'is-settling': (glyphScale ?? 1) < 0.999,
+        'agent-hub-shell--circle cursor-pointer border border-base-300 shadow-md hover:border-primary/50 hover:ring-2 hover:ring-primary/20':
           shellMode === 'circle',
-        'agent-hub-shell--card border-base-300/70 shadow-xl': shellMode === 'card',
-        'agent-hub-shell--details border-transparent shadow-2xl': shellMode === 'details',
+        'agent-hub-shell--card border-2 border-base-300/70 shadow-xl': shellMode === 'card',
+        'agent-hub-shell--details border-2 border-transparent shadow-2xl': shellMode === 'details',
       }"
       role="dialog"
       :aria-label="
@@ -315,9 +346,7 @@ function onKeydown(event: KeyboardEvent) {
         <img
           :src="iconSrc"
           alt=""
-          width="52"
-          height="52"
-          class="size-[52px] rounded-full object-cover"
+          class="absolute inset-0 size-full rounded-full object-cover"
         />
       </div>
 
@@ -589,7 +618,7 @@ function onKeydown(event: KeyboardEvent) {
     <span
       v-if="status"
       class="pointer-events-none absolute bottom-1.5 right-1.5 flex size-3.5 transition-opacity duration-200"
-      :class="shellMode === 'circle' ? 'opacity-100' : 'opacity-0'"
+      :class="shellMode === 'circle' && showMeta !== false ? 'opacity-100' : 'opacity-0'"
       :title="status.headline"
       aria-hidden="true"
     >
@@ -603,10 +632,11 @@ function onKeydown(event: KeyboardEvent) {
 
     <div
       class="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] max-w-[200px] -translate-x-1/2 rounded-box border border-base-300/50 bg-base-100/90 px-2.5 py-1 text-center shadow-sm backdrop-blur-sm transition-opacity duration-200"
-      :class="shellMode === 'circle' ? 'opacity-100' : 'opacity-0'"
+      :class="shellMode === 'circle' && showMeta !== false ? 'opacity-100' : 'opacity-0'"
     >
       <p class="truncate text-xs font-semibold">{{ agent.name }}</p>
       <p v-if="status" class="truncate text-[10px] text-base-content/60">{{ status.compactLine }}</p>
+    </div>
     </div>
   </div>
 </template>
@@ -644,8 +674,9 @@ function onKeydown(event: KeyboardEvent) {
   border-radius: 0;
 }
 
-.agent-hub-shell.is-flipping {
-  /* Size jumps instantly; FLIP animates transform only (set inline). */
+.agent-hub-shell.is-flipping,
+.agent-hub-shell.is-settling {
+  /* Size is already the circle; don't grow width on top of the glide. */
   transition: none;
 }
 

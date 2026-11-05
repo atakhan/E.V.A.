@@ -41,6 +41,18 @@ class AgentRow(Base):
     )
 
 
+class ProjectRow(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(256))
+    description: Mapped[str] = mapped_column(Text, default="")
+    agents: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
 class AgentDraftRow(Base):
     __tablename__ = "agent_drafts"
 

@@ -18,6 +18,7 @@ import { normalizeToolBinding } from "@/features/tools/types/normalize";
 import type { CanvasDocument } from "@/features/skills/types/canvas";
 import { normalizeSkill, skillFromLegacyCanvas } from "@/features/skills/types/skill";
 import { createId } from "@/shared/utils/id";
+import { libraryAgentSkills } from "@/features/skills/systemSkills";
 import { normalizeAgentSlug, suggestUniqueAgentSlug } from "@/shared/utils/agentSlug";
 
 const STORAGE_KEY = "eva.agents.v2";
@@ -189,6 +190,9 @@ function migrateAgentRecord(raw: unknown): Agent {
   };
 
   const body = createEmptyAgentBody();
+  const kind = record.kind === "runtime" || record.kind === "fork" ? record.kind : "library";
+  const projectSlug = typeof record.projectSlug === "string" ? record.projectSlug : undefined;
+  const originSlug = typeof record.originSlug === "string" ? record.originSlug : undefined;
   let skills = Array.isArray(record.skills) ? record.skills.map(normalizeSkill) : [];
 
   if (skills.length === 0 && record.modules) {
@@ -205,6 +209,9 @@ function migrateAgentRecord(raw: unknown): Agent {
     description: record.description ?? "",
     icon: typeof record.icon === "string" ? record.icon : "",
     archivedAt: record.archivedAt ?? null,
+    kind,
+    projectSlug,
+    originSlug,
     defaultSkillId: record.defaultSkillId,
     createdAt: record.createdAt || new Date().toISOString(),
     updatedAt: record.updatedAt || new Date().toISOString(),
@@ -396,6 +403,22 @@ export async function createAgentOnApi(agent: Agent) {
   }
 }
 
+export function rememberAgent(agent: Agent) {
+  const normalized = normalizeAgents([agent])[0];
+  const index = agents.value.findIndex(
+    (item) => item.id === normalized.id || item.slug === normalized.slug,
+  );
+  if (index >= 0) {
+    agents.value[index] = normalized;
+  } else {
+    agents.value = [normalized, ...agents.value];
+  }
+}
+
+export function forgetAgent(slug: string) {
+  agents.value = agents.value.filter((agent) => agent.slug !== slug);
+}
+
 export async function createAgentWithStorage(input: {
   name: string;
   slug: string;
@@ -414,7 +437,9 @@ export async function createAgentWithStorage(input: {
     icon: "",
     createdAt: now,
     updatedAt: now,
+    kind: "library",
     ...createEmptyAgentBody(),
+    skills: libraryAgentSkills(now),
   };
   agents.value = [agent, ...agents.value];
   void createAgentOnApi(agent);

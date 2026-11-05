@@ -58,7 +58,7 @@ Skills/Actions/Tool instances хранятся как один `body` (JSONB) в
 
 ## 12. Инстансы Tools: сборка по типу
 
-`definition_loader._build_tool_for_binding` — `if/elif` по `tool_type` с пятью ветками; типы без ветки возвращают `None` и молча не регистрируются. Манифесты таких типов несут `implemented: False`; `tests/test_catalog_completeness.py::test_implemented_flag_matches_runtime_factory` падает, если флаг и ветки фабрики разошлись. Режимы `stub` подменяют реализацию целиком (для `polza_ai_llm` — `LlmStubTool` с расширенным списком команд). Инстансу «штампуются» атрибуты `id`, `tool_type`, `credential_id` поверх экземпляра класса (а не через конструктор).
+`definition_loader._build_tool_for_binding` — `if/elif` по `tool_type` с шестью ветками; типы без ветки возвращают `None` и молча не регистрируются. Манифесты таких типов несут `implemented: False`; `tests/test_catalog_completeness.py::test_implemented_flag_matches_runtime_factory` падает, если флаг и ветки фабрики разошлись. Режимы `stub` подменяют реализацию целиком (для `polza_ai_llm` — `LlmStubTool` с расширенным списком команд). Инстансу «штампуются» атрибуты `id`, `tool_type`, `credential_id` поверх экземпляра класса (а не через конструктор).
 
 ## 13. Валидация входа команды — три режима
 

@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useTemplateRef, watch } from "vue";
 import { getAgentBySlug } from "@/features/agents/services/agentsStorage";
 import { toolUsage, type ToolUsage } from "@/features/agents/utils/agentDependencies";
 import type { WorldLinkStatus } from "@/features/agents/utils/evaluateWorldLink";
 import LinkStatusNote from "@/features/constructor/components/LinkStatusNote.vue";
+import PluginSettingsSheet from "@/features/constructor/components/PluginSettingsSheet.vue";
 import ToolUsageList from "@/features/constructor/components/ToolUsageList.vue";
 import PolzaAiPanel from "@/features/tools/components/PolzaAiPanel.vue";
 import ToolInstanceConfigForm from "@/features/tools/components/ToolInstanceConfigForm.vue";
 import { useTools } from "@/features/tools/composables/useTools";
 import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { getConfigSchema, mergeSchemaConfig } from "@/features/tools/utils/instanceConfig";
 import { fetchCredentials, type ToolCredential } from "@/features/tools/services/credentialsApi";
 import type { ToolInstance } from "@/features/tools/types/tool";
 import { serializePolzaConfigNote } from "@/features/tools/utils/polzaConfig";
@@ -26,6 +28,12 @@ const emit = defineEmits<{
   disconnect: [];
   selectSkill: [skillId: string];
 }>();
+
+const sheet = useTemplateRef("sheet");
+
+function closeSheet() {
+  sheet.value?.requestClose();
+}
 
 const { getInstance, updateInstance } = useTools();
 
@@ -82,6 +90,13 @@ function patchInstance(patch: Partial<ToolInstance>) {
   updateInstance(props.agentSlug, instance.value.id, patch);
 }
 
+function onConfig(next: Record<string, unknown>) {
+  if (!instance.value) return;
+  patchInstance({
+    config: mergeSchemaConfig(instance.value.config, next, getConfigSchema(instance.value.toolId)),
+  });
+}
+
 function polzaConfigNote(item: ToolInstance): string {
   return serializePolzaConfigNote({
     model: typeof item.config.model === "string" ? item.config.model : undefined,
@@ -100,14 +115,11 @@ function onPolzaConfigNote(note: string) {
 </script>
 
 <template>
-  <aside
-    class="absolute inset-y-0 right-0 z-30 flex w-[22rem] flex-col border-l border-base-300/60 bg-base-100 shadow-xl sm:w-96"
-    data-canvas-ui
-  >
-    <header class="flex items-start justify-between gap-2 border-b border-base-300 px-4 py-3">
+  <PluginSettingsSheet ref="sheet" labelled-by="plugin-settings-title" @close="emit('close')">
+    <header class="flex items-start justify-between gap-2 border-b border-base-300 px-6 py-4">
       <div class="min-w-0">
         <p class="text-xs uppercase tracking-wide text-base-content/50">Плагин</p>
-        <h2 class="mt-0.5 truncate text-base font-semibold">{{ instance?.name ?? instanceId }}</h2>
+        <h2 id="plugin-settings-title" class="mt-0.5 truncate text-base font-semibold">{{ instance?.name ?? instanceId }}</h2>
         <p class="mt-0.5 font-mono text-[10px] text-base-content/45">
           {{ instance?.toolId ?? "?" }} · {{ instanceId }}
         </p>
@@ -116,13 +128,14 @@ function onPolzaConfigNote(note: string) {
         type="button"
         class="btn btn-xs btn-square btn-ghost shrink-0"
         aria-label="Закрыть"
-        @click="emit('close')"
+        @click="closeSheet()"
       >
         ✕
       </button>
     </header>
 
-    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+    <div class="min-h-0 flex-1 overflow-y-auto px-6 py-6 text-sm">
+      <div class="mx-auto w-full max-w-5xl space-y-4">
       <LinkStatusNote :status="status" :reason="reason" />
 
       <p v-if="typeDef?.description" class="text-xs text-base-content/60">
@@ -144,7 +157,7 @@ function onPolzaConfigNote(note: string) {
           <ToolInstanceConfigForm
             :tool-type-id="instance.toolId"
             :model-value="instance.config"
-            @update:model-value="patchInstance({ config: $event })"
+            @update:model-value="onConfig"
           />
         </div>
 
@@ -188,9 +201,11 @@ function onPolzaConfigNote(note: string) {
       </template>
 
       <p v-else class="text-sm text-error">Плагин не найден</p>
+      </div>
     </div>
 
-    <footer class="flex flex-col gap-2 border-t border-base-300 p-3">
+    <footer class="border-t border-base-300 px-6 py-4">
+      <div class="mx-auto flex w-full max-w-5xl flex-wrap gap-2">
       <RouterLink
         v-if="instance"
         :to="agentToolInstancePath(agentSlug, instance.id)"
@@ -201,7 +216,8 @@ function onPolzaConfigNote(note: string) {
       <button type="button" class="btn btn-sm btn-ghost text-error" @click="emit('disconnect')">
         Отключить плагин
       </button>
-      <button type="button" class="btn btn-sm" @click="emit('close')">Готово</button>
+      <button type="button" class="btn btn-sm" @click="closeSheet()">Готово</button>
+      </div>
     </footer>
-  </aside>
+  </PluginSettingsSheet>
 </template>

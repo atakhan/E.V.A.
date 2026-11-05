@@ -20,6 +20,12 @@ import {
   WORLD_PORT_SIZE,
   type ConstructorSkillNode,
 } from "@/features/constructor/types/constructor";
+import {
+  DESK_ASIDE_MS,
+  DESK_EASE,
+  DESK_EASE_OPEN,
+  DESK_MOVE_MS,
+} from "@/features/projects/utils/deskMotion";
 
 export interface CanvasPlugin {
   instanceId: string;
@@ -75,6 +81,21 @@ const props = withDefaults(
     memoryHistoryLine?: string;
     memoryStateLine?: string;
     highlight?: CanvasHighlight | null;
+    /** When set, the hub is already at this screen point on the first paint. */
+    bootPan?: { x: number; y: number } | null;
+    /** World, skills, plugins, memory, and canvas chrome. The hub lives outside this canvas. */
+    satellitesVisible?: boolean;
+    /** Fold the agent world back while a channel flies to the center. */
+    parked?: boolean;
+    /** Channel card hidden because a flying copy has taken its place. */
+    liftedChannelId?: string | null;
+    /** Keep the desk grid showing through during the project → agent handoff. */
+    clearBackdrop?: boolean;
+    /** Slide the world origin with the agent icon. */
+    glide?: boolean;
+    glideEase?: string;
+    glideMs?: number;
+    glideDelay?: number;
   }>(),
   {
     nodes: () => [],
@@ -92,6 +113,15 @@ const props = withDefaults(
     memoryHistoryLine: "",
     memoryStateLine: "",
     highlight: null,
+    bootPan: null,
+    satellitesVisible: true,
+    parked: false,
+    liftedChannelId: null,
+    clearBackdrop: false,
+    glide: false,
+    glideEase: DESK_EASE,
+    glideMs: DESK_MOVE_MS,
+    glideDelay: 0,
   },
 );
 
@@ -110,6 +140,7 @@ const emit = defineEmits<{
   addPlugin: [];
   disconnectPlugin: [instanceId: string];
   selectMemory: [];
+  ready: [];
 }>();
 
 const GRID_SIZE = 20;
@@ -117,8 +148,8 @@ const ADD_BTN_WIDTH = 168;
 const ADD_BTN_HEIGHT = ADD_SLOT_HEIGHT;
 const AGENT_RIM = AGENT_SIZE / 2 + 4;
 
-const panX = ref(0);
-const panY = ref(0);
+const panX = ref(props.bootPan?.x ?? 0);
+const panY = ref(props.bootPan?.y ?? 0);
 const zoom = ref(1);
 
 const viewportEl = useTemplateRef<HTMLElement>("viewport");
@@ -142,18 +173,41 @@ const addKindButtonStyle = computed(() => ({
 const viewportStyle = computed(() => {
   const size = GRID_SIZE * zoom.value;
   return {
-    backgroundImage:
-      "radial-gradient(circle, color-mix(in oklab, var(--color-base-content) 18%, transparent) 1px, transparent 1px)",
+    backgroundImage: props.clearBackdrop
+      ? "none"
+      : "radial-gradient(circle, color-mix(in oklab, var(--color-base-content) 18%, transparent) 1px, transparent 1px)",
     backgroundSize: `${size}px ${size}px`,
     backgroundPosition: `${panX.value}px ${panY.value}px`,
     cursor: panDrag.value ? "grabbing" : "grab",
   };
 });
 
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 const worldStyle = computed(() => ({
   transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
   transformOrigin: "0 0",
+    transition: props.glide && !prefersReducedMotion
+    ? `transform ${props.glideMs ?? DESK_MOVE_MS}ms ${props.glideEase || DESK_EASE} ${props.glideDelay ?? 0}ms`
+    : "none",
 }));
+
+/** Satellites grow out of the agent origin and fold back into it. */
+const satelliteLayerStyle = computed(() => {
+  const shown = props.satellitesVisible;
+  const ease = shown ? DESK_EASE_OPEN : DESK_EASE;
+  const opacity = !shown ? "0" : props.parked ? "0.3" : "1";
+  const opacityMs =
+    shown && props.parked ? DESK_ASIDE_MS : Math.round(DESK_MOVE_MS * 0.55);
+  return {
+    transform: shown ? "scale(1)" : "scale(0)",
+    transformOrigin: "0 0",
+    opacity,
+    transition: prefersReducedMotion
+      ? "none"
+      : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${opacityMs}ms ease`,
+  };
+});
 
 const addButtonStyle = computed(() => ({
   left: `${props.addSkillSlot.x - ADD_BTN_WIDTH / 2}px`,
@@ -355,23 +409,31 @@ watch(
 
 onMounted(async () => {
   await nextTick();
-  centerOnOrigin(true);
+  if (!props.bootPan) centerOnOrigin(true);
+  emit("ready");
 });
 
 onUnmounted(() => {
   panDrag.value = null;
 });
 
+function setPan(x: number, y: number) {
+  panX.value = x;
+  panY.value = y;
+}
+
 defineExpose({
   centerOnOrigin,
   centerOnNode,
+  setPan,
 });
 </script>
 
 <template>
   <div
     ref="viewport"
-    class="relative h-full w-full touch-none overflow-hidden bg-base-300 select-none"
+    class="relative h-full w-full touch-none overflow-hidden select-none"
+    :class="clearBackdrop ? 'bg-transparent' : 'bg-base-300'"
     :style="viewportStyle"
     @wheel="onWheel"
     @pointerdown="onPointerDown"
@@ -381,6 +443,11 @@ defineExpose({
     @contextmenu.prevent
   >
     <div class="pointer-events-none absolute inset-0" :style="worldStyle">
+    <div
+      class="pointer-events-none absolute inset-0"
+      :inert="!satellitesVisible || parked"
+      :style="satelliteLayerStyle"
+    >
       <svg
         class="pointer-events-none absolute overflow-visible"
         width="1"
@@ -394,6 +461,7 @@ defineExpose({
           fill="none"
           class="transition-opacity duration-200"
           :class="[cableClass(link.status), dimKind(link.toolId) ? 'opacity-25' : '']"
+          :style="liftedChannelId === link.toolId ? { opacity: 0, transition: 'none' } : undefined"
           stroke-width="2.5"
           stroke-linecap="round"
         >
@@ -417,6 +485,7 @@ defineExpose({
           :d="cable.d"
           fill="none"
           :class="[cableClass(cable.status), dimKind(cable.id) ? 'opacity-25' : '']"
+          :style="liftedChannelId === cable.id ? { opacity: 0, transition: 'none' } : undefined"
           stroke-width="3"
           stroke-linecap="round"
           class="pointer-events-none transition-opacity duration-200"
@@ -494,11 +563,16 @@ defineExpose({
         :key="kind.toolId"
         data-canvas-ui
         class="pointer-events-auto absolute transition-opacity duration-200"
-        :class="dimKind(kind.toolId) ? 'opacity-35' : ''"
+        :class="[
+          liftedChannelId === kind.toolId ? 'opacity-0 transition-none' : '',
+          liftedChannelId !== kind.toolId && dimKind(kind.toolId) ? 'opacity-35' : '',
+        ]"
         :style="{
           left: `${kind.x - WORLD_KIND_WIDTH / 2}px`,
           top: `${kind.y - WORLD_KIND_HEIGHT / 2}px`,
           width: `${WORLD_KIND_WIDTH}px`,
+          opacity: liftedChannelId === kind.toolId ? 0 : undefined,
+          transition: liftedChannelId === kind.toolId ? 'none' : undefined,
         }"
         @pointerdown.stop
       >
@@ -506,7 +580,8 @@ defineExpose({
           <div
             class="flex h-14 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-2 text-center text-xs font-semibold text-base-content shadow-md hover:border-primary/50"
             :class="selectedKindToolId === kind.toolId ? 'ring-2 ring-primary/40' : ''"
-            :title="`${kind.reason} · клик — настроить канал`"
+            :data-channel="kind.toolId"
+            :title="`${kind.reason} · открыть канал`"
             @click="emit('selectKind', kind.toolId)"
           >
             <span class="line-clamp-2">{{ kind.name }}</span>
@@ -560,6 +635,8 @@ defineExpose({
           top: `${address.y - WORLD_ADDRESS_HEIGHT / 2}px`,
           width: `${WORLD_ADDRESS_WIDTH}px`,
           height: `${WORLD_ADDRESS_HEIGHT}px`,
+          opacity: liftedChannelId === address.toolId ? 0 : undefined,
+          transition: liftedChannelId === address.toolId ? 'none' : undefined,
         }"
         :title="address.reason"
         @pointerdown.stop
@@ -708,10 +785,13 @@ defineExpose({
         <span class="line-clamp-2">{{ node.name }}</span>
       </button>
     </div>
+    </div>
 
     <button
       type="button"
-      class="btn btn-circle btn-md absolute bottom-4 left-4 z-10 border border-base-300/60 bg-base-100/90 shadow-lg backdrop-blur-sm"
+      class="btn btn-circle btn-md absolute bottom-4 left-4 z-10 border border-base-300/60 bg-base-100/90 shadow-lg backdrop-blur-sm transition-opacity motion-reduce:transition-none"
+      :class="satellitesVisible && !parked ? 'opacity-100' : 'pointer-events-none opacity-0'"
+      :style="{ transitionDuration: `${Math.round(DESK_MOVE_MS * 0.55)}ms` }"
       data-canvas-ui
       title="К центру холста"
       aria-label="К центру холста"
@@ -734,7 +814,9 @@ defineExpose({
     </button>
 
     <div
-      class="pointer-events-none absolute bottom-4 right-4 rounded-box border border-base-300/60 bg-base-100/90 px-2 py-1 font-mono text-xs text-base-content/70 shadow-lg backdrop-blur-sm"
+      class="pointer-events-none absolute bottom-4 right-4 rounded-box border border-base-300/60 bg-base-100/90 px-2 py-1 font-mono text-xs text-base-content/70 shadow-lg backdrop-blur-sm transition-opacity motion-reduce:transition-none"
+      :class="satellitesVisible && !parked ? 'opacity-100' : 'opacity-0'"
+      :style="{ transitionDuration: `${Math.round(DESK_MOVE_MS * 0.55)}ms` }"
     >
       {{ Math.round(zoom * 100) }}%
     </div>

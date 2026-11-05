@@ -6,10 +6,11 @@ import AgentFormDialog from "@/features/agents/components/AgentFormDialog.vue";
 import { useAgents } from "@/features/agents/composables/useAgents";
 import type { Agent } from "@/features/agents/types/agent";
 import { agentHomePath, agentRuntimePath } from "@/router/paths";
+import AppMainNav from "@/shared/layout/AppMainNav.vue";
 
 const router = useRouter();
 const {
-  activeAgents,
+  libraryAgents,
   deleteAgent,
   archiveAgent,
   unarchiveAgent,
@@ -24,7 +25,9 @@ const createDialog = useTemplateRef("createDialog");
 const editDialog = useTemplateRef("editDialog");
 const editingAgent = ref<Agent | null>(null);
 
-const visibleAgents = computed(() => (tab.value === "active" ? activeAgents.value : archivedAgents.value));
+const visibleAgents = computed(() =>
+  tab.value === "active" ? libraryAgents.value : archivedAgents.value,
+);
 
 async function loadArchivedAgents() {
   archiveLoading.value = true;
@@ -101,11 +104,13 @@ async function unarchiveAgentAction(agent: Agent) {
 
 <template>
   <div class="px-6 py-8 pb-24 lg:px-8">
+    <AppMainNav class="mb-10" />
+
     <div class="mx-auto max-w-5xl">
       <header class="mb-8">
         <h1 class="text-2xl font-semibold tracking-wide">Агенты</h1>
         <p class="mt-1 text-sm text-base-content/60">
-          Конструктор Skills, Actions и Tools
+          Библиотека доступных агентов. Конструктор Skills, Actions и Tools
         </p>
       </header>
 

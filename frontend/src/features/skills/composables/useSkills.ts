@@ -51,6 +51,8 @@ export function useSkills() {
       name?: string;
       description?: string;
       version?: string;
+      accepts?: string;
+      answers?: boolean;
     },
   ) {
     const agent = getAgentBySlug(agentSlug);

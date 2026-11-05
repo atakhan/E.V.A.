@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import re
 import uuid
 from collections.abc import Callable
@@ -12,8 +13,15 @@ from sqlalchemy.orm import Session
 from definition.behavior.materialize import flatten_agent_document
 from definition.mappers.action_mapper import normalize_action_document
 from definition.mappers.skill_mapper import skill_from_document
+from definition.system_skills import library_agent_skills
 from definition.validation.validate_agent import validate_agent
-from infrastructure.models.tables import AgentDraftRow, AgentPublicationRow, AgentRow, ToolCatalogRow
+from infrastructure.models.tables import (
+    AgentDraftRow,
+    AgentPublicationRow,
+    AgentRow,
+    ToolCatalogRow,
+    ToolCredentialRow,
+)
 
 # Slugs created by integration tests; safe to delete on dev startup.
 EPHEMERAL_AGENT_SLUG_PREFIXES = (
@@ -22,6 +30,9 @@ EPHEMERAL_AGENT_SLUG_PREFIXES = (
     "web-agent-",
     "cred-agent-",
 )
+
+_AGENT_KINDS = {"library", "runtime", "fork"}
+
 
 class AgentArchivedError(Exception):
     def __init__(self, slug: str) -> None:
@@ -67,7 +78,26 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "tools": draft_body.get("tools", []),
         "constructor": draft_body.get("constructor") or {"nodes": []},
         "world": draft_body.get("world") or {"addresses": []},
+        "kind": draft_body.get("kind") if draft_body.get("kind") in _AGENT_KINDS else "library",
+        "projectSlug": draft_body.get("projectSlug") or None,
+        "originSlug": draft_body.get("originSlug") or None,
     }
+
+
+def _remap_credential_ids(tools: list[Any], mapping: dict[str, str]) -> list[Any]:
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("credentialId") in mapping:
+            tool["credentialId"] = mapping[str(tool["credentialId"])]
+    return tools
+
+
+def _remap_world_credentials(world: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
+    addresses = world.get("addresses")
+    if isinstance(addresses, list):
+        for address in addresses:
+            if isinstance(address, dict) and address.get("credentialId") in mapping:
+                address["credentialId"] = mapping[str(address["credentialId"])]
+    return world
 
 
 def _summary_from_row(row: AgentRow) -> dict[str, Any]:
@@ -148,7 +178,17 @@ class AgentService:
             return None
         return flatten_agent_document(_merge_agent(agent, agent.draft.body))
 
-    def create_agent(self, *, name: str, slug: str, description: str = "") -> dict[str, Any]:
+    def create_agent(
+        self,
+        *,
+        name: str,
+        slug: str,
+        description: str = "",
+        kind: str = "library",
+        project_slug: str | None = None,
+        skills: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         if self.session.scalar(select(AgentRow).where(AgentRow.slug == slug)):
             raise ValueError(f"Slug '{slug}' already exists")
 
@@ -156,11 +196,110 @@ class AgentService:
         self.session.add(agent)
         self.session.flush()
 
+        now = _utcnow_iso()
         body = _empty_draft_body(agent)
+        body["kind"] = kind if kind in _AGENT_KINDS else "library"
+        if project_slug:
+            body["projectSlug"] = project_slug
+        body["skills"] = skills if skills is not None else library_agent_skills(now)
+        if tools is not None:
+            body["tools"] = tools
         draft = AgentDraftRow(agent_id=agent.id, body=body)
         self.session.add(draft)
         self.session.flush()
         return _merge_agent(agent, body)
+
+    def fork_library_agent(self, origin_slug: str, project_slug: str) -> dict[str, Any]:
+        """Copy a library agent into a project. Later edits of either side stay apart."""
+        origin = self.get_agent_by_slug(origin_slug)
+        if origin is None:
+            raise KeyError(f"Agent '{origin_slug}' not found")
+        if origin.get("kind") == "fork" and origin.get("originSlug"):
+            return self.fork_library_agent(str(origin["originSlug"]), project_slug)
+        if origin.get("kind") == "runtime":
+            raise ValueError("Системного агента проекта нельзя форкнуть")
+        existing = self._find_fork(origin_slug, project_slug)
+        if existing is not None:
+            return existing
+
+        slug = self._mint_fork_slug(origin_slug, project_slug)
+        agent = AgentRow(
+            slug=slug,
+            name=str(origin.get("name") or origin_slug),
+            description=str(origin.get("description") or ""),
+            icon=str(origin.get("icon") or ""),
+        )
+        self.session.add(agent)
+        self.session.flush()
+        mapping = self._copy_credentials(str(origin["id"]), agent.id)
+        now = _utcnow_iso()
+        body = {
+            "id": agent.id,
+            "slug": slug,
+            "name": agent.name,
+            "description": agent.description,
+            "icon": agent.icon,
+            "createdAt": now,
+            "updatedAt": now,
+            "defaultSkillId": origin.get("defaultSkillId") or None,
+            "skills": copy.deepcopy(origin.get("skills") or []),
+            "actions": copy.deepcopy(origin.get("actions") or []),
+            "tools": _remap_credential_ids(copy.deepcopy(origin.get("tools") or []), mapping),
+            "constructor": copy.deepcopy(origin.get("constructor") or {"nodes": []}),
+            "world": _remap_world_credentials(copy.deepcopy(origin.get("world") or {"addresses": []}), mapping),
+            "kind": "fork",
+            "projectSlug": project_slug,
+            "originSlug": origin_slug,
+        }
+        self.session.add(AgentDraftRow(agent_id=agent.id, body=body))
+        self.session.flush()
+        return _merge_agent(agent, body)
+
+    def _find_fork(self, origin_slug: str, project_slug: str) -> dict[str, Any] | None:
+        rows = self.session.scalars(select(AgentRow)).all()
+        for row in rows:
+            body = row.draft.body if row.draft and isinstance(row.draft.body, dict) else {}
+            if (
+                body.get("kind") == "fork"
+                and body.get("originSlug") == origin_slug
+                and body.get("projectSlug") == project_slug
+                and row.archived_at is None
+            ):
+                return self.get_agent_by_slug(row.slug)
+        return None
+
+    def _mint_fork_slug(self, origin_slug: str, project_slug: str) -> str:
+        raw = re.sub(r"[^a-z0-9-]+", "-", f"{origin_slug}-{project_slug}".lower()).strip("-")[:48].strip("-")
+        if len(raw) < 2 or not raw[:1].isalpha():
+            raw = f"a-{raw}".strip("-")[:48]
+        candidate = raw
+        suffix = 2
+        while self.session.scalar(select(AgentRow.id).where(AgentRow.slug == candidate)):
+            tail = f"-{suffix}"
+            candidate = f"{raw[: 48 - len(tail)]}{tail}"
+            suffix += 1
+        return candidate
+
+    def _copy_credentials(self, origin_id: str, fork_id: str) -> dict[str, str]:
+        rows = self.session.scalars(
+            select(ToolCredentialRow).where(ToolCredentialRow.agent_id == origin_id)
+        ).all()
+        mapping: dict[str, str] = {}
+        for row in rows:
+            copied = str(uuid.uuid4())
+            mapping[row.id] = copied
+            self.session.add(
+                ToolCredentialRow(
+                    id=copied,
+                    agent_id=fork_id,
+                    tool_id=row.tool_id,
+                    name=row.name,
+                    secret_encrypted=row.secret_encrypted,
+                    meta=dict(row.meta or {}),
+                )
+            )
+        self.session.flush()
+        return mapping
 
     def upsert_draft(self, slug: str, payload: dict[str, Any]) -> dict[str, Any]:
         agent = self.ensure_active(slug)
@@ -174,7 +313,17 @@ class AgentService:
         if agent.draft is None:
             agent.draft = AgentDraftRow(agent_id=agent.id, body={})
 
+        previous = agent.draft.body if agent.draft and isinstance(agent.draft.body, dict) else {}
         default_skill_id = str(payload.get("defaultSkillId") or "").strip() or None
+        kind = payload.get("kind") or previous.get("kind") or "library"
+        if kind not in _AGENT_KINDS:
+            kind = "library"
+        project_slug = payload.get("projectSlug")
+        if not project_slug:
+            project_slug = previous.get("projectSlug")
+        origin_slug = payload.get("originSlug")
+        if not origin_slug:
+            origin_slug = previous.get("originSlug")
         body = flatten_agent_document({
             "id": agent.id,
             "slug": agent.slug,
@@ -189,6 +338,9 @@ class AgentService:
             "tools": payload.get("tools", []),
             "constructor": payload.get("constructor") or {"nodes": []},
             "world": payload.get("world") or {"addresses": []},
+            "kind": kind,
+            "projectSlug": project_slug or None,
+            "originSlug": origin_slug or None,
         })
         agent.draft.body = body
         agent.draft.updated_at = datetime.now(timezone.utc)

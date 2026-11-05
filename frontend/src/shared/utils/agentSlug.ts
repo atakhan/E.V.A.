@@ -7,6 +7,8 @@ export const RESERVED_AGENT_SLUGS = [
   "skills",
   "actions",
   "tools",
+  "projects",
+  "runtime",
 ] as const;
 
 const AGENT_SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;

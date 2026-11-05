@@ -15,7 +15,9 @@ import type { ToolInstance } from "@/features/tools/types/tool";
 import { getToolDefinition, isToolImplemented } from "@/features/tools/registry/builtinTools";
 import { serializePolzaConfigNote } from "@/features/tools/utils/polzaConfig";
 import { serializeWebClientConfigNote } from "@/features/tools/utils/webClientConfig";
-import { agentToolsPath } from "@/router/paths";
+import { getConfigSchema, mergeSchemaConfig } from "@/features/tools/utils/instanceConfig";
+import { SSH_COMMANDS_TOOL_ID } from "@/features/tools/utils/sshLibrary";
+import { agentConstructorPath, agentToolsPath } from "@/router/paths";
 
 const props = defineProps<{
   agentSlug: string;
@@ -73,6 +75,13 @@ onMounted(() => {
 function patchInstance(patch: Partial<ToolInstance>) {
   if (!instance.value) return;
   updateInstance(props.agentSlug, instance.value.id, patch);
+}
+
+function onConfig(next: Record<string, unknown>) {
+  if (!instance.value) return;
+  patchInstance({
+    config: mergeSchemaConfig(instance.value.config, next, getConfigSchema(instance.value.toolId)),
+  });
 }
 
 function configNoteForPanel(item: ToolInstance): string {
@@ -213,7 +222,7 @@ function removeAndGoBack() {
         <ToolInstanceConfigForm
           :tool-type-id="instance.toolId"
           :model-value="instance.config"
-          @update:model-value="patchInstance({ config: $event })"
+          @update:model-value="onConfig"
         />
       </div>
 
@@ -287,6 +296,11 @@ function removeAndGoBack() {
           </button>
         </div>
       </div>
+
+      <p v-if="instance.toolId === SSH_COMMANDS_TOOL_ID" class="mt-3 text-sm text-base-content/65">
+        Команды и действия этой библиотеки собираются в конструкторе: откройте плагин на столе.
+        <RouterLink :to="agentConstructorPath(agentSlug)" class="link">Открыть конструктор</RouterLink>
+      </p>
 
       <p v-if="credentialError" class="mt-3 text-sm text-error">{{ credentialError }}</p>
 

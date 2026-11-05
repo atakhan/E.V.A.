@@ -66,6 +66,20 @@ export function evaluateWorldLink(agent: Agent, toolId: string): WorldLinkEvalua
 
   const instance = enabled[0]!;
 
+  if (toolId === "project") {
+    const linked = (agent.world?.addresses ?? []).some((address) => {
+      const slug = address.config?.projectSlug;
+      return address.toolId === toolId && typeof slug === "string" && slug.trim().length > 0;
+    });
+    if (!linked) {
+      return {
+        status: "yellow",
+        reason: "Нет коннектора другого проекта",
+        instanceId: instance.id,
+      };
+    }
+  }
+
   if (toolId === "web_client") {
     const hasApp = (agent.world?.addresses ?? []).some(
       (address) => address.toolId === toolId && Boolean(address.credentialId?.trim()),

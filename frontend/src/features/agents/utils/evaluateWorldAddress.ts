@@ -23,6 +23,7 @@ export interface EvaluateWorldAddressOptions {
 
 const PLACE_REQUIRED: Record<string, string[]> = {
   telegram: ["chat_id"],
+  project: ["projectSlug"],
 };
 
 function filled(value: unknown): boolean {

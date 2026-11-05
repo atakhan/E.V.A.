@@ -99,6 +99,7 @@ backend/
 │   ├── polza/{client,llm}.py
 │   ├── telegram/{manifest,tool,stub}.py
 │   ├── text/{manifest,tool,regex_utils,validators}.py
+│   ├── ssh_commands/{manifest,library,runner,tool}.py
 │   └── web_client/{manifest,config,http,tool}.py
 ├── workers/
 │   ├── runtime_worker.py      process_event_data, run_worker
