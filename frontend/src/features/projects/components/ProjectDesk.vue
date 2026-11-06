@@ -3,8 +3,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { agentIconSrc } from "@/features/agents/types/agent";
 import type { Agent } from "@/features/agents/types/agent";
 import type { ProjectAgent } from "@/features/projects/types/project";
+import type { Flight } from "@/features/projects/motion";
 import { layoutAroundRuntime, type DeskAnchor } from "@/features/projects/utils/deskLayout";
-import { DESK_ASIDE_MS, DESK_EASE_OPEN, DESK_MOVE_MS } from "@/features/projects/utils/deskMotion";
+import { DESK_ASIDE_MS } from "@/features/projects/utils/deskMotion";
+import { orbitIconStyle, orbitPlaceStyle } from "@/features/projects/utils/orbitStyles";
 
 const props = withDefaults(
   defineProps<{
@@ -16,8 +18,13 @@ const props = withDefaults(
     focusSlug?: string | null;
     dimmed?: boolean;
     focusHidden?: boolean;
+    /**
+     * When false, member icons sit collapsed on the runtime and then
+     * pop out along the arc when flipped to true.
+     */
+    satellites?: boolean;
     /** Moves the focused desk icon toward the agent hub while the constructor catches up. */
-    iconFlight?: { dx: number; dy: number; scale: number } | null;
+    iconFlight?: Flight | null;
   }>(),
   {
     statusBySlug: undefined,
@@ -25,6 +32,7 @@ const props = withDefaults(
     focusSlug: null,
     dimmed: false,
     focusHidden: false,
+    satellites: true,
     iconFlight: null,
   },
 );
@@ -37,6 +45,11 @@ const emit = defineEmits<{
 
 const board = ref<HTMLElement | null>(null);
 const size = ref({ width: 0, height: 0 });
+/**
+ * Until the first expand, collapsed poses snap with no transition so agents never
+ * paint on the orbit first and then jerk into the runtime.
+ */
+const everRevealed = ref(props.satellites);
 
 const bySlug = computed(() => new Map(props.library.map((agent) => [agent.slug, agent])));
 
@@ -48,8 +61,15 @@ const placed = computed(() => {
 
 let arrangeTimer = 0;
 
+watch(
+  () => props.satellites,
+  (on) => {
+    if (on) everRevealed.value = true;
+  },
+);
+
 watch(placed, (next) => {
-  if (!props.anchor || size.value.width <= 0) return;
+  if (!props.anchor || size.value.width <= 0 || !props.satellites) return;
   if (samePlaces(next, props.agents)) return;
   window.clearTimeout(arrangeTimer);
   arrangeTimer = window.setTimeout(() => emit("arrange", next), 80);
@@ -94,32 +114,35 @@ onUnmounted(() => {
   window.clearTimeout(arrangeTimer);
 });
 
-function placeStyle(agent: ProjectAgent & { x: number; y: number }) {
-  const aside = props.dimmed && agent.agentSlug !== props.focusSlug;
-  return {
-    left: `${agent.x}px`,
-    top: `${agent.y}px`,
-    transform: aside ? "translateX(-50%) scale(0.86)" : "translateX(-50%)",
-    transitionDuration: `${DESK_ASIDE_MS}ms`,
-  };
+function placeStyle(agent: ProjectAgent & { x: number; y: number }, index: number) {
+  return orbitPlaceStyle({
+    x: agent.x,
+    y: agent.y,
+    focused: agent.agentSlug === props.focusSlug,
+    dimmed: props.dimmed,
+    satellites: props.satellites,
+    anchor: props.anchor,
+    snapCollapse: !everRevealed.value,
+    index,
+    count: props.agents.length,
+  });
 }
 
 function iconStyle(slug: string) {
-  const flying = props.iconFlight && slug === props.focusSlug;
-  return {
-    transform: flying
-      ? `translate(${props.iconFlight!.dx}px, ${props.iconFlight!.dy}px) scale(${props.iconFlight!.scale})`
-      : "none",
-    transition: props.focusHidden
-      ? "none"
-      : `transform ${DESK_MOVE_MS}ms ${DESK_EASE_OPEN}`,
-  };
+  return orbitIconStyle({
+    slug,
+    focusSlug: props.focusSlug,
+    iconFlight: props.iconFlight,
+    focusHidden: props.focusHidden,
+  });
 }
 
 function onOpen(event: MouseEvent, agent: ProjectAgent) {
   if (!(event.target instanceof Element) || event.target.closest("[data-desk-action]")) return;
   emit("open", agent.agentSlug);
 }
+
+defineExpose({ rootEl: board });
 </script>
 
 <template>
@@ -130,24 +153,23 @@ function onOpen(event: MouseEvent, agent: ProjectAgent) {
     style="background-image: radial-gradient(circle, color-mix(in oklab, var(--color-base-content) 16%, transparent) 1px, transparent 1px); background-size: 22px 22px"
   >
     <p
-      v-if="agents.length === 0"
+      v-if="agents.length === 0 && satellites"
       class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-base-content/60"
     >
       На столе пока никого нет. Подключите агента из библиотеки.
     </p>
     <article
-      v-for="agent in placed"
+      v-for="(agent, index) in placed"
       :key="agent.agentSlug"
-      class="group absolute flex w-max max-w-48 cursor-pointer flex-col items-center gap-1.5 text-center transition-[opacity,transform] motion-reduce:transition-none"
+      class="group absolute flex w-max max-w-48 cursor-pointer flex-col items-center gap-1.5 text-center motion-reduce:transition-none"
       role="button"
       :data-agent="agent.agentSlug"
       :aria-label="label(agent.agentSlug)"
       :class="[
-        dimmed ? 'pointer-events-none' : '',
-        dimmed && agent.agentSlug !== focusSlug ? 'opacity-30' : 'opacity-100',
+        dimmed || !satellites ? 'pointer-events-none' : '',
         agent.agentSlug === focusSlug ? 'z-30' : 'z-10',
       ]"
-      :style="placeStyle(agent)"
+      :style="placeStyle(agent, index)"
       @click="onOpen($event, agent)"
     >
       <img
@@ -159,13 +181,13 @@ function onOpen(event: MouseEvent, agent: ProjectAgent) {
       />
       <span
         class="text-sm font-medium leading-tight break-words transition-opacity motion-reduce:transition-none"
-        :class="dimmed ? 'opacity-0' : 'opacity-100'"
+        :class="dimmed || !satellites ? 'opacity-0' : 'opacity-100'"
         :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
       >{{ label(agent.agentSlug) }}</span>
       <span
         v-if="status(agent.agentSlug)"
         class="text-xs leading-tight text-base-content/50 transition-opacity motion-reduce:transition-none"
-        :class="dimmed ? 'opacity-0' : 'opacity-100'"
+        :class="dimmed || !satellites ? 'opacity-0' : 'opacity-100'"
         :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
       >
         {{ status(agent.agentSlug) }}

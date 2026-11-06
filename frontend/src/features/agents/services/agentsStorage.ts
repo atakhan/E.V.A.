@@ -190,7 +190,10 @@ function migrateAgentRecord(raw: unknown): Agent {
   };
 
   const body = createEmptyAgentBody();
-  const kind = record.kind === "runtime" || record.kind === "fork" ? record.kind : "library";
+  const kind =
+    record.kind === "runtime" || record.kind === "fork" || record.kind === "platform"
+      ? record.kind
+      : "library";
   const projectSlug = typeof record.projectSlug === "string" ? record.projectSlug : undefined;
   const originSlug = typeof record.originSlug === "string" ? record.originSlug : undefined;
   let skills = Array.isArray(record.skills) ? record.skills.map(normalizeSkill) : [];

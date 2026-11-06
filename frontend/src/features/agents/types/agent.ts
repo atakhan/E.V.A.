@@ -15,7 +15,10 @@ export type { AgentWorld, WorldAddress } from "@/features/agents/types/world";
 /** Default avatar when agent.icon is empty. */
 export const DEFAULT_AGENT_ICON = "/eva-logo.png";
 
-export type AgentKind = "library" | "runtime" | "fork";
+export type AgentKind = "library" | "runtime" | "fork" | "platform";
+
+/** Platform agent that runs the projects desk. */
+export const EVA_AGENT_SLUG = "eva";
 
 export interface Agent {
   id: string;
@@ -27,7 +30,7 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
-  /** `runtime` belongs to a project and stays out of the agent library. `fork` is a project's own copy of a library agent. */
+  /** `runtime` — project system agent; `fork` — project copy of a library agent; `platform` — Eva. */
   kind?: AgentKind;
   /** Set on the project runtime agent and on a project fork. */
   projectSlug?: string;

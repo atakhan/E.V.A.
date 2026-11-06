@@ -55,6 +55,7 @@ import {
 } from "@/features/projects/utils/projectQuestions";
 import { skillPath } from "@/router/paths";
 import { SSH_COMMANDS_TOOL_ID } from "@/features/tools/utils/sshLibrary";
+import { useDeskMotion } from "@/features/projects/motion";
 import {
   DESK_ASIDE_MS,
   DESK_EASE,
@@ -173,7 +174,14 @@ const flight = ref<FlightPose | null>(null);
 const flightGlide = ref(false);
 const flightEase = ref(DESK_EASE_OPEN);
 const layoutScale = ref(1);
-let channelMotion = 0;
+const {
+  beginPass: beginChannelPass,
+  isCurrent: isChannelPass,
+  cancelPasses: cancelChannelPasses,
+  wait,
+  frame,
+  reducedMotion,
+} = useDeskMotion();
 
 const PROJECT_ACTION_SIZE = 64;
 const PROJECT_ACTIONS = [
@@ -196,7 +204,11 @@ const questions = ref<ProjectQuestion[]>([]);
 const nameDraft = ref("");
 const nameError = ref<string | null>(null);
 const nameField = useTemplateRef<HTMLInputElement>("nameField");
-let layerMotion = 0;
+const {
+  beginPass: beginLayerPass,
+  isCurrent: isLayerPass,
+  cancelPasses: cancelLayerPasses,
+} = useDeskMotion();
 
 const channelFaceOpen = computed(
   () => channelStage.value === "channel" && channelSatellites.value && !channelAside.value,
@@ -716,7 +728,7 @@ const channelSpreadStyle = computed(() => {
     transform: shown ? "scale(1)" : "scale(0)",
     opacity: !shown ? "0" : channelAside.value ? "0.3" : "1",
     transformOrigin: "0 0",
-    transition: prefersReducedChannelMotion()
+    transition: reducedMotion()
       ? "none"
       : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
   };
@@ -725,7 +737,7 @@ const channelSpreadStyle = computed(() => {
 const flightStyle = computed(() => {
   const pose = flight.value;
   if (!pose) return {};
-  const glide = flightGlide.value && !prefersReducedChannelMotion();
+  const glide = flightGlide.value && !reducedMotion();
   const move = glide
     ? `left ${DESK_MOVE_MS}ms ${flightEase.value}, top ${DESK_MOVE_MS}ms ${flightEase.value}`
     : "none";
@@ -740,7 +752,7 @@ const flightStyle = computed(() => {
 const cardBoxStyle = computed(() => {
   const pose = flight.value;
   if (!pose) return {};
-  const glide = flightGlide.value && !prefersReducedChannelMotion();
+  const glide = flightGlide.value && !reducedMotion();
   return {
     left: `${-pose.width / 2}px`,
     top: `${-pose.height / 2}px`,
@@ -751,7 +763,7 @@ const cardBoxStyle = computed(() => {
     opacity: channelAside.value ? "0" : "1",
     transition: [
       glide ? `transform ${DESK_MOVE_MS}ms ${flightEase.value}` : "",
-      prefersReducedChannelMotion() ? "" : `opacity ${DESK_ASIDE_MS}ms ease`,
+      reducedMotion() ? "" : `opacity ${DESK_ASIDE_MS}ms ease`,
     ]
       .filter(Boolean)
       .join(", ") || "none",
@@ -771,22 +783,6 @@ const disconnectStyle = computed(() => {
 
 const backButtonClass =
   "btn absolute top-4 left-[12.75rem] z-40 h-11 border border-base-300/60 bg-base-100/90 shadow-lg backdrop-blur-sm transition-opacity motion-reduce:transition-none";
-
-function prefersReducedChannelMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function frame(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => resolve());
-  });
-}
 
 function centerPose(from: FlightPose): FlightPose {
   const width = rootEl.value?.clientWidth ?? 0;
@@ -825,7 +821,7 @@ function borderClass(status: string): string {
 }
 
 function resetChannel() {
-  channelMotion += 1;
+  cancelChannelPasses();
   channelStage.value = "agent";
   channelToolId.value = null;
   channelParked.value = false;
@@ -839,7 +835,7 @@ function resetChannel() {
 
 async function enterChannel(toolId: string) {
   if (channelStage.value !== "agent") return;
-  const token = ++channelMotion;
+  const token = beginChannelPass();
   const start = cardPose(toolId);
   channelToolId.value = toolId;
   channelStage.value = "entering";
@@ -849,7 +845,7 @@ async function enterChannel(toolId: string) {
   flightEase.value = DESK_EASE_OPEN;
   layoutScale.value = start && start.height > 0 ? AGENT_SIZE / start.height : 1;
 
-  if (prefersReducedChannelMotion() || !start) {
+  if (reducedMotion() || !start) {
     const pose = start ?? {
       x: 0,
       y: 0,
@@ -869,14 +865,14 @@ async function enterChannel(toolId: string) {
   await nextTick();
   await frame();
   await frame();
-  if (token !== channelMotion) return;
+  if (!isChannelPass(token)) return;
   liftedChannelId.value = toolId;
   channelParked.value = true;
   flightGlide.value = true;
   flight.value = centerPose(start);
   channelSatellites.value = true;
   await wait(DESK_MOVE_MS);
-  if (token !== channelMotion) return;
+  if (!isChannelPass(token)) return;
   flightGlide.value = false;
   channelStage.value = "channel";
 }
@@ -884,10 +880,10 @@ async function enterChannel(toolId: string) {
 async function leaveChannel() {
   if (channelStage.value === "agent" || channelStage.value === "leaving") return;
   const toolId = channelToolId.value;
-  const token = ++channelMotion;
+  const token = beginChannelPass();
   closeKindConnector();
   closeAddressConfig();
-  if (prefersReducedChannelMotion() || !toolId || !flight.value) {
+  if (reducedMotion() || !toolId || !flight.value) {
     resetChannel();
     return;
   }
@@ -898,11 +894,11 @@ async function leaveChannel() {
   flightGlide.value = true;
   await nextTick();
   await frame();
-  if (token !== channelMotion) return;
+  if (!isChannelPass(token)) return;
   const slot = cardPose(toolId);
   if (slot) flight.value = slot;
   await wait(DESK_MOVE_MS);
-  if (token !== channelMotion) return;
+  if (!isChannelPass(token)) return;
   liftedChannelId.value = null;
   flight.value = null;
   flightGlide.value = false;
@@ -1031,7 +1027,7 @@ function addressHome(addressId: string): LayerPose | null {
 const layerStyle = computed(() => {
   const pose = layerPose.value;
   if (!pose) return {};
-  const glide = layerGlide.value && !prefersReducedChannelMotion();
+  const glide = layerGlide.value && !reducedMotion();
   const ease = layerEase.value;
   return {
     left: `${pose.x}px`,
@@ -1059,7 +1055,7 @@ const layerSpreadStyle = computed(() => {
     opacity: shown ? "1" : "0",
     transformOrigin: "0 0",
     zIndex: "24",
-    transition: prefersReducedChannelMotion()
+    transition: reducedMotion()
       ? "none"
       : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
   };
@@ -1108,7 +1104,7 @@ const addressSettingsSlot = {
 };
 
 function resetProjectLayer() {
-  layerMotion += 1;
+  cancelLayerPasses();
   projectLayer.value = null;
   addressLayerId.value = null;
   pendingAddressId.value = null;
@@ -1187,7 +1183,7 @@ async function enterProjectLayer(id: ProjectLayerId) {
   if (projectLayer.value === id && projectLayerStage.value === "open" && !addressLayerId.value) return;
   if (projectLayer.value === "name") commitInstanceName();
   addressLayerId.value = null;
-  const token = ++layerMotion;
+  const token = beginLayerPass();
   const home = layerHome(id);
   const switching = Boolean(projectLayer.value) || channelAside.value;
   closeKindConnector();
@@ -1200,7 +1196,7 @@ async function enterProjectLayer(id: ProjectLayerId) {
     nameError.value = null;
   }
 
-  if (switching || prefersReducedChannelMotion()) {
+  if (switching || reducedMotion()) {
     liftedAction.value = id;
     channelAside.value = true;
     layerPose.value = layerCenter(home);
@@ -1216,14 +1212,14 @@ async function enterProjectLayer(id: ProjectLayerId) {
   await nextTick();
   await frame();
   await frame();
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   liftedAction.value = id;
   channelAside.value = true;
   layerGlide.value = true;
   layerPose.value = layerCenter(home);
   layerSatellites.value = true;
   await wait(DESK_MOVE_MS);
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   layerGlide.value = false;
   projectLayerStage.value = "open";
 }
@@ -1231,10 +1227,10 @@ async function enterProjectLayer(id: ProjectLayerId) {
 async function leaveProjectLayer() {
   if (!projectLayer.value || projectLayerStage.value === "leaving" || projectLayerStage.value === "closed") return;
   const id = projectLayer.value;
-  const token = ++layerMotion;
+  const token = beginLayerPass();
   if (id === "name") commitInstanceName();
-  if (token !== layerMotion) return;
-  if (prefersReducedChannelMotion()) {
+  if (!isLayerPass(token)) return;
+  if (reducedMotion()) {
     resetProjectLayer();
     return;
   }
@@ -1245,10 +1241,10 @@ async function leaveProjectLayer() {
   layerGlide.value = true;
   await nextTick();
   await frame();
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   layerPose.value = layerHome(id);
   await wait(DESK_MOVE_MS);
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   liftedAction.value = null;
   layerPose.value = null;
   layerGlide.value = false;
@@ -1260,7 +1256,7 @@ async function enterAddressLayer(addressId: string) {
   if (channelStage.value !== "channel" || projectLayer.value || addressLayerId.value) return;
   const home = addressHome(addressId);
   if (!home) return;
-  const token = ++layerMotion;
+  const token = beginLayerPass();
   closeKindConnector();
   closeAddressConfig();
   addressLayerId.value = addressId;
@@ -1270,7 +1266,7 @@ async function enterAddressLayer(addressId: string) {
   layerEase.value = DESK_EASE_OPEN;
   layerPose.value = home;
 
-  if (prefersReducedChannelMotion()) {
+  if (reducedMotion()) {
     channelAside.value = true;
     layerPose.value = layerCenter(home);
     layerSatellites.value = true;
@@ -1281,13 +1277,13 @@ async function enterAddressLayer(addressId: string) {
   await nextTick();
   await frame();
   await frame();
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   channelAside.value = true;
   layerGlide.value = true;
   layerPose.value = layerCenter(home);
   layerSatellites.value = true;
   await wait(DESK_MOVE_MS);
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   layerGlide.value = false;
   projectLayerStage.value = "open";
 }
@@ -1295,9 +1291,9 @@ async function enterAddressLayer(addressId: string) {
 async function leaveAddressLayer() {
   if (!addressLayerId.value || projectLayerStage.value === "leaving" || projectLayerStage.value === "closed") return;
   const addressId = addressLayerId.value;
-  const token = ++layerMotion;
+  const token = beginLayerPass();
   const home = addressHome(addressId);
-  if (prefersReducedChannelMotion() || !home) {
+  if (reducedMotion() || !home) {
     resetProjectLayer();
     return;
   }
@@ -1308,10 +1304,10 @@ async function leaveAddressLayer() {
   layerGlide.value = true;
   await nextTick();
   await frame();
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   layerPose.value = home;
   await wait(DESK_MOVE_MS);
-  if (token !== layerMotion) return;
+  if (!isLayerPass(token)) return;
   layerPose.value = null;
   layerGlide.value = false;
   addressLayerId.value = null;
@@ -1390,7 +1386,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  channelMotion += 1;
+  cancelChannelPasses();
+  cancelLayerPasses();
   document.removeEventListener("keydown", onChannelKeydown, true);
 });
 </script>
@@ -1545,7 +1542,7 @@ onUnmounted(() => {
           opacity: channelSatellites ? '1' : '0',
           transform: channelSatellites ? 'scale(1)' : 'scale(0)',
           transformOrigin: '0 0',
-          transition: prefersReducedChannelMotion()
+          transition: reducedMotion()
             ? 'none'
             : `transform ${DESK_MOVE_MS}ms ${channelSatellites ? DESK_EASE_OPEN : DESK_EASE}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
         }"

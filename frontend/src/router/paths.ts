@@ -30,6 +30,15 @@ export function projectsPath(): string {
   return "/projects";
 }
 
+/** Platform Eva constructor — reserved slug, not a project. */
+export function evaConstructorPath(): string {
+  return `/projects/eva`;
+}
+
+export function isEvaConstructorSlug(slug: string | null | undefined): boolean {
+  return slug === "eva";
+}
+
 export function projectPath(projectSlug: string): string {
   return `/projects/${encodeURIComponent(projectSlug)}`;
 }

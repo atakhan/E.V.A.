@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from definition.behavior.materialize import flatten_agent_document
 from definition.mappers.action_mapper import normalize_action_document
 from definition.mappers.skill_mapper import skill_from_document
-from definition.system_skills import library_agent_skills
+from definition.system_skills import library_agent_skills, runtime_agent_skills
 from definition.validation.validate_agent import validate_agent
 from infrastructure.models.tables import (
     AgentDraftRow,
@@ -31,7 +31,8 @@ EPHEMERAL_AGENT_SLUG_PREFIXES = (
     "cred-agent-",
 )
 
-_AGENT_KINDS = {"library", "runtime", "fork"}
+_AGENT_KINDS = {"library", "runtime", "fork", "platform"}
+EVA_AGENT_SLUG = "eva"
 
 
 class AgentArchivedError(Exception):
@@ -218,6 +219,8 @@ class AgentService:
             return self.fork_library_agent(str(origin["originSlug"]), project_slug)
         if origin.get("kind") == "runtime":
             raise ValueError("Системного агента проекта нельзя форкнуть")
+        if origin.get("kind") == "platform":
+            raise ValueError("Системного агента платформы нельзя форкнуть")
         existing = self._find_fork(origin_slug, project_slug)
         if existing is not None:
             return existing
@@ -470,6 +473,24 @@ class AgentService:
                 AgentPublicationRow.version == version,
             )
         )
+
+
+def ensure_eva_agent(session: Session) -> str:
+    """Platform agent that runs the projects desk. Hidden from the library."""
+    service = AgentService(session)
+    existing = service.get_agent_by_slug(EVA_AGENT_SLUG)
+    if existing is not None:
+        return EVA_AGENT_SLUG
+    now = _utcnow_iso()
+    service.create_agent(
+        name="Ева",
+        slug=EVA_AGENT_SLUG,
+        description="Системный агент платформы. Ведёт проекты и говорит с человеком.",
+        kind="platform",
+        skills=runtime_agent_skills(now),
+    )
+    session.flush()
+    return EVA_AGENT_SLUG
 
 
 def prune_ephemeral_agents(session: Session) -> list[str]:

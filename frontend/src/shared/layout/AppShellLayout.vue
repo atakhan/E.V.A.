@@ -4,7 +4,7 @@ import { useRoute } from "vue-router";
 import { RouteNames } from "@/router/paths";
 
 const route = useRoute();
-const fullBleed = computed(() => route.name === RouteNames.projectDesk);
+const fullBleed = computed(() => route.name === RouteNames.projects);
 </script>
 
 <template>

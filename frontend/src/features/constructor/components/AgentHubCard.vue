@@ -313,7 +313,7 @@ function onKeydown(event: KeyboardEvent) {
   >
     <div
       :class="parked ? 'pointer-events-none opacity-0' : 'opacity-100'"
-      :style="{ transition: `opacity ${DESK_ASIDE_MS}ms ease` }"
+      :style="{ transition: 'none' }"
       :aria-hidden="parked ? 'true' : undefined"
     >
     <div

@@ -12,13 +12,20 @@ import ProjectDesk from "@/features/projects/components/ProjectDesk.vue";
 import ProjectFormDialog from "@/features/projects/components/ProjectFormDialog.vue";
 import { useProjects } from "@/features/projects/composables/useProjects";
 import type { Project, ProjectAgent } from "@/features/projects/types/project";
+import {
+  createConstructorReadyGate,
+  flightTo,
+  handoffSeat,
+  useDeskMotion,
+  type Flight,
+} from "@/features/projects/motion";
 import { AGENT_ICON, type DeskAnchor } from "@/features/projects/utils/deskLayout";
 import {
   DESK_ASIDE_MS,
   DESK_EASE,
   DESK_EASE_OPEN,
-  DESK_HANDOFF_MS,
   DESK_MOVE_MS,
+  DESK_REVEAL_MS,
 } from "@/features/projects/utils/deskMotion";
 import { useRuntimeSummary } from "@/features/runtime/composables/useRuntimeSummary";
 import { projectAgentPath, projectPath, projectsPath } from "@/router/paths";
@@ -27,6 +34,10 @@ import { appNavItems, isAppNavActive } from "@/shared/layout/appNav";
 const props = defineProps<{
   projectSlug: string;
   agentSlug?: string;
+  /** Parent drives the open burst in the same pass as the hub icon flight. */
+  deferSatelliteReveal?: boolean;
+  /** Project desk is leaving to the Eva hub — collapse members, do not re-expand. */
+  exitingToHub?: boolean;
 }>();
 
 type EdgePanel = "nav" | "library";
@@ -43,6 +54,7 @@ const memberAgents = ref<Agent[]>([]);
 const loadError = ref<string | null>(null);
 const panel = ref<EdgePanel | null>(null);
 const editDialog = useTemplateRef("editDialog");
+const projectBoard = useTemplateRef<{ rootEl: HTMLElement | null }>("projectBoard");
 const runtimeAnchor = useTemplateRef<HTMLButtonElement>("runtimeAnchor");
 const deskAnchor = ref<DeskAnchor | null>(null);
 const deskSize = ref({ width: 0, height: 0 });
@@ -54,6 +66,8 @@ const focusHidden = ref(Boolean(openedSlug));
 const constructorOn = ref(Boolean(openedSlug));
 const hubVisible = ref(false);
 const satellites = ref(false);
+/** Member icons burst out from the runtime when the project desk opens. */
+const deskSatellites = ref(Boolean(openedSlug));
 const stage = ref<DeskStage>(openedSlug ? "agent" : "project");
 const bootPan = ref<{ x: number; y: number } | null>(null);
 const glyphScale = ref(1);
@@ -64,10 +78,10 @@ const glideDelay = ref(0);
 const glideTo = ref<{ x: number; y: number } | null>(null);
 const worldAt = ref<{ x: number; y: number } | null>(null);
 const showMeta = ref(Boolean(openedSlug));
-const iconFlight = ref<{ dx: number; dy: number; scale: number } | null>(null);
+const iconFlight = ref<Flight | null>(null);
 let settleOnReady = Boolean(openedSlug);
-let motion = 0;
-let readyWait: (() => void) | null = null;
+const { beginPass, isCurrent, cancelPasses, wait, frame, reducedMotion } = useDeskMotion();
+const { releaseReady, waitForConstructor } = createConstructorReadyGate();
 
 const edgeButtonClass =
   "btn border border-base-300/60 bg-base-100/90 shadow-lg backdrop-blur-sm transition-[opacity,transform] motion-reduce:transition-none";
@@ -136,18 +150,33 @@ const runtimeFocused = computed(
   () => Boolean(focusSlug.value) && focusSlug.value === project.value?.runtimeAgentSlug,
 );
 
+/** Hub icon is in flight to/from this seat — keep the desk runtime invisible to avoid a twin. */
+const runtimeSeatTaken = computed(
+  () => Boolean(props.deferSatelliteReveal || props.exitingToHub),
+);
+
 const runtimeClass = computed(() => {
+  if (runtimeSeatTaken.value) return "pointer-events-none opacity-0";
   if (runtimeFocused.value && focusHidden.value) return "pointer-events-none opacity-0";
   if (dimmed.value && !runtimeFocused.value) return "pointer-events-none opacity-30";
   return "opacity-100";
 });
 
 const runtimeStyle = computed(() => {
-  const handoff = runtimeFocused.value && focusHidden.value;
+  const handoff =
+    runtimeSeatTaken.value || (runtimeFocused.value && focusHidden.value);
   const parked = dimmed.value && !runtimeFocused.value;
+  const flight = runtimeFocused.value && iconFlight.value && !focusHidden.value;
   return {
-    transform: `translateX(-50%) scale(${parked ? 0.86 : 1})`,
-    transition: handoff ? "none" : `opacity ${DESK_ASIDE_MS}ms, transform ${DESK_ASIDE_MS}ms`,
+    transform: flight
+      ? `translateX(-50%) translate(${iconFlight.value!.dx}px, ${iconFlight.value!.dy}px) scale(${iconFlight.value!.scale})`
+      : `translateX(-50%) scale(${parked ? 0.86 : 1})`,
+    // Opacity must snap on seat handoff — fading it is what reads as a blink.
+    transition: handoff
+      ? "none"
+      : flight
+        ? `transform ${DESK_MOVE_MS}ms ${DESK_EASE_OPEN}`
+        : `transform ${DESK_ASIDE_MS}ms`,
     zIndex: dimmed.value && !runtimeFocused.value ? 25 : 40,
     outline: "none",
   };
@@ -196,7 +225,10 @@ function onKeydown(event: KeyboardEvent) {
   if (stage.value !== "project") {
     event.preventDefault();
     void backToProject();
+    return;
   }
+  event.preventDefault();
+  void router.push(projectsPath());
 }
 
 async function rememberMembers() {
@@ -221,6 +253,7 @@ async function rememberMembers() {
 async function loadProject() {
   loadError.value = null;
   try {
+    if (!props.agentSlug) deskSatellites.value = false;
     project.value = await fetchProject(props.projectSlug);
     const opened = props.agentSlug;
     const redirected = project.value.agents.find(
@@ -234,6 +267,13 @@ async function loadProject() {
     if (runtimeSlug && !getAgentBySlug(runtimeSlug)) {
       rememberAgent(await fetchAgent(runtimeSlug));
     }
+    await nextTick();
+    measureRuntime();
+    if (props.agentSlug) {
+      deskSatellites.value = true;
+    } else if (!props.deferSatelliteReveal) {
+      await revealDeskAgents();
+    }
   } catch (error) {
     project.value = null;
     memberAgents.value = [];
@@ -241,9 +281,13 @@ async function loadProject() {
   }
 }
 
+function projectDeskEl(): HTMLElement | null {
+  return projectBoard.value?.rootEl ?? null;
+}
+
 function measureRuntime() {
   const button = runtimeAnchor.value;
-  const desk = document.querySelector("[data-project-desk]");
+  const desk = projectDeskEl();
   const icon = button?.querySelector("img");
   if (!button || !desk || !icon) return;
   const iconRect = icon.getBoundingClientRect();
@@ -270,7 +314,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  motion += 1;
+  cancelPasses();
   releaseReady();
   document.removeEventListener("keydown", onKeydown);
   anchorObserver?.disconnect();
@@ -334,22 +378,47 @@ async function backToProject() {
   await router.push(projectPath(props.projectSlug));
 }
 
-function reducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Wait until members exist and are painted collapsed on the runtime — before the shared pass. */
+async function prepareDeskAgents(): Promise<void> {
+  const deadline = performance.now() + 2000;
+  while (!project.value && performance.now() < deadline) {
+    await frame();
+  }
+  if (props.agentSlug || reducedMotion()) {
+    deskSatellites.value = true;
+    return;
+  }
+  deskSatellites.value = false;
+  await nextTick();
+  while (performance.now() < deadline) {
+    measureRuntime();
+    if (deskAnchor.value) break;
+    await frame();
+  }
+  // Two frames so ProjectDesk can snap-park on the runtime with transitions off.
+  await frame();
+  await frame();
 }
 
-function wait(ms: number): Promise<void> {
-  if (reducedMotion()) return Promise.resolve();
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
+async function revealDeskAgents() {
+  if (deskSatellites.value) return;
+  if (!project.value) await prepareDeskAgents();
+  if (deskSatellites.value) return;
+  deskSatellites.value = true;
 }
 
-function frame(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => resolve());
-  });
+async function collapseDeskAgents(): Promise<void> {
+  if (!deskSatellites.value) return;
+  deskSatellites.value = false;
+  if (reducedMotion()) return;
+  await wait(DESK_REVEAL_MS);
 }
+
+defineExpose({
+  collapseDeskAgents,
+  revealDeskAgents,
+  prepareDeskAgents,
+});
 
 function deskCenter(): { x: number; y: number } {
   return { x: deskSize.value.width / 2, y: deskSize.value.height / 2 };
@@ -357,11 +426,13 @@ function deskCenter(): { x: number; y: number } {
 
 function measureFocus(): { x: number; y: number; width: number } | null {
   const slug = focusSlug.value;
-  const desk = document.querySelector("[data-project-desk]");
+  const desk = projectDeskEl();
   if (!slug || !desk) return null;
+  // Runtime seat lives outside the board (fixed chrome); fall back to the view root.
   const img =
     desk.querySelector(`[data-agent="${CSS.escape(slug)}"] img`) ??
-    document.querySelector(`[data-agent="${CSS.escape(slug)}"] img`);
+    runtimeAnchor.value?.querySelector("img") ??
+    null;
   if (!(img instanceof HTMLElement)) return null;
   const deskRect = desk.getBoundingClientRect();
   const rect = img.getBoundingClientRect();
@@ -372,31 +443,13 @@ function measureFocus(): { x: number; y: number; width: number } | null {
   };
 }
 
-function releaseReady() {
-  const resolve = readyWait;
-  readyWait = null;
-  resolve?.();
-}
-
 function onConstructorReady() {
   if (settleOnReady) {
     settleOnReady = false;
     hubVisible.value = true;
-    window.setTimeout(() => {
-      if (stage.value === "agent") satellites.value = true;
-    }, reducedMotion() ? 0 : DESK_HANDOFF_MS);
+    if (stage.value === "agent") satellites.value = true;
   }
   releaseReady();
-}
-
-function waitForConstructor(): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = window.setTimeout(resolve, 800);
-    readyWait = () => {
-      window.clearTimeout(timer);
-      resolve();
-    };
-  });
 }
 
 async function enter(slug: string) {
@@ -404,7 +457,7 @@ async function enter(slug: string) {
     focusSlug.value = slug;
     return;
   }
-  const token = ++motion;
+  const token = beginPass();
   settleOnReady = false;
   focusSlug.value = slug;
   stage.value = "entering";
@@ -426,6 +479,7 @@ async function enter(slug: string) {
     hubVisible.value = true;
     satellites.value = true;
     showMeta.value = true;
+    deskSatellites.value = true;
     constructorOn.value = true;
     stage.value = "agent";
     return;
@@ -434,11 +488,9 @@ async function enter(slug: string) {
   measureRuntime();
   const start = measureFocus() ?? deskCenter();
   const center = deskCenter();
-  iconFlight.value = {
-    dx: center.x - start.x,
-    dy: center.y - start.y,
-    scale: AGENT_SIZE / AGENT_ICON,
-  };
+  // One pass: other agents collapse into the runtime while the focus icon flies.
+  deskSatellites.value = false;
+  iconFlight.value = flightTo(start, center, AGENT_SIZE / AGENT_ICON);
   bootPan.value = start;
   glyphScale.value = AGENT_ICON / AGENT_SIZE;
   hubVisible.value = false;
@@ -447,12 +499,12 @@ async function enter(slug: string) {
   await nextTick();
   await frame();
   await frame();
-  if (token !== motion) return;
+  if (!isCurrent(token)) return;
   const flightStarted = performance.now();
   const ready = waitForConstructor();
   constructorOn.value = true;
   await ready;
-  if (token !== motion) return;
+  if (!isCurrent(token)) return;
   const here = measureFocus();
   const elapsed = Math.min(DESK_MOVE_MS, Math.max(0, performance.now() - flightStarted));
   const remain = Math.max(0, DESK_MOVE_MS - elapsed);
@@ -462,12 +514,25 @@ async function enter(slug: string) {
   }
   await nextTick();
   await frame();
-  if (token !== motion) return;
-  hubVisible.value = true;
-  focusHidden.value = true;
-  iconFlight.value = null;
-  showMeta.value = true;
-  satellites.value = true;
+  if (!isCurrent(token)) return;
+  // Land the constructor hub first, then drop the desk flyer next frame.
+  if (
+    !(await handoffSeat({
+      land: () => {
+        hubVisible.value = true;
+        showMeta.value = true;
+        satellites.value = true;
+      },
+      drop: () => {
+        focusHidden.value = true;
+        iconFlight.value = null;
+      },
+      token,
+      isCurrent,
+    }))
+  ) {
+    return;
+  }
   if (remain < 48) {
     bootPan.value = center;
     glyphScale.value = 1;
@@ -480,26 +545,28 @@ async function enter(slug: string) {
   glide.value = true;
   await nextTick();
   await frame();
-  if (token !== motion) return;
+  if (!isCurrent(token)) return;
   glyphScale.value = 1;
   glideTo.value = center;
   await wait(remain);
-  if (token !== motion) return;
+  if (!isCurrent(token)) return;
   glide.value = false;
   glideDelay.value = 0;
   glideMs.value = DESK_MOVE_MS;
   worldAt.value = center;
   await nextTick();
-  if (token !== motion) return;
+  if (!isCurrent(token)) return;
   stage.value = "agent";
 }
 
 async function leave() {
   if (stage.value === "project") return;
   blurRuntime();
-  const token = ++motion;
+  const token = beginPass();
   settleOnReady = false;
   releaseReady();
+
+  const stayOnDesk = !props.exitingToHub;
 
   if (reducedMotion()) {
     constructorOn.value = false;
@@ -508,6 +575,7 @@ async function leave() {
     focusHidden.value = false;
     dimmed.value = false;
     focusSlug.value = null;
+    deskSatellites.value = stayOnDesk;
     glide.value = false;
     glideTo.value = null;
     glyphScale.value = 1;
@@ -524,6 +592,7 @@ async function leave() {
     constructorOn.value = false;
     hubVisible.value = false;
     focusSlug.value = null;
+    deskSatellites.value = stayOnDesk;
     glide.value = false;
     glideDelay.value = 0;
     glideTo.value = null;
@@ -540,22 +609,38 @@ async function leave() {
     glide.value = true;
     await nextTick();
     await frame();
-    if (token !== motion) return;
+    if (!isCurrent(token)) return;
     if (slot) {
       glyphScale.value = AGENT_ICON / AGENT_SIZE;
       glideTo.value = slot;
     }
+    // One pass: constructor satellites collapse; desk agents expand only when staying.
     if (fadeSatellites) satellites.value = false;
-    dimmed.value = false;
+    deskSatellites.value = stayOnDesk;
+    dimmed.value = Boolean(props.exitingToHub);
     await wait(slot ? DESK_MOVE_MS : 0);
-    if (token !== motion) return;
-    focusHidden.value = false;
-    hubVisible.value = false;
+    if (!isCurrent(token)) return;
+    // Desk icon under the hub first, then drop the constructor next frame.
+    if (
+      !(await handoffSeat({
+        land: () => {
+          focusHidden.value = false;
+        },
+        drop: () => {
+          hubVisible.value = false;
+        },
+        token,
+        isCurrent,
+      }))
+    ) {
+      return;
+    }
     await nextTick();
-    if (token !== motion) return;
+    if (!isCurrent(token)) return;
     constructorOn.value = false;
   } else {
-    dimmed.value = false;
+    deskSatellites.value = stayOnDesk;
+    dimmed.value = Boolean(props.exitingToHub);
   }
   blurRuntime();
   focusHidden.value = false;
@@ -590,6 +675,7 @@ async function remove() {
   <div class="relative h-full min-h-0 w-full overflow-hidden">
     <ProjectDesk
       v-if="project"
+      ref="projectBoard"
       class="h-full"
       :class="dimmed ? 'z-20' : 'z-0'"
       :agents="project.agents"
@@ -599,6 +685,7 @@ async function remove() {
       :focus-slug="focusSlug"
       :dimmed="dimmed"
       :focus-hidden="focusHidden"
+      :satellites="deskSatellites"
       :icon-flight="iconFlight"
       @open="openAgent"
       @remove="removeAgent"

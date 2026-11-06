@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from definition.services.agent_service import (
     AgentService,
+    ensure_eva_agent,
     prune_ephemeral_agents,
     seed_tool_catalog,
 )
@@ -62,6 +63,7 @@ def init_db() -> None:
         _ensure_runtime_schema(engine)
     with session_scope() as session:
         seed_tool_catalog(session)
+        ensure_eva_agent(session)
         if settings.prune_ephemeral_agents:
             prune_ephemeral_agents(session)
 

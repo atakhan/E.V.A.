@@ -5,7 +5,11 @@ export const DESK_EASE_OPEN = "cubic-bezier(0.4, 0, 0.2, 1)";
 export const DESK_DIM_MS = 280;
 export const DESK_MOVE_MS = 680;
 export const DESK_HANDOFF_MS = 220;
-export const DESK_REVEAL_MS = 480;
+/**
+ * Satellite collapse/reveal matches the icon flight so every transition is one pass:
+ * all elements of both modes start together and share this duration.
+ */
+export const DESK_REVEAL_MS = DESK_MOVE_MS;
 /** Other elements join the icon flight this far into it (0 = together with the icon). */
 export const DESK_SPREAD_AT = 0;
 /** How long desk chrome takes to step aside or return, matching the rest of the flight. */

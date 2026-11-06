@@ -60,7 +60,7 @@ export function isAppNavActive(item: AppNavItem, route: RouteLocationNormalizedL
   const routeName = String(route.name ?? "");
 
   if (item.id === "projects") {
-    return routeName === RouteNames.projects || routeName === RouteNames.projectDesk;
+    return routeName === RouteNames.projects;
   }
 
   if (item.id === "agents") {

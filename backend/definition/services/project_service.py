@@ -13,7 +13,7 @@ from definition.system_skills import runtime_agent_skills
 from infrastructure.models.tables import AgentRow, ProjectRow
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-_RESERVED = {"projects", "agents", "runtime", "tools", "api", "health", "applications"}
+_RESERVED = {"projects", "agents", "runtime", "tools", "api", "health", "applications", "eva"}
 
 
 def _iso(value: datetime | None) -> str | None:

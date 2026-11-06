@@ -1,0 +1,30 @@
+---
+description: Spatial UI design principles for constructor desks, orbits, and mode transitions
+alwaysApply: true
+---
+
+# Spatial UI design (constructor desks)
+
+Formed while building Eva hub → project desk → agent/channel modes.
+Canonical note: `docs/01-concept/spatial-ui-principles.md`.
+
+## Space
+
+1. **Scale, not pages.** Modes are zoom levels of one desk on one route — not separate screens with unrelated chrome.
+2. **Center + satellites.** Every mode has one center (Eva / runtime / agent hub / channel) and satellites on an upper orbit.
+3. **Packed orbit.** Neighbors sit at min chord; do not stretch evenly across the max arc. Prefer closer to the center than to top/side chrome; stay within about half the desk height.
+4. **Reuse the packing metaphor** across sibling desks (projects around Eva ≈ agents around runtime); change constants, not the idea.
+
+## Motion
+
+5. **One pass.** In a transition, all elements of both modes start animating together — no collapse-then-fly-then-reveal phases.
+6. **Identity continuity.** The thing you click flies and *becomes* the next center (project icon → runtime seat, agent → constructor hub, Eva → her hub).
+7. **One seat, one icon.** Never two icons for the same seat. Twins and end-point blinks are design bugs.
+8. **Handoff.** Show/land the destination first (opacity snaps, no fade); drop the flyer on the next frame.
+9. **Focus is exempt.** Satellites may collapse into the center; the focused flyer stays on its path and is not sucked into the anchor mid-flight.
+10. **Burst from the center.** Entering a desk: satellites emerge from the center. Leaving: they return into it. Light stagger is physics inside one pass, not a second phase.
+
+## When changing UI
+
+- State the invariant before coding a new transition.
+- After a motion fix, check the reverse transition for the same class of bug.

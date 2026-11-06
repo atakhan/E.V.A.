@@ -17,7 +17,12 @@ from definition.schemas.agent_api import (
     AgentValidationReportApi,
     PublishResponseApi,
 )
-from definition.services.agent_service import AgentArchivedError, AgentService
+from definition.services.agent_service import (
+    EVA_AGENT_SLUG,
+    AgentArchivedError,
+    AgentService,
+    ensure_eva_agent,
+)
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -56,6 +61,8 @@ def create_agent(
 
 @router.get("/{slug}", response_model=AgentApi)
 def get_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+    if slug == EVA_AGENT_SLUG:
+        ensure_eva_agent(session)
     service = get_agent_service(session)
     agent = service.get_agent_by_slug(slug)
     if agent is None:
