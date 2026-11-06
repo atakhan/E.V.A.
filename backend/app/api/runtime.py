@@ -394,7 +394,7 @@ def agent_memory(
     runs_limit: int = Query(default=15, ge=1, le=100, alias="runsLimit"),
     session: Session = Depends(_db_session),
 ) -> dict[str, Any]:
-    """Event history and working state a person can read. Service keys stay on the server."""
+    """Event history, working state, and interaction manifesto. Service keys stay on the server."""
     store = PostgresSkillRunStore(session)
     if store.summarize_agent(slug) is None:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -412,4 +412,14 @@ def agent_memory(
         for event, skill_id in store.list_agent_events(slug, events_limit)
     ]
     runs = [run_memory_from_row(row) for row in store.list_memory_runs(slug, runs_limit)]
-    return {"ok": True, "events": events, "runs": runs}
+    from definition.interaction_manifest import empty_agent_memory, normalize_agent_memory
+    from definition.services.agent_service import AgentService
+
+    agent = AgentService(session).get_agent_by_slug(slug)
+    memory_doc = normalize_agent_memory(agent.get("memory") if agent else None) if agent else empty_agent_memory()
+    return {
+        "ok": True,
+        "events": events,
+        "runs": runs,
+        "interaction": memory_doc.get("interaction"),
+    }

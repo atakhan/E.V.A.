@@ -13,20 +13,23 @@ flowchart LR
     T --> C[Credentials]
     A -->|publish| P[(Publication vN)]
   end
-  subgraph Runtime["Runtime plane — исполнение"]
+  subgraph LifePlane["Исполнение — жизнь + эпизоды"]
     E[Event] --> D[Dispatcher]
-    D --> R[Skill Run]
+    D --> L[Life run]
+    D --> R[Episode Skill Run]
     R --> F[FSM step]
     F --> AR[Action Run]
     AR --> TE[Tool Execution]
     TE --> W((Внешний мир))
     W --> E
+    R -.->|parent| L
   end
+  P -. читается .-> L
   P -. читается .-> R
 ```
 
 - **Definition plane** — то, что человек проектирует: агент, его навыки, операции, инструменты. Черновик редактируется свободно; **публикация** фиксирует неизменяемый снимок с версией.
-- **Runtime plane** — то, что живёт: конкретные исполнения навыков (Skill Run), операций (Action Run), команд инструментов (Tool Execution), и события, которые их двигают. Runtime читает только публикации.
+- **Исполнение** — агент **живёт** нитью навыка «Жизнь» (один непрерывный Skill Run); остальные навыки — **эпизоды** с привязкой к жизни. Машина в коде (`backend/runtime/`) читает только публикации. Подробнее: [`../06-experiments/life-skill-and-runtime-plugin.md`](../06-experiments/life-skill-and-runtime-plugin.md).
 
 ## Сущности определения
 

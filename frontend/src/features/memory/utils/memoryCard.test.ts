@@ -60,6 +60,23 @@ describe("describeMemoryCard", () => {
     expect(lines.historyLine).toBe("channel.message.received");
     expect(lines.stateLine).toBe("ждёт · wait_review");
   });
+
+  it("mentions linked agents from the interaction manifesto", () => {
+    const lines = describeMemoryCard(
+      {
+        events: [],
+        runs: [],
+        interaction: {
+          version: 1,
+          defaultAllowInbound: false,
+          defaultAllowOutbound: false,
+          peers: [{ agentSlug: "rt-a", allowInbound: true, allowOutbound: true }],
+        },
+      },
+      { loading: false, failed: false },
+    );
+    expect(lines.stateLine).toBe("Связей: 1");
+  });
 });
 
 describe("formatMemoryValue", () => {

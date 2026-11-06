@@ -22,6 +22,7 @@ from definition.services.agent_service import (
     AgentArchivedError,
     AgentService,
     ensure_eva_agent,
+    ensure_life_skill_on_agents,
 )
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -39,6 +40,7 @@ def list_agents(
     include_archived: bool = Query(default=False, alias="includeArchived"),
     session: Session = Depends(_db_session),
 ) -> list[dict[str, Any]]:
+    ensure_life_skill_on_agents(session)
     service = get_agent_service(session)
     return service.list_agents(include_archived=include_archived)
 
@@ -63,6 +65,7 @@ def create_agent(
 def get_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
     if slug == EVA_AGENT_SLUG:
         ensure_eva_agent(session)
+    ensure_life_skill_on_agents(session)
     service = get_agent_service(session)
     agent = service.get_agent_by_slug(slug)
     if agent is None:

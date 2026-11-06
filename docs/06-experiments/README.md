@@ -133,6 +133,27 @@ Interpretation: Критерий универсальности ядра пок�
 Ретроспектива объёма, качества и процесса (2026-11-06):  
 [`constructor-spatial-modes-retrospective.md`](./constructor-spatial-modes-retrospective.md).
 
+**Handoff для нового чата** (карта кода, опыт, куда строить UI орбит):  
+[`constructor-orbit-ui-handoff.md`](./constructor-orbit-ui-handoff.md).
+
+## UI. Канал агентов + конструктор памяти
+
+Ретроспектива (2026-11-06):  
+[`constructor-memory-retrospective.md`](./constructor-memory-retrospective.md).  
+Черновик режима: [`memory-constructor-draft.md`](./memory-constructor-draft.md).
+
+## Runtime. Жизнь заменяет рантайм (онтология)
+
+Концепт + первый срез (2026-11-06):  
+[`life-skill-and-runtime-plugin.md`](./life-skill-and-runtime-plugin.md).  
+Нить жизни: `backend/runtime/life.py`. Манифест-заглушка tool `runtime`: `implemented: false` (отложен).
+
+## UI. Reading stage (правая половина + книжные поля)
+
+Черновик поверхности контента детали (blur, девятины, allowlist на будущее):  
+[`constructor-reading-stage-draft.md`](./constructor-reading-stage-draft.md).  
+Токены: `frontend/src/features/constructor/utils/readingStage.ts`.
+
 ---
 
 ## Как добавлять записи

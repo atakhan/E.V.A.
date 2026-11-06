@@ -18,20 +18,30 @@ import InfiniteCanvas, {
 } from "@/features/constructor/components/InfiniteCanvas.vue";
 import AddressConfigPanel from "@/features/constructor/components/AddressConfigPanel.vue";
 import KindConnectorPanel from "@/features/constructor/components/KindConnectorPanel.vue";
-import PluginPanel from "@/features/constructor/components/PluginPanel.vue";
 import SshCommandsConstructor from "@/features/constructor/components/SshCommandsConstructor.vue";
 import ToolCatalogSheet from "@/features/constructor/components/ToolCatalogSheet.vue";
-import SkillDetailPanel from "@/features/constructor/components/SkillDetailPanel.vue";
 import SkillPickerDialog from "@/features/constructor/components/SkillPickerDialog.vue";
 import { useAgentHubStatus } from "@/features/constructor/composables/useAgentHubStatus";
 import { useConstructor } from "@/features/constructor/composables/useConstructor";
 import { describeMemoryCard } from "@/features/memory/utils/memoryCard";
-import MemoryPanel from "@/features/memory/components/MemoryPanel.vue";
+import MemoryFacetCards from "@/features/memory/components/MemoryFacetCards.vue";
 import { useAgentMemory } from "@/features/memory/composables/useAgentMemory";
+import {
+  layoutMemoryOrbit,
+  MEMORY_SAT_SIZE,
+  memoryOrbitItem,
+  type MemoryOrbitId,
+} from "@/features/memory/utils/memoryOrbit";
 import {
   addPluginSlotForCount,
   AGENT_SIZE,
+  DEFAULT_SKILL_NODE_HEIGHT,
+  DEFAULT_SKILL_NODE_WIDTH,
   layoutWorldKindColumn,
+  MEMORY_NODE_HEIGHT,
+  MEMORY_NODE_WIDTH,
+  PLUGIN_NODE_HEIGHT,
+  PLUGIN_NODE_WIDTH,
   pluginNodeCenter,
   SKILL_ORBIT_RADIUS,
   WORLD_ADDRESS_HEIGHT,
@@ -44,9 +54,30 @@ import {
   WORLD_PORT_GAP,
   WORLD_PORT_SIZE,
 } from "@/features/constructor/types/constructor";
+import SkillDetailGlyph from "@/features/skills/components/SkillDetailGlyph.vue";
+import SkillFacetCards from "@/features/skills/components/SkillFacetCards.vue";
 import { useSkills } from "@/features/skills/composables/useSkills";
+import {
+  layoutSkillColumn,
+  layoutSkillHubPose,
+  SKILL_LABEL_TYPE,
+  SKILL_SAT_SIZE,
+  skillOrbitItem,
+  type SkillOrbitId,
+} from "@/features/skills/utils/skillOrbit";
+import PluginDetailGlyph from "@/features/tools/components/PluginDetailGlyph.vue";
+import PluginFacetCards from "@/features/tools/components/PluginFacetCards.vue";
+import { getToolDefinition } from "@/features/tools/registry/builtinTools";
 import { fetchCredentials, type ToolCredential } from "@/features/tools/services/credentialsApi";
 import { useTools } from "@/features/tools/composables/useTools";
+import {
+  layoutPluginColumn,
+  layoutPluginHubPose,
+  PLUGIN_LABEL_TYPE,
+  PLUGIN_SAT_SIZE,
+  pluginOrbitItem,
+  type PluginOrbitId,
+} from "@/features/tools/utils/pluginOrbit";
 import type { Project } from "@/features/projects/types/project";
 import {
   readProjectQuestions,
@@ -55,7 +86,7 @@ import {
 } from "@/features/projects/utils/projectQuestions";
 import { skillPath } from "@/router/paths";
 import { SSH_COMMANDS_TOOL_ID } from "@/features/tools/utils/sshLibrary";
-import { useDeskMotion } from "@/features/projects/motion";
+import { handoffSeat, useDeskMotion } from "@/features/projects/motion";
 import {
   DESK_ASIDE_MS,
   DESK_EASE,
@@ -145,7 +176,6 @@ const selectedNodeId = ref<string | null>(null);
 const selectedKindToolId = ref<string | null>(null);
 const selectedAddressId = ref<string | null>(null);
 const selectedPluginId = ref<string | null>(null);
-const memoryOpen = ref(false);
 const agentPhase = ref<AgentHubPhase>("circle");
 const viewport = ref({ panX: 0, panY: 0, zoom: 1 });
 const canvasRef = useTemplateRef<InstanceType<typeof InfiniteCanvas>>("canvas");
@@ -156,6 +186,9 @@ const credentialsReady = ref(false);
 const rootEl = useTemplateRef<HTMLElement>("constructorRoot");
 
 type ChannelStage = "agent" | "entering" | "channel" | "leaving";
+type MemoryStage = "agent" | "entering" | "memory" | "leaving";
+type PluginStage = "agent" | "entering" | "plugin" | "leaving";
+type SkillStage = "agent" | "entering" | "skill" | "leaving";
 interface FlightPose {
   x: number;
   y: number;
@@ -182,6 +215,101 @@ const {
   frame,
   reducedMotion,
 } = useDeskMotion();
+
+/** Memory desk mode: memory card → center; facets on a circle. */
+const memoryStage = ref<MemoryStage>("agent");
+const memoryParked = ref(false);
+const liftedMemory = ref(false);
+const memorySatellites = ref(false);
+const memoryFlight = ref<FlightPose | null>(null);
+const memoryFlightGlide = ref(false);
+const memoryFlightEase = ref(DESK_EASE_OPEN);
+const memoryLayoutScale = ref(1);
+/** Facet layer: selected shelf → center; others collapse into memory; cards on the right. */
+const memoryFacetId = ref<MemoryOrbitId | null>(null);
+const memoryFacetStage = ref<"closed" | "entering" | "open" | "leaving">("closed");
+const memoryAside = ref(false);
+const liftedMemoryFacet = ref<MemoryOrbitId | null>(null);
+const memoryFacetPose = ref<FlightPose | null>(null);
+const memoryFacetGlide = ref(false);
+const memoryFacetEase = ref(DESK_EASE_OPEN);
+const memoryFacetCardsShown = ref(false);
+const {
+  beginPass: beginMemoryPass,
+  isCurrent: isMemoryPass,
+  cancelPasses: cancelMemoryPasses,
+} = useDeskMotion();
+const {
+  beginPass: beginMemoryFacetPass,
+  isCurrent: isMemoryFacetPass,
+  cancelPasses: cancelMemoryFacetPasses,
+} = useDeskMotion();
+
+/** Plugin desk mode: instance card → center; detail facets on a circle. */
+const pluginStage = ref<PluginStage>("agent");
+const pluginParked = ref(false);
+const liftedPluginId = ref<string | null>(null);
+const pluginSatellites = ref(false);
+const pluginFlight = ref<FlightPose | null>(null);
+const pluginFlightGlide = ref(false);
+const pluginFlightEase = ref(DESK_EASE_OPEN);
+/** Facet layer: detail icon → center; others collapse into plugin; right = gradient blur. */
+const pluginFacetId = ref<PluginOrbitId | null>(null);
+const pluginFacetStage = ref<"closed" | "entering" | "open" | "leaving">("closed");
+const pluginAside = ref(false);
+const liftedPluginFacet = ref<PluginOrbitId | null>(null);
+const pluginFacetPose = ref<FlightPose | null>(null);
+const pluginFacetGlide = ref(false);
+const pluginFacetEase = ref(DESK_EASE_OPEN);
+const pluginFacetShown = ref(false);
+/** After seat lands, flyer paints at opacity 0 until drop (no double-composite blink). */
+const pluginFacetHandoff = ref(false);
+const {
+  beginPass: beginPluginPass,
+  isCurrent: isPluginPass,
+  cancelPasses: cancelPluginPasses,
+} = useDeskMotion();
+const {
+  beginPass: beginPluginFacetPass,
+  isCurrent: isPluginFacetPass,
+  cancelPasses: cancelPluginFacetPasses,
+} = useDeskMotion();
+
+/** Skill desk mode: skill card → left hub; detail facets in a vertical column (same as plugin). */
+const skillStage = ref<SkillStage>("agent");
+const skillParked = ref(false);
+const liftedSkillId = ref<string | null>(null);
+const selectedSkillId = ref<string | null>(null);
+const skillSatellites = ref(false);
+const skillFlight = ref<FlightPose | null>(null);
+const skillFlightGlide = ref(false);
+const skillFlightEase = ref(DESK_EASE_OPEN);
+/** Canvas seat pose captured on enter — leave lands here (no remasure drift / ring). */
+const skillHomePose = ref<FlightPose | null>(null);
+const skillFacetId = ref<SkillOrbitId | null>(null);
+const skillFacetStage = ref<"closed" | "entering" | "open" | "leaving">("closed");
+const skillAside = ref(false);
+const liftedSkillFacet = ref<SkillOrbitId | null>(null);
+const skillFacetPose = ref<FlightPose | null>(null);
+const skillFacetGlide = ref(false);
+const skillFacetEase = ref(DESK_EASE_OPEN);
+const skillFacetShown = ref(false);
+const skillFacetHandoff = ref(false);
+const {
+  beginPass: beginSkillPass,
+  isCurrent: isSkillPass,
+  cancelPasses: cancelSkillPasses,
+} = useDeskMotion();
+const {
+  beginPass: beginSkillFacetPass,
+  isCurrent: isSkillFacetPass,
+  cancelPasses: cancelSkillFacetPasses,
+} = useDeskMotion();
+
+const deskParked = computed(
+  () =>
+    channelParked.value || memoryParked.value || pluginParked.value || skillParked.value,
+);
 
 const PROJECT_ACTION_SIZE = 64;
 const PROJECT_ACTIONS = [
@@ -283,13 +411,20 @@ watch(
 );
 
 const canvasNodes = computed(() =>
-  nodes.value.map((node) => ({
-    ...node,
-    name: getSkill(props.agentSlug, node.skillId)?.name ?? node.skillId,
-  })),
+  nodes.value.map((node) => {
+    const skill = getSkill(props.agentSlug, node.skillId);
+    return {
+      ...node,
+      name: skill?.name ?? node.skillId,
+      // Same subtitle as the skill-mode flyer — seat handoff stays continuous.
+      role: skill?.systemRole ? "системный" : "навык",
+    };
+  }),
 );
 
 const selectedSkill = computed(() => {
+  const modeId = selectedSkillId.value;
+  if (modeId) return getSkill(props.agentSlug, modeId) ?? null;
   const node = nodes.value.find((item) => item.id === selectedNodeId.value);
   if (!node) return null;
   return getSkill(props.agentSlug, node.skillId) ?? null;
@@ -433,8 +568,13 @@ function clearSelection() {
   selectedNodeId.value = null;
   selectedKindToolId.value = null;
   selectedAddressId.value = null;
-  selectedPluginId.value = null;
-  memoryOpen.value = false;
+  // Keep mode ids while constructor modes are open — facet cards mount on them.
+  if (pluginStage.value === "agent") {
+    selectedPluginId.value = null;
+  }
+  if (skillStage.value === "agent") {
+    selectedSkillId.value = null;
+  }
 }
 
 function openPicker() {
@@ -450,23 +590,55 @@ function closeAddressConfig() {
 }
 
 function openPlugin(instanceId: string) {
+  if (pluginStage.value !== "agent") {
+    selectedPluginId.value = instanceId;
+    return;
+  }
   clearSelection();
   selectedPluginId.value = instanceId;
   if (agentPhase.value !== "details") agentPhase.value = "circle";
+  const instance = agent.value?.tools.find((item) => item.id === instanceId);
+  if (instance?.toolId === SSH_COMMANDS_TOOL_ID) return;
+  if (channelStage.value !== "agent") resetChannel();
+  if (memoryStage.value !== "agent") resetMemory();
+  if (skillStage.value !== "agent") resetSkill();
+  void enterPlugin(instanceId);
 }
 
 function closePlugin() {
+  if (pluginStage.value !== "agent") {
+    void leavePlugin();
+    return;
+  }
   selectedPluginId.value = null;
 }
 
 function openMemory() {
+  if (memoryStage.value !== "agent") return;
   clearSelection();
-  memoryOpen.value = true;
   if (agentPhase.value !== "details") agentPhase.value = "circle";
+  if (channelStage.value !== "agent") resetChannel();
+  if (pluginStage.value !== "agent") resetPlugin();
+  if (skillStage.value !== "agent") resetSkill();
+  void enterMemory();
+}
+
+function openSkill(skillId: string) {
+  if (skillStage.value !== "agent") {
+    selectedSkillId.value = skillId;
+    return;
+  }
+  clearSelection();
+  if (agentPhase.value !== "details") agentPhase.value = "circle";
+  if (channelStage.value !== "agent") resetChannel();
+  if (memoryStage.value !== "agent") resetMemory();
+  if (pluginStage.value !== "agent") resetPlugin();
+  // enterSkill measures the seat before applying selection ring / lift.
+  void enterSkill(skillId);
 }
 
 function closeMemory() {
-  memoryOpen.value = false;
+  void leaveMemory();
 }
 
 async function focusNode(nodeId: string) {
@@ -479,15 +651,14 @@ async function focusNode(nodeId: string) {
 }
 
 function focusSkill(skillId: string) {
-  const node = findNodeBySkillId(skillId);
-  if (node) void focusNode(node.id);
+  openSkill(skillId);
 }
 
 function onSelectSkill(skillId: string) {
   pickerOpen.value = false;
   const node = placeSkill(skillId);
   if (!node) return;
-  void focusNode(node.id);
+  openSkill(skillId);
 }
 
 async function onCreateSkill() {
@@ -496,19 +667,38 @@ async function onCreateSkill() {
   if (!skill) return;
   const node = placeSkill(skill.id);
   if (node) {
-    await focusNode(node.id);
+    openSkill(skill.id);
     return;
   }
   await router.push(skillPath(props.agentSlug, skill.id));
 }
 
 function onSelectNode(nodeId: string) {
-  clearSelection();
-  selectedNodeId.value = nodeId;
-  if (agentPhase.value !== "details") agentPhase.value = "circle";
+  const node = nodes.value.find((item) => item.id === nodeId);
+  if (!node) return;
+  openSkill(node.skillId);
 }
 
 function onClearSelection() {
+  // Skill / plugin modes leave only via Escape / back — not empty click.
+  if (skillStage.value !== "agent") return;
+  if (pluginStage.value !== "agent") return;
+  if (memoryStage.value !== "agent") {
+    if (memoryFacetId.value) {
+      void leaveMemoryFacet();
+      return;
+    }
+    void leaveMemory();
+    return;
+  }
+  if (channelStage.value !== "agent") {
+    if (addressLayerId.value || projectLayer.value) {
+      leaveCurrentLayer();
+      return;
+    }
+    void leaveChannel();
+    return;
+  }
   clearSelection();
   if (agentPhase.value === "card") agentPhase.value = "circle";
 }
@@ -583,6 +773,7 @@ function deleteSelectedSkill() {
   if (!confirm(`Удалить навык «${skill.name}»?`)) return;
   deleteSkill(props.agentSlug, skill.id);
   selectedNodeId.value = null;
+  if (skillStage.value !== "agent") resetSkill();
 }
 
 function onInsertKind(toolId: string) {
@@ -833,8 +1024,1074 @@ function resetChannel() {
   resetProjectLayer();
 }
 
+function resetMemoryFacet() {
+  cancelMemoryFacetPasses();
+  memoryFacetId.value = null;
+  memoryFacetStage.value = "closed";
+  memoryAside.value = false;
+  liftedMemoryFacet.value = null;
+  memoryFacetPose.value = null;
+  memoryFacetGlide.value = false;
+  memoryFacetCardsShown.value = false;
+}
+
+function resetMemory() {
+  cancelMemoryPasses();
+  resetMemoryFacet();
+  memoryStage.value = "agent";
+  memoryParked.value = false;
+  liftedMemory.value = false;
+  memorySatellites.value = false;
+  memoryFlight.value = null;
+  memoryFlightGlide.value = false;
+  memoryLayoutScale.value = 1;
+}
+
+function resetPluginFacet() {
+  cancelPluginFacetPasses();
+  pluginFacetId.value = null;
+  pluginFacetStage.value = "closed";
+  pluginAside.value = false;
+  liftedPluginFacet.value = null;
+  pluginFacetPose.value = null;
+  pluginFacetGlide.value = false;
+  pluginFacetShown.value = false;
+  pluginFacetHandoff.value = false;
+}
+
+function resetPlugin() {
+  cancelPluginPasses();
+  resetPluginFacet();
+  pluginStage.value = "agent";
+  pluginParked.value = false;
+  liftedPluginId.value = null;
+  pluginSatellites.value = false;
+  pluginFlight.value = null;
+  pluginFlightGlide.value = false;
+  selectedPluginId.value = null;
+}
+
+function resetSkillFacet() {
+  cancelSkillFacetPasses();
+  skillFacetId.value = null;
+  skillFacetStage.value = "closed";
+  skillAside.value = false;
+  liftedSkillFacet.value = null;
+  skillFacetPose.value = null;
+  skillFacetGlide.value = false;
+  skillFacetShown.value = false;
+  skillFacetHandoff.value = false;
+}
+
+function resetSkill() {
+  cancelSkillPasses();
+  resetSkillFacet();
+  skillStage.value = "agent";
+  skillParked.value = false;
+  liftedSkillId.value = null;
+  skillSatellites.value = false;
+  skillFlight.value = null;
+  skillFlightGlide.value = false;
+  skillHomePose.value = null;
+  selectedSkillId.value = null;
+}
+
+function memoryCardPose(): FlightPose | null {
+  const root = rootEl.value;
+  if (!root) return null;
+  const card = root.querySelector("[data-memory-card]");
+  if (!(card instanceof HTMLElement)) return null;
+  const rootBox = root.getBoundingClientRect();
+  const box = card.getBoundingClientRect();
+  if (box.width < 1 || box.height < 1) return null;
+  return {
+    x: box.left - rootBox.left,
+    y: box.top - rootBox.top,
+    width: box.width,
+    height: box.height,
+    scale: 1,
+  };
+}
+
+function centerMemoryPose(from: FlightPose): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  const scale = from.height > 0 ? AGENT_SIZE / from.height : 1;
+  return {
+    x: width / 2 - from.width / 2,
+    y: height / 2 - from.height / 2,
+    width: from.width,
+    height: from.height,
+    scale,
+  };
+}
+
+async function enterMemory() {
+  if (memoryStage.value !== "agent") return;
+  const token = beginMemoryPass();
+  const start = memoryCardPose();
+  memoryStage.value = "entering";
+  memorySatellites.value = false;
+  memoryFlightGlide.value = false;
+  memoryFlightEase.value = DESK_EASE_OPEN;
+  resetMemoryFacet();
+  memoryLayoutScale.value = start && start.height > 0 ? AGENT_SIZE / start.height : 1;
+
+  if (reducedMotion() || !start) {
+    const pose = start ?? {
+      x: 0,
+      y: 0,
+      width: MEMORY_NODE_WIDTH,
+      height: MEMORY_NODE_HEIGHT,
+      scale: 1,
+    };
+    memoryParked.value = true;
+    liftedMemory.value = true;
+    memoryFlight.value = centerMemoryPose(pose);
+    memorySatellites.value = true;
+    memoryStage.value = "memory";
+    return;
+  }
+
+  memoryFlight.value = start;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isMemoryPass(token)) return;
+  liftedMemory.value = true;
+  memoryParked.value = true;
+  memoryFlightGlide.value = true;
+  memoryFlight.value = centerMemoryPose(start);
+  memorySatellites.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isMemoryPass(token)) return;
+  memoryFlightGlide.value = false;
+  memoryStage.value = "memory";
+}
+
+async function leaveMemory() {
+  if (memoryStage.value === "agent" || memoryStage.value === "leaving") return;
+  if (memoryFacetId.value) {
+    await leaveMemoryFacet();
+    if (memoryFacetId.value) return;
+  }
+  const token = beginMemoryPass();
+  if (reducedMotion() || !memoryFlight.value) {
+    resetMemory();
+    return;
+  }
+  memoryStage.value = "leaving";
+  memorySatellites.value = false;
+  memoryParked.value = false;
+  memoryFlightEase.value = DESK_EASE;
+  memoryFlightGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isMemoryPass(token)) return;
+  const slot = memoryCardPose();
+  if (slot) memoryFlight.value = slot;
+  await wait(DESK_MOVE_MS);
+  if (!isMemoryPass(token)) return;
+  liftedMemory.value = false;
+  memoryFlight.value = null;
+  memoryFlightGlide.value = false;
+  memoryStage.value = "agent";
+}
+
+function pluginCardPose(instanceId: string): FlightPose | null {
+  const root = rootEl.value;
+  if (!root) return null;
+  const card = root.querySelector(`[data-plugin="${CSS.escape(instanceId)}"]`);
+  if (!(card instanceof HTMLElement)) return null;
+  const rootBox = root.getBoundingClientRect();
+  const box = card.getBoundingClientRect();
+  if (box.width < 1 || box.height < 1) return null;
+  return {
+    x: box.left - rootBox.left,
+    y: box.top - rootBox.top,
+    width: box.width,
+    height: box.height,
+    scale: 1,
+  };
+}
+
+function centerPluginPose(from: FlightPose): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  return layoutPluginHubPose({ width, height }, from);
+}
+
+async function enterPlugin(instanceId: string) {
+  if (pluginStage.value !== "agent") return;
+  const token = beginPluginPass();
+  const start = pluginCardPose(instanceId);
+  pluginStage.value = "entering";
+  pluginSatellites.value = false;
+  pluginFacetId.value = null;
+  pluginFlightGlide.value = false;
+  pluginFlightEase.value = DESK_EASE_OPEN;
+  selectedPluginId.value = instanceId;
+
+  if (reducedMotion() || !start) {
+    const pose = start ?? {
+      x: 0,
+      y: 0,
+      width: PLUGIN_NODE_WIDTH,
+      height: PLUGIN_NODE_HEIGHT,
+      scale: 1,
+    };
+    pluginParked.value = true;
+    liftedPluginId.value = instanceId;
+    pluginFlight.value = centerPluginPose(pose);
+    pluginSatellites.value = true;
+    pluginStage.value = "plugin";
+    return;
+  }
+
+  pluginFlight.value = start;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isPluginPass(token)) return;
+  liftedPluginId.value = instanceId;
+  pluginParked.value = true;
+  pluginFlightGlide.value = true;
+  pluginFlight.value = centerPluginPose(start);
+  pluginSatellites.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isPluginPass(token)) return;
+  pluginFlightGlide.value = false;
+  pluginStage.value = "plugin";
+}
+
+async function leavePlugin() {
+  if (pluginStage.value === "agent" || pluginStage.value === "leaving") return;
+  if (pluginFacetId.value) {
+    await leavePluginFacet();
+    if (pluginFacetId.value) return;
+  }
+  const token = beginPluginPass();
+  if (reducedMotion() || !pluginFlight.value || !selectedPluginId.value) {
+    resetPlugin();
+    return;
+  }
+  const instanceId = selectedPluginId.value;
+  pluginStage.value = "leaving";
+  pluginSatellites.value = false;
+  pluginParked.value = false;
+  pluginFlightEase.value = DESK_EASE;
+  pluginFlightGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isPluginPass(token)) return;
+  const slot = pluginCardPose(instanceId);
+  if (slot) pluginFlight.value = slot;
+  await wait(DESK_MOVE_MS);
+  if (!isPluginPass(token)) return;
+  liftedPluginId.value = null;
+  pluginFlight.value = null;
+  pluginFlightGlide.value = false;
+  pluginStage.value = "agent";
+  selectedPluginId.value = null;
+}
+
+const pluginOrbitTypeDef = computed(() => {
+  const instance = selectedPluginId.value
+    ? agent.value?.tools.find((item) => item.id === selectedPluginId.value)
+    : null;
+  return instance ? getToolDefinition(instance.toolId) : undefined;
+});
+
+const pluginOrbitSlots = computed(() => {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  return layoutPluginColumn({ x: width / 2, y: height / 2 }, { width, height }, pluginOrbitTypeDef.value);
+});
+
+const pluginCenterMeta = computed(() => {
+  const instance = selectedPluginId.value
+    ? agent.value?.tools.find((item) => item.id === selectedPluginId.value)
+    : null;
+  if (!instance) return { name: "Плагин", typeId: "" };
+  return { name: instance.name || instance.id, typeId: instance.toolId };
+});
+
+const pluginFaceOpen = computed(
+  () =>
+    pluginStage.value === "plugin" &&
+    pluginSatellites.value &&
+    !pluginAside.value &&
+    pluginFacetStage.value === "closed",
+);
+
+const pluginFlightStyle = computed(() => {
+  const pose = pluginFlight.value;
+  if (!pose) return {};
+  const glide = pluginFlightGlide.value && !reducedMotion();
+  const move = glide
+    ? `left ${DESK_MOVE_MS}ms ${pluginFlightEase.value}, top ${DESK_MOVE_MS}ms ${pluginFlightEase.value}`
+    : "none";
+  return {
+    left: `${pose.x + pose.width / 2}px`,
+    top: `${pose.y + pose.height / 2}px`,
+    zIndex: "25",
+    transition: move,
+  };
+});
+
+const pluginCardBoxStyle = computed(() => {
+  const pose = pluginFlight.value;
+  if (!pose) return {};
+  const glide = pluginFlightGlide.value && !reducedMotion();
+  return {
+    left: `${-pose.width / 2}px`,
+    top: `${-pose.height / 2}px`,
+    width: `${pose.width}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    transformOrigin: "center center",
+    // Plugin stays as the pocket other satellites collapse into; dims when a facet is open.
+    opacity: pluginAside.value ? "0.35" : "1",
+    transition: [
+      glide ? `transform ${DESK_MOVE_MS}ms ${pluginFlightEase.value}` : "",
+      reducedMotion() ? "" : `opacity ${DESK_ASIDE_MS}ms ease`,
+    ]
+      .filter(Boolean)
+      .join(", ") || "none",
+  };
+});
+
+const pluginSpreadStyle = computed(() => {
+  const shown = pluginSatellites.value && !pluginAside.value;
+  const ease = shown ? DESK_EASE_OPEN : DESK_EASE;
+  return {
+    left: "0px",
+    top: "0px",
+    width: "0px",
+    height: "0px",
+    transform: shown ? "scale(1)" : "scale(0)",
+    opacity: shown ? "1" : "0",
+    transformOrigin: "0 0",
+    transition: reducedMotion()
+      ? "none"
+      : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
+  };
+});
+
+function pluginFlightOrigin(): { x: number; y: number } {
+  const pose = pluginFlight.value;
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  if (pose) {
+    return { x: pose.x + pose.width / 2, y: pose.y + pose.height / 2 };
+  }
+  return { x: width / 2, y: height / 2 };
+}
+
+function pluginSatStyle(slot: { x: number; y: number; id: PluginOrbitId }) {
+  const lifted = liftedPluginFacet.value === slot.id;
+  const origin = pluginFlightOrigin();
+  return {
+    left: `${slot.x - origin.x}px`,
+    top: `${slot.y - origin.y}px`,
+    height: `${PLUGIN_SAT_SIZE}px`,
+    // Handoff invariant: seat opacity snaps — never fade on land/drop (end blink).
+    opacity: lifted ? 0 : 1,
+    transition: "none",
+  };
+}
+
+function pluginFacetHome(id: PluginOrbitId): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  const origin = pluginFlightOrigin();
+  const slot = layoutPluginColumn(
+    { x: width / 2, y: height / 2 },
+    { width, height },
+    pluginOrbitTypeDef.value,
+  ).find((item) => item.id === id);
+  return {
+    x: (slot?.x ?? origin.x - PLUGIN_SAT_SIZE / 2) - origin.x,
+    y: (slot?.y ?? origin.y - PLUGIN_SAT_SIZE / 2) - origin.y,
+    width: PLUGIN_SAT_SIZE,
+    height: PLUGIN_SAT_SIZE,
+    scale: 1,
+  };
+}
+
+function pluginFacetCenter(_home: FlightPose): FlightPose {
+  // Same icon+label row as the list; grow around the icon center into the hub seat.
+  const scale = PLUGIN_SAT_SIZE > 0 ? AGENT_SIZE / PLUGIN_SAT_SIZE : 1;
+  return {
+    x: -PLUGIN_SAT_SIZE / 2,
+    y: -PLUGIN_SAT_SIZE / 2,
+    width: PLUGIN_SAT_SIZE,
+    height: PLUGIN_SAT_SIZE,
+    scale,
+  };
+}
+
+const pluginFacetStyle = computed(() => {
+  const pose = pluginFacetPose.value;
+  if (!pose) return {};
+  const glide = pluginFacetGlide.value && !reducedMotion();
+  const ease = pluginFacetEase.value;
+  const ox = PLUGIN_SAT_SIZE / 2;
+  const oy = PLUGIN_SAT_SIZE / 2;
+  return {
+    left: `${pose.x}px`,
+    top: `${pose.y}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    // Pivot on the glyph so the side label stays to the right while scaling.
+    transformOrigin: `${ox}px ${oy}px`,
+    zIndex: "26",
+    // Snap hide when seat lands — never fade the flyer on handoff.
+    opacity: pluginFacetHandoff.value ? 0 : 1,
+    transition: glide
+      ? `left ${DESK_MOVE_MS}ms ${ease}, top ${DESK_MOVE_MS}ms ${ease}, transform ${DESK_MOVE_MS}ms ${ease}`
+      : "none",
+  };
+});
+
+const pluginFacetMeta = computed(() =>
+  pluginFacetId.value ? pluginOrbitItem(pluginFacetId.value) : null,
+);
+
+async function enterPluginFacet(id: PluginOrbitId) {
+  if (pluginStage.value !== "plugin") return;
+  if (pluginFacetId.value === id && pluginFacetStage.value === "open") return;
+  const token = beginPluginFacetPass();
+  const home = pluginFacetHome(id);
+  const switching = Boolean(pluginFacetId.value) || pluginAside.value;
+  pluginFacetId.value = id;
+  pluginFacetStage.value = switching ? "open" : "entering";
+  pluginFacetEase.value = DESK_EASE_OPEN;
+
+  if (switching || reducedMotion()) {
+    liftedPluginFacet.value = id;
+    pluginAside.value = true;
+    pluginFacetPose.value = pluginFacetCenter(home);
+    pluginFacetShown.value = true;
+    pluginFacetGlide.value = false;
+    pluginFacetStage.value = "open";
+    return;
+  }
+
+  pluginFacetShown.value = false;
+  pluginFacetGlide.value = false;
+  pluginFacetPose.value = home;
+  // Hide the list seat as soon as the flyer occupies it (no twin blink).
+  liftedPluginFacet.value = id;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isPluginFacetPass(token)) return;
+  // One pass: collapse other satellites into plugin, fly focus to hub, reveal right stage.
+  pluginAside.value = true;
+  pluginFacetGlide.value = true;
+  pluginFacetPose.value = pluginFacetCenter(home);
+  pluginFacetShown.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isPluginFacetPass(token)) return;
+  pluginFacetGlide.value = false;
+  pluginFacetStage.value = "open";
+}
+
+async function leavePluginFacet() {
+  if (!pluginFacetId.value || pluginFacetStage.value === "leaving" || pluginFacetStage.value === "closed") {
+    return;
+  }
+  const id = pluginFacetId.value;
+  const token = beginPluginFacetPass();
+  if (reducedMotion()) {
+    resetPluginFacet();
+    return;
+  }
+  pluginFacetStage.value = "leaving";
+  pluginFacetShown.value = false;
+  pluginAside.value = false;
+  pluginFacetEase.value = DESK_EASE;
+  pluginFacetGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isPluginFacetPass(token)) return;
+  pluginFacetPose.value = pluginFacetHome(id);
+  await wait(DESK_MOVE_MS);
+  if (!isPluginFacetPass(token)) return;
+  pluginFacetGlide.value = false;
+  // Seat handoff: land list row + hide flyer (opacity snap) → next frame → unmount flyer.
+  const landed = await handoffSeat({
+    land: () => {
+      liftedPluginFacet.value = null;
+      pluginFacetHandoff.value = true;
+    },
+    drop: () => {
+      pluginFacetPose.value = null;
+      pluginFacetHandoff.value = false;
+      pluginFacetId.value = null;
+      pluginFacetStage.value = "closed";
+    },
+    token,
+    isCurrent: isPluginFacetPass,
+  });
+  if (!landed) return;
+}
+
+function skillCardPose(skillId: string): FlightPose | null {
+  const root = rootEl.value;
+  if (!root) return null;
+  const card = root.querySelector(`[data-skill="${CSS.escape(skillId)}"]`);
+  if (!(card instanceof HTMLElement)) return null;
+  const rootBox = root.getBoundingClientRect();
+  const box = card.getBoundingClientRect();
+  if (box.width < 1 || box.height < 1) return null;
+  return {
+    x: box.left - rootBox.left,
+    y: box.top - rootBox.top,
+    width: box.width,
+    height: box.height,
+    scale: 1,
+  };
+}
+
+function centerSkillPose(from: FlightPose): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  return layoutSkillHubPose({ width, height }, from);
+}
+
+async function enterSkill(skillId: string) {
+  if (skillStage.value !== "agent") return;
+  const token = beginSkillPass();
+  // Measure before selection ring so home pose matches the resting seat.
+  const start = skillCardPose(skillId);
+  skillStage.value = "entering";
+  skillSatellites.value = false;
+  skillFacetId.value = null;
+  skillFlightGlide.value = false;
+  skillFlightEase.value = DESK_EASE_OPEN;
+  selectedSkillId.value = skillId;
+  const node = findNodeBySkillId(skillId);
+  if (node) selectedNodeId.value = node.id;
+
+  if (reducedMotion() || !start) {
+    const pose = start ?? {
+      x: 0,
+      y: 0,
+      width: DEFAULT_SKILL_NODE_WIDTH,
+      height: DEFAULT_SKILL_NODE_HEIGHT,
+      scale: 1,
+    };
+    skillHomePose.value = { ...pose, scale: 1 };
+    skillParked.value = true;
+    liftedSkillId.value = skillId;
+    skillFlight.value = centerSkillPose(pose);
+    skillSatellites.value = true;
+    skillStage.value = "skill";
+    return;
+  }
+
+  skillHomePose.value = { ...start, scale: 1 };
+  skillFlight.value = start;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isSkillPass(token)) return;
+  liftedSkillId.value = skillId;
+  skillParked.value = true;
+  skillFlightGlide.value = true;
+  skillFlight.value = centerSkillPose(start);
+  skillSatellites.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isSkillPass(token)) return;
+  skillFlightGlide.value = false;
+  skillStage.value = "skill";
+}
+
+async function leaveSkill() {
+  if (skillStage.value === "agent" || skillStage.value === "leaving") return;
+  if (skillFacetId.value) {
+    await leaveSkillFacet();
+    if (skillFacetId.value) return;
+  }
+  const token = beginSkillPass();
+  if (reducedMotion() || !skillFlight.value || !selectedSkillId.value) {
+    resetSkill();
+    selectedNodeId.value = null;
+    return;
+  }
+  const id = selectedSkillId.value;
+  skillStage.value = "leaving";
+  skillSatellites.value = false;
+  skillParked.value = false;
+  // Drop selection ring before landing so the seat matches the flyer box.
+  selectedNodeId.value = null;
+  skillFlightEase.value = DESK_EASE;
+  skillFlightGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isSkillPass(token)) return;
+  // Prefer live seat (pan/zoom), fall back to enter home pose.
+  const slot = skillCardPose(id) ?? skillHomePose.value;
+  if (slot) skillFlight.value = { ...slot, scale: 1 };
+  await wait(DESK_MOVE_MS);
+  if (!isSkillPass(token)) return;
+  skillFlightGlide.value = false;
+  // Seat handoff: land canvas seat → next frame → drop flyer (no end blink).
+  const landed = await handoffSeat({
+    land: () => {
+      liftedSkillId.value = null;
+    },
+    drop: () => {
+      skillFlight.value = null;
+      skillHomePose.value = null;
+      skillStage.value = "agent";
+      selectedSkillId.value = null;
+    },
+    token,
+    isCurrent: isSkillPass,
+  });
+  if (!landed) return;
+}
+
+const skillOrbitSlots = computed(() => {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  return layoutSkillColumn({ x: width / 2, y: height / 2 }, { width, height });
+});
+
+const skillCenterMeta = computed(() => {
+  const skill = selectedSkill.value;
+  if (!skill) return { name: "Навык", role: "" };
+  return {
+    name: skill.name || skill.id,
+    role: skill.systemRole ? "системный" : "навык",
+  };
+});
+
+const skillFaceOpen = computed(
+  () =>
+    skillStage.value === "skill" &&
+    skillSatellites.value &&
+    !skillAside.value &&
+    skillFacetStage.value === "closed",
+);
+
+const skillFlightStyle = computed(() => {
+  const pose = skillFlight.value;
+  if (!pose) return {};
+  const glide = skillFlightGlide.value && !reducedMotion();
+  const move = glide
+    ? `left ${DESK_MOVE_MS}ms ${skillFlightEase.value}, top ${DESK_MOVE_MS}ms ${skillFlightEase.value}`
+    : "none";
+  return {
+    left: `${pose.x + pose.width / 2}px`,
+    top: `${pose.y + pose.height / 2}px`,
+    zIndex: "25",
+    transition: move,
+  };
+});
+
+const skillCardBoxStyle = computed(() => {
+  const pose = skillFlight.value;
+  if (!pose) return {};
+  const glide = skillFlightGlide.value && !reducedMotion();
+  return {
+    left: `${-pose.width / 2}px`,
+    top: `${-pose.height / 2}px`,
+    width: `${pose.width}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    transformOrigin: "center center",
+    opacity: skillAside.value ? "0.35" : "1",
+    transition: [
+      glide ? `transform ${DESK_MOVE_MS}ms ${skillFlightEase.value}` : "",
+      reducedMotion() ? "" : `opacity ${DESK_ASIDE_MS}ms ease`,
+    ]
+      .filter(Boolean)
+      .join(", ") || "none",
+  };
+});
+
+const skillSpreadStyle = computed(() => {
+  const shown = skillSatellites.value && !skillAside.value;
+  const ease = shown ? DESK_EASE_OPEN : DESK_EASE;
+  return {
+    left: "0px",
+    top: "0px",
+    width: "0px",
+    height: "0px",
+    transform: shown ? "scale(1)" : "scale(0)",
+    opacity: shown ? "1" : "0",
+    transformOrigin: "0 0",
+    transition: reducedMotion()
+      ? "none"
+      : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
+  };
+});
+
+function skillFlightOrigin(): { x: number; y: number } {
+  const pose = skillFlight.value;
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  if (pose) {
+    return { x: pose.x + pose.width / 2, y: pose.y + pose.height / 2 };
+  }
+  return { x: width / 2, y: height / 2 };
+}
+
+function skillSatStyle(slot: { x: number; y: number; id: SkillOrbitId }) {
+  const lifted = liftedSkillFacet.value === slot.id;
+  const origin = skillFlightOrigin();
+  return {
+    left: `${slot.x - origin.x}px`,
+    top: `${slot.y - origin.y}px`,
+    height: `${SKILL_SAT_SIZE}px`,
+    // Handoff invariant: seat opacity snaps — never fade on land/drop.
+    opacity: lifted ? 0 : 1,
+    transition: "none",
+  };
+}
+
+function skillFacetHome(id: SkillOrbitId): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  const origin = skillFlightOrigin();
+  const slot = layoutSkillColumn(
+    { x: width / 2, y: height / 2 },
+    { width, height },
+  ).find((item) => item.id === id);
+  return {
+    x: (slot?.x ?? origin.x - SKILL_SAT_SIZE / 2) - origin.x,
+    y: (slot?.y ?? origin.y - SKILL_SAT_SIZE / 2) - origin.y,
+    width: SKILL_SAT_SIZE,
+    height: SKILL_SAT_SIZE,
+    scale: 1,
+  };
+}
+
+function skillFacetCenter(_home: FlightPose): FlightPose {
+  const scale = SKILL_SAT_SIZE > 0 ? AGENT_SIZE / SKILL_SAT_SIZE : 1;
+  return {
+    x: -SKILL_SAT_SIZE / 2,
+    y: -SKILL_SAT_SIZE / 2,
+    width: SKILL_SAT_SIZE,
+    height: SKILL_SAT_SIZE,
+    scale,
+  };
+}
+
+const skillFacetStyle = computed(() => {
+  const pose = skillFacetPose.value;
+  if (!pose) return {};
+  const glide = skillFacetGlide.value && !reducedMotion();
+  const ease = skillFacetEase.value;
+  const ox = SKILL_SAT_SIZE / 2;
+  const oy = SKILL_SAT_SIZE / 2;
+  return {
+    left: `${pose.x}px`,
+    top: `${pose.y}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    transformOrigin: `${ox}px ${oy}px`,
+    zIndex: "26",
+    opacity: skillFacetHandoff.value ? 0 : 1,
+    transition: glide
+      ? `left ${DESK_MOVE_MS}ms ${ease}, top ${DESK_MOVE_MS}ms ${ease}, transform ${DESK_MOVE_MS}ms ${ease}`
+      : "none",
+  };
+});
+
+const skillFacetMeta = computed(() =>
+  skillFacetId.value ? skillOrbitItem(skillFacetId.value) : null,
+);
+
+async function enterSkillFacet(id: SkillOrbitId) {
+  if (skillStage.value !== "skill") return;
+  if (skillFacetId.value === id && skillFacetStage.value === "open") return;
+  const token = beginSkillFacetPass();
+  const home = skillFacetHome(id);
+  const switching = Boolean(skillFacetId.value) || skillAside.value;
+  skillFacetId.value = id;
+  skillFacetStage.value = switching ? "open" : "entering";
+  skillFacetEase.value = DESK_EASE_OPEN;
+
+  if (switching || reducedMotion()) {
+    liftedSkillFacet.value = id;
+    skillAside.value = true;
+    skillFacetPose.value = skillFacetCenter(home);
+    skillFacetShown.value = true;
+    skillFacetGlide.value = false;
+    skillFacetStage.value = "open";
+    return;
+  }
+
+  skillFacetShown.value = false;
+  skillFacetGlide.value = false;
+  skillFacetPose.value = home;
+  liftedSkillFacet.value = id;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isSkillFacetPass(token)) return;
+  skillAside.value = true;
+  skillFacetGlide.value = true;
+  skillFacetPose.value = skillFacetCenter(home);
+  skillFacetShown.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isSkillFacetPass(token)) return;
+  skillFacetGlide.value = false;
+  skillFacetStage.value = "open";
+}
+
+async function leaveSkillFacet() {
+  if (!skillFacetId.value || skillFacetStage.value === "leaving" || skillFacetStage.value === "closed") {
+    return;
+  }
+  const id = skillFacetId.value;
+  const token = beginSkillFacetPass();
+  if (reducedMotion()) {
+    resetSkillFacet();
+    return;
+  }
+  skillFacetStage.value = "leaving";
+  skillFacetShown.value = false;
+  skillAside.value = false;
+  skillFacetEase.value = DESK_EASE;
+  skillFacetGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isSkillFacetPass(token)) return;
+  skillFacetPose.value = skillFacetHome(id);
+  await wait(DESK_MOVE_MS);
+  if (!isSkillFacetPass(token)) return;
+  skillFacetGlide.value = false;
+  const landed = await handoffSeat({
+    land: () => {
+      liftedSkillFacet.value = null;
+      skillFacetHandoff.value = true;
+    },
+    drop: () => {
+      skillFacetPose.value = null;
+      skillFacetHandoff.value = false;
+      skillFacetId.value = null;
+      skillFacetStage.value = "closed";
+    },
+    token,
+    isCurrent: isSkillFacetPass,
+  });
+  if (!landed) return;
+}
+
+const memoryOrbitSlots = computed(() => {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  return layoutMemoryOrbit({ x: width / 2, y: height / 2 }, { width, height });
+});
+
+const memorySkillNames = computed(() =>
+  (agent.value?.skills ?? []).map((skill) => ({
+    id: skill.id,
+    name: skill.name || skill.id,
+  })),
+);
+
+const memoryFaceOpen = computed(
+  () =>
+    memoryStage.value === "memory" &&
+    memorySatellites.value &&
+    !memoryAside.value &&
+    memoryFacetStage.value === "closed",
+);
+
+const memoryFlightStyle = computed(() => {
+  const pose = memoryFlight.value;
+  if (!pose) return {};
+  const glide = memoryFlightGlide.value && !reducedMotion();
+  const move = glide
+    ? `left ${DESK_MOVE_MS}ms ${memoryFlightEase.value}, top ${DESK_MOVE_MS}ms ${memoryFlightEase.value}`
+    : "none";
+  return {
+    left: `${pose.x + pose.width / 2}px`,
+    top: `${pose.y + pose.height / 2}px`,
+    zIndex: "25",
+    transition: move,
+  };
+});
+
+const memoryCardBoxStyle = computed(() => {
+  const pose = memoryFlight.value;
+  if (!pose) return {};
+  const glide = memoryFlightGlide.value && !reducedMotion();
+  return {
+    left: `${-pose.width / 2}px`,
+    top: `${-pose.height / 2}px`,
+    width: `${pose.width}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    transformOrigin: "center center",
+    // Memory stays as the pocket other satellites collapse into; dims when a facet is open.
+    opacity: memoryAside.value ? "0.35" : "1",
+    transition: [
+      glide ? `transform ${DESK_MOVE_MS}ms ${memoryFlightEase.value}` : "",
+      reducedMotion() ? "" : `opacity ${DESK_ASIDE_MS}ms ease`,
+    ]
+      .filter(Boolean)
+      .join(", ") || "none",
+  };
+});
+
+const memorySpreadStyle = computed(() => {
+  const shown = memorySatellites.value && !memoryAside.value;
+  const ease = shown ? DESK_EASE_OPEN : DESK_EASE;
+  return {
+    left: "0px",
+    top: "0px",
+    width: "0px",
+    height: "0px",
+    transform: shown ? "scale(1)" : "scale(0)",
+    opacity: shown ? "1" : "0",
+    transformOrigin: "0 0",
+    transition: reducedMotion()
+      ? "none"
+      : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${Math.round(DESK_MOVE_MS * 0.55)}ms ease`,
+  };
+});
+
+function memorySatStyle(slot: { x: number; y: number; id: MemoryOrbitId }) {
+  const lifted = liftedMemoryFacet.value === slot.id;
+  return {
+    left: `${slot.x - (rootEl.value?.clientWidth ?? 0) / 2}px`,
+    top: `${slot.y - (rootEl.value?.clientHeight ?? 0) / 2}px`,
+    width: `${MEMORY_SAT_SIZE}px`,
+    height: `${MEMORY_SAT_SIZE}px`,
+    opacity: lifted ? 0 : undefined,
+    transition: lifted ? "none" : `opacity ${DESK_ASIDE_MS}ms ease`,
+  };
+}
+
+function memoryFacetHome(id: MemoryOrbitId): FlightPose {
+  const width = rootEl.value?.clientWidth ?? 0;
+  const height = rootEl.value?.clientHeight ?? 0;
+  const slot = layoutMemoryOrbit({ x: width / 2, y: height / 2 }, { width, height }).find(
+    (item) => item.id === id,
+  );
+  return {
+    x: (slot?.x ?? width / 2 - MEMORY_SAT_SIZE / 2) - width / 2,
+    y: (slot?.y ?? height / 2 - MEMORY_SAT_SIZE / 2) - height / 2,
+    width: MEMORY_SAT_SIZE,
+    height: MEMORY_SAT_SIZE,
+    scale: 1,
+  };
+}
+
+function memoryFacetCenter(home: FlightPose): FlightPose {
+  const scale = home.height > 0 ? AGENT_SIZE / home.height : 1;
+  return {
+    x: -home.width / 2,
+    y: -home.height / 2,
+    width: home.width,
+    height: home.height,
+    scale,
+  };
+}
+
+const memoryFacetStyle = computed(() => {
+  const pose = memoryFacetPose.value;
+  if (!pose) return {};
+  const glide = memoryFacetGlide.value && !reducedMotion();
+  const ease = memoryFacetEase.value;
+  return {
+    left: `${pose.x}px`,
+    top: `${pose.y}px`,
+    width: `${pose.width}px`,
+    height: `${pose.height}px`,
+    transform: `scale(${pose.scale})`,
+    transformOrigin: "center center",
+    zIndex: "26",
+    transition: glide
+      ? `left ${DESK_MOVE_MS}ms ${ease}, top ${DESK_MOVE_MS}ms ${ease}, transform ${DESK_MOVE_MS}ms ${ease}`
+      : "none",
+  };
+});
+
+const memoryFacetMeta = computed(() =>
+  memoryFacetId.value ? memoryOrbitItem(memoryFacetId.value) : null,
+);
+
+async function enterMemoryFacet(id: MemoryOrbitId) {
+  if (memoryStage.value !== "memory") return;
+  if (memoryFacetId.value === id && memoryFacetStage.value === "open") return;
+  const token = beginMemoryFacetPass();
+  const home = memoryFacetHome(id);
+  const switching = Boolean(memoryFacetId.value) || memoryAside.value;
+  memoryFacetId.value = id;
+  memoryFacetStage.value = switching ? "open" : "entering";
+  memoryFacetEase.value = DESK_EASE_OPEN;
+
+  if (switching || reducedMotion()) {
+    liftedMemoryFacet.value = id;
+    memoryAside.value = true;
+    memoryFacetPose.value = memoryFacetCenter(home);
+    memoryFacetCardsShown.value = true;
+    memoryFacetGlide.value = false;
+    memoryFacetStage.value = "open";
+    return;
+  }
+
+  memoryFacetCardsShown.value = false;
+  memoryFacetGlide.value = false;
+  memoryFacetPose.value = home;
+  await nextTick();
+  await frame();
+  await frame();
+  if (!isMemoryFacetPass(token)) return;
+  // One pass: collapse other satellites into memory, fly focus to center, reveal cards.
+  liftedMemoryFacet.value = id;
+  memoryAside.value = true;
+  memoryFacetGlide.value = true;
+  memoryFacetPose.value = memoryFacetCenter(home);
+  memoryFacetCardsShown.value = true;
+  await wait(DESK_MOVE_MS);
+  if (!isMemoryFacetPass(token)) return;
+  memoryFacetGlide.value = false;
+  memoryFacetStage.value = "open";
+}
+
+async function leaveMemoryFacet() {
+  if (!memoryFacetId.value || memoryFacetStage.value === "leaving" || memoryFacetStage.value === "closed") {
+    return;
+  }
+  const id = memoryFacetId.value;
+  const token = beginMemoryFacetPass();
+  if (reducedMotion()) {
+    resetMemoryFacet();
+    return;
+  }
+  memoryFacetStage.value = "leaving";
+  memoryFacetCardsShown.value = false;
+  memoryAside.value = false;
+  memoryFacetEase.value = DESK_EASE;
+  memoryFacetGlide.value = true;
+  await nextTick();
+  await frame();
+  if (!isMemoryFacetPass(token)) return;
+  memoryFacetPose.value = memoryFacetHome(id);
+  await wait(DESK_MOVE_MS);
+  if (!isMemoryFacetPass(token)) return;
+  liftedMemoryFacet.value = null;
+  memoryFacetPose.value = null;
+  memoryFacetGlide.value = false;
+  memoryFacetId.value = null;
+  memoryFacetStage.value = "closed";
+}
+
 async function enterChannel(toolId: string) {
   if (channelStage.value !== "agent") return;
+  if (memoryStage.value !== "agent") resetMemory();
+  if (pluginStage.value !== "agent") resetPlugin();
+  if (skillStage.value !== "agent") resetSkill();
   const token = beginChannelPass();
   const start = cardPose(toolId);
   channelToolId.value = toolId;
@@ -1346,7 +2603,15 @@ watch(projectLayerStage, async (stage) => {
 });
 
 function onChannelKeydown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || channelStage.value === "agent") return;
+  if (event.key !== "Escape") return;
+  if (
+    channelStage.value === "agent" &&
+    memoryStage.value === "agent" &&
+    pluginStage.value === "agent" &&
+    skillStage.value === "agent"
+  ) {
+    return;
+  }
   const target = event.target;
   if (
     target instanceof HTMLElement &&
@@ -1359,6 +2624,30 @@ function onChannelKeydown(event: KeyboardEvent) {
   }
   event.preventDefault();
   event.stopImmediatePropagation();
+  if (skillStage.value !== "agent") {
+    if (skillFacetId.value) {
+      void leaveSkillFacet();
+      return;
+    }
+    void leaveSkill();
+    return;
+  }
+  if (pluginStage.value !== "agent") {
+    if (pluginFacetId.value) {
+      void leavePluginFacet();
+      return;
+    }
+    void leavePlugin();
+    return;
+  }
+  if (memoryStage.value !== "agent") {
+    if (memoryFacetId.value) {
+      void leaveMemoryFacet();
+      return;
+    }
+    void leaveMemory();
+    return;
+  }
   if (selectedAddressId.value) {
     closeAddressConfig();
     return;
@@ -1377,7 +2666,12 @@ function onChannelKeydown(event: KeyboardEvent) {
 watch(
   () => props.satellitesVisible,
   (shown) => {
-    if (!shown) resetChannel();
+    if (!shown) {
+      resetChannel();
+      resetMemory();
+      resetPlugin();
+      resetSkill();
+    }
   },
 );
 
@@ -1388,6 +2682,12 @@ onMounted(() => {
 onUnmounted(() => {
   cancelChannelPasses();
   cancelLayerPasses();
+  cancelMemoryPasses();
+  cancelMemoryFacetPasses();
+  cancelPluginPasses();
+  cancelPluginFacetPasses();
+  cancelSkillPasses();
+  cancelSkillFacetPasses();
   document.removeEventListener("keydown", onChannelKeydown, true);
 });
 </script>
@@ -1397,6 +2697,9 @@ onUnmounted(() => {
     ref="constructorRoot"
     class="relative h-full min-h-0 w-full flex-1 overflow-hidden"
     :data-channel-mode="channelStage !== 'agent' ? 'on' : undefined"
+    :data-plugin-mode="pluginStage !== 'agent' ? 'on' : undefined"
+    :data-skill-mode="skillStage !== 'agent' ? 'on' : undefined"
+    :data-memory-mode="memoryStage !== 'agent' ? 'on' : undefined"
   >
     <InfiniteCanvas
       ref="canvas"
@@ -1405,6 +2708,8 @@ onUnmounted(() => {
       :selected-kind-tool-id="selectedKindToolId"
       :selected-address-id="selectedAddressId"
       :selected-plugin-id="selectedPluginId"
+      :lifted-plugin-id="liftedPluginId"
+      :lifted-skill-id="liftedSkillId"
       :add-skill-slot="addSkillSlot"
       :add-kind-slot="addKindSlot"
       :add-plugin-slot="addPluginSlot"
@@ -1412,12 +2717,13 @@ onUnmounted(() => {
       :world-addresses="canvasWorldAddresses"
       :plugins="canvasPlugins"
       :highlight="highlight"
-      :memory-selected="memoryOpen"
+      :memory-selected="memoryStage !== 'agent'"
       :memory-history-line="memoryLines.historyLine"
       :memory-state-line="memoryLines.stateLine"
+      :lifted-memory="liftedMemory"
       :boot-pan="bootPan"
       :satellites-visible="satellitesVisible"
-      :parked="channelParked"
+      :parked="deskParked"
       :lifted-channel-id="liftedChannelId"
       :clear-backdrop="clearBackdrop"
       :glide="glide"
@@ -1458,7 +2764,7 @@ onUnmounted(() => {
       :glide-ms="glideMs"
       :glide-delay="glideDelay"
       :show-meta="showMeta"
-      :parked="channelParked"
+      :parked="deskParked"
       @open="openAgentCard"
       @close-card="closeAgentCard"
       @open-details="openAgentDetails"
@@ -1740,6 +3046,268 @@ onUnmounted(() => {
       </button>
     </div>
 
+    <!-- Skill mode: skill → left hub; facets vertical column (same layout as plugin). -->
+    <div
+      v-if="skillFlight"
+      class="pointer-events-none absolute"
+      :style="skillFlightStyle"
+    >
+      <div class="absolute" :style="skillSpreadStyle">
+        <button
+          v-for="slot in skillOrbitSlots"
+          :key="slot.id"
+          type="button"
+          class="absolute flex items-center gap-3 border-0 bg-transparent p-0 text-left text-inherit hover:text-base-content"
+          :class="skillFaceOpen ? 'pointer-events-auto' : 'pointer-events-none'"
+          :style="skillSatStyle(slot)"
+          :aria-label="slot.label"
+          :title="slot.label"
+          @click="enterSkillFacet(slot.id)"
+        >
+          <span
+            class="flex shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 shadow-md"
+            :style="{ width: `${SKILL_SAT_SIZE}px`, height: `${SKILL_SAT_SIZE}px` }"
+          >
+            <SkillDetailGlyph :id="slot.id" />
+          </span>
+          <span
+            class="whitespace-nowrap font-medium leading-tight text-base-content/75"
+            :style="{ fontSize: SKILL_LABEL_TYPE }"
+          >
+            {{ slot.caption }}
+          </span>
+        </button>
+      </div>
+
+      <div class="absolute" :style="skillCardBoxStyle">
+        <div
+          class="flex h-full w-full flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md"
+        >
+          <span class="w-full truncate text-xs font-semibold">{{ skillCenterMeta.name }}</span>
+          <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+            {{ skillCenterMeta.role }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="skillFacetPose && skillFacetId && skillFacetMeta"
+        class="pointer-events-none absolute flex items-center gap-3"
+        :style="skillFacetStyle"
+      >
+        <div
+          class="flex shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 shadow-md"
+          :style="{ width: `${SKILL_SAT_SIZE}px`, height: `${SKILL_SAT_SIZE}px` }"
+        >
+          <SkillDetailGlyph :id="skillFacetId" />
+        </div>
+        <span
+          class="whitespace-nowrap font-medium leading-tight text-base-content/75"
+          :style="{ fontSize: SKILL_LABEL_TYPE }"
+        >
+          {{ skillFacetMeta.caption }}
+        </span>
+      </div>
+    </div>
+
+    <SkillFacetCards
+      v-if="skillFacetId && selectedSkill && selectedSkillDependencies"
+      :agent-slug="agentSlug"
+      :skill="selectedSkill"
+      :facet="skillFacetId"
+      :dependencies="selectedSkillDependencies"
+      :shown="skillFacetShown"
+      @open-editor="openSkillEditor"
+      @remove="deleteSelectedSkill"
+      @select-kind="onSelectKind"
+      @select-plugin="openPlugin"
+    />
+
+    <!-- Plugin mode: instance → center; facet → center + right gradient-blur stage. -->
+    <div
+      v-if="pluginFlight"
+      class="pointer-events-none absolute"
+      :style="pluginFlightStyle"
+    >
+      <div class="absolute" :style="pluginSpreadStyle">
+        <button
+          v-for="slot in pluginOrbitSlots"
+          :key="slot.id"
+          type="button"
+          class="absolute flex items-center gap-3 border-0 bg-transparent p-0 text-left text-inherit hover:text-base-content"
+          :class="pluginFaceOpen ? 'pointer-events-auto' : 'pointer-events-none'"
+          :style="pluginSatStyle(slot)"
+          :aria-label="slot.label"
+          :title="slot.label"
+          @click="enterPluginFacet(slot.id)"
+        >
+          <span
+            class="flex shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 shadow-md"
+            :style="{ width: `${PLUGIN_SAT_SIZE}px`, height: `${PLUGIN_SAT_SIZE}px` }"
+          >
+            <PluginDetailGlyph :id="slot.id" />
+          </span>
+          <span
+            class="whitespace-nowrap font-medium leading-tight text-base-content/75"
+            :style="{ fontSize: PLUGIN_LABEL_TYPE }"
+          >
+            {{ slot.caption }}
+          </span>
+        </button>
+      </div>
+
+      <div class="absolute" :style="pluginCardBoxStyle">
+        <div
+          class="flex h-full w-full flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md"
+        >
+          <span class="w-full truncate text-xs font-semibold">{{ pluginCenterMeta.name }}</span>
+          <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+            {{ pluginCenterMeta.typeId }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Same icon+label row as the list — flies without restructuring. -->
+      <div
+        v-if="pluginFacetPose && pluginFacetId && pluginFacetMeta"
+        class="pointer-events-none absolute flex items-center gap-3"
+        :style="pluginFacetStyle"
+      >
+        <div
+          class="flex shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 shadow-md"
+          :style="{ width: `${PLUGIN_SAT_SIZE}px`, height: `${PLUGIN_SAT_SIZE}px` }"
+        >
+          <PluginDetailGlyph :id="pluginFacetId" />
+        </div>
+        <span
+          class="whitespace-nowrap font-medium leading-tight text-base-content/75"
+          :style="{ fontSize: PLUGIN_LABEL_TYPE }"
+        >
+          {{ pluginFacetMeta.caption }}
+        </span>
+      </div>
+    </div>
+
+    <PluginFacetCards
+      v-if="pluginFacetId && selectedPluginId && selectedPluginLink"
+      :agent-slug="agentSlug"
+      :instance-id="selectedPluginId"
+      :facet="pluginFacetId"
+      :status="selectedPluginLink.status"
+      :reason="selectedPluginLink.reason"
+      :shown="pluginFacetShown"
+      @select-skill="focusSkill"
+    />
+
+    <button
+      v-if="pluginStage === 'plugin' && selectedPluginId && pluginFaceOpen"
+      type="button"
+      class="btn btn-ghost btn-xs absolute bottom-6 left-1/2 z-30 -translate-x-1/2 text-error"
+      @click="onDisconnectPlugin(selectedPluginId)"
+    >
+      Отключить плагин
+    </button>
+
+    <!-- Memory mode: card → center; facet layer → shelf at center + cards on the right. -->
+    <div
+      v-if="memoryFlight"
+      class="pointer-events-none absolute"
+      :style="memoryFlightStyle"
+    >
+      <div class="absolute" :style="memorySpreadStyle">
+        <div
+          v-for="slot in memoryOrbitSlots"
+          :key="slot.id"
+          class="absolute"
+          :style="memorySatStyle(slot)"
+        >
+          <button
+            type="button"
+            class="btn btn-circle h-full w-full border border-base-300 bg-base-100 shadow-md"
+            :class="memoryFaceOpen ? 'pointer-events-auto' : 'pointer-events-none'"
+            :aria-label="slot.label"
+            :title="slot.label"
+            @click="enterMemoryFacet(slot.id)"
+          >
+            <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <template v-if="slot.id === 'self'">
+                <circle cx="12" cy="8" r="3" />
+                <path stroke-linecap="round" d="M5 19c1.5-4 4-6 7-6s5.5 2 7 6" />
+              </template>
+              <template v-else-if="slot.id === 'life'">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h14" />
+              </template>
+              <template v-else-if="slot.id === 'outcomes'">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m8 11 2.5 2.5L16 8" />
+                <circle cx="12" cy="12" r="9" />
+              </template>
+              <template v-else-if="slot.id === 'tasks'">
+                <circle cx="12" cy="12" r="8" />
+                <path stroke-linecap="round" d="M12 8v4l2.5 2.5" />
+              </template>
+              <template v-else-if="slot.id === 'others'">
+                <circle cx="8" cy="12" r="3" />
+                <circle cx="16" cy="8" r="2.5" />
+                <circle cx="16" cy="16" r="2.5" />
+                <path stroke-linecap="round" d="M10.5 10.5 14 9M10.5 13.5 14 15" />
+              </template>
+              <template v-else-if="slot.id === 'skills'">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 4h10v4H7zM9 8v12M15 8v12M7 20h10" />
+              </template>
+              <template v-else>
+                <circle cx="12" cy="12" r="3" />
+                <circle cx="12" cy="12" r="7" stroke-dasharray="3 3" />
+              </template>
+            </svg>
+          </button>
+          <span
+            class="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-base-content/70"
+          >
+            {{ slot.caption }}
+          </span>
+        </div>
+      </div>
+
+      <div class="absolute" :style="memoryCardBoxStyle">
+        <div
+          class="flex h-full w-full flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md"
+        >
+          <span class="w-full truncate text-xs font-semibold">Память</span>
+          <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+            {{ memoryLines.historyLine }}
+          </span>
+          <span v-if="memoryLines.stateLine" class="w-full truncate text-[10px] text-base-content/55">
+            {{ memoryLines.stateLine }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="memoryFacetPose && memoryFacetId && memoryFacetMeta"
+        class="pointer-events-none absolute"
+        :style="memoryFacetStyle"
+      >
+        <div
+          class="flex h-full w-full flex-col items-center justify-center rounded-full border border-base-300 bg-base-100 shadow-md"
+        >
+          <span class="px-1 text-center text-[10px] font-semibold leading-tight">
+            {{ memoryFacetMeta.caption }}
+          </span>
+        </div>
+      </div>
+
+      <MemoryFacetCards
+        v-if="memoryFacetId"
+        :agent-slug="agentSlug"
+        :facet="memoryFacetId"
+        :memory="memory"
+        :loading="memoryLoading"
+        :error="memoryError"
+        :skill-names="memorySkillNames"
+        :shown="memoryFacetCardsShown"
+      />
+    </div>
+
     <button
       v-if="channelStage !== 'agent'"
       type="button"
@@ -1751,6 +3319,45 @@ onUnmounted(() => {
       @click="addressLayerId || projectLayer ? leaveCurrentLayer() : leaveChannel()"
     >
       {{ addressLayerId || projectLayer ? "К каналу" : "К агенту" }}
+    </button>
+
+    <button
+      v-if="memoryStage !== 'agent'"
+      type="button"
+      :class="[
+        backButtonClass,
+        memorySatellites || memoryFacetId ? 'opacity-100' : 'pointer-events-none opacity-0',
+      ]"
+      :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
+      @click="memoryFacetId ? leaveMemoryFacet() : leaveMemory()"
+    >
+      {{ memoryFacetId ? "К памяти" : "К агенту" }}
+    </button>
+
+    <button
+      v-if="pluginStage !== 'agent'"
+      type="button"
+      :class="[
+        backButtonClass,
+        pluginSatellites || pluginFacetId ? 'opacity-100' : 'pointer-events-none opacity-0',
+      ]"
+      :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
+      @click="pluginFacetId ? leavePluginFacet() : leavePlugin()"
+    >
+      {{ pluginFacetId ? "К плагину" : "К агенту" }}
+    </button>
+
+    <button
+      v-if="skillStage !== 'agent'"
+      type="button"
+      :class="[
+        backButtonClass,
+        skillSatellites || skillFacetId ? 'opacity-100' : 'pointer-events-none opacity-0',
+      ]"
+      :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
+      @click="skillFacetId ? leaveSkillFacet() : leaveSkill()"
+    >
+      {{ skillFacetId ? "К навыку" : "К агенту" }}
     </button>
 
     <AddressConfigPanel
@@ -1773,38 +3380,6 @@ onUnmounted(() => {
       :reason="selectedKindLink.reason"
       @close="closeKindConnector"
       @select-skill="focusSkill"
-    />
-
-    <PluginPanel
-      v-else-if="selectedPluginId && selectedPluginLink && !sshConstructorOpen && agentPhase !== 'details'"
-      :agent-slug="agentSlug"
-      :instance-id="selectedPluginId"
-      :status="selectedPluginLink.status"
-      :reason="selectedPluginLink.reason"
-      @close="closePlugin"
-      @disconnect="onDisconnectPlugin(selectedPluginId)"
-      @select-skill="focusSkill"
-    />
-
-    <SkillDetailPanel
-      v-else-if="selectedSkill && selectedSkillDependencies && agentPhase !== 'details'"
-      :agent-slug="agentSlug"
-      :skill="selectedSkill"
-      :dependencies="selectedSkillDependencies"
-      @close="onClearSelection"
-      @open-editor="openSkillEditor"
-      @remove="deleteSelectedSkill"
-      @select-kind="onSelectKind"
-      @select-plugin="openPlugin"
-    />
-
-    <MemoryPanel
-      v-else-if="memoryOpen && agentPhase !== 'details'"
-      :agent-slug="agentSlug"
-      :memory="memory"
-      :loading="memoryLoading"
-      :error="memoryError"
-      @close="closeMemory"
     />
 
     <SshCommandsConstructor

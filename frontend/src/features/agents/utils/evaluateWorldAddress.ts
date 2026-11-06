@@ -24,6 +24,7 @@ export interface EvaluateWorldAddressOptions {
 const PLACE_REQUIRED: Record<string, string[]> = {
   telegram: ["chat_id"],
   project: ["projectSlug"],
+  agents: ["agentSlug"],
 };
 
 function filled(value: unknown): boolean {

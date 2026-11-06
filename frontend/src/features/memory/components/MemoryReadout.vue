@@ -37,6 +37,41 @@ function hasPayload(payload: Record<string, unknown>): boolean {
     <p v-else-if="loading && !memory" class="text-sm text-base-content/50">Загрузка…</p>
 
     <template v-else-if="memory">
+      <section
+        v-if="memory.interaction"
+        class="space-y-2"
+        aria-labelledby="memory-interaction"
+      >
+        <h3
+          id="memory-interaction"
+          class="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+        >
+          Манифест взаимодействия
+        </h3>
+        <p class="text-sm text-base-content/60">
+          По умолчанию:
+          вход {{ memory.interaction.defaultAllowInbound ? "разрешён" : "запрещён" }},
+          выход {{ memory.interaction.defaultAllowOutbound ? "разрешён" : "запрещён" }}.
+        </p>
+        <p v-if="memory.interaction.peers.length === 0" class="text-sm text-base-content/60">
+          Связанных агентов пока нет. Они появляются как адреса канала «Агенты».
+        </p>
+        <ul v-else class="space-y-2">
+          <li
+            v-for="peer in memory.interaction.peers"
+            :key="peer.agentSlug"
+            class="rounded-2xl border border-base-300 bg-base-100 px-3 py-2.5"
+          >
+            <p class="font-mono text-sm">{{ peer.name || peer.agentSlug }}</p>
+            <p class="mt-0.5 text-xs text-base-content/60">
+              /{{ peer.agentSlug }} ·
+              вход {{ peer.allowInbound ? "да" : "нет" }} ·
+              выход {{ peer.allowOutbound ? "да" : "нет" }}
+            </p>
+          </li>
+        </ul>
+      </section>
+
       <section class="space-y-2" aria-labelledby="memory-history">
         <h3 id="memory-history" class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
           История событий

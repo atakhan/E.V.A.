@@ -66,7 +66,7 @@ export interface CanvasWorldAddress {
 
 const props = withDefaults(
   defineProps<{
-    nodes?: Array<ConstructorSkillNode & { name: string }>;
+    nodes?: Array<ConstructorSkillNode & { name: string; role?: string }>;
     selectedNodeId?: string | null;
     selectedKindToolId?: string | null;
     selectedAddressId?: string | null;
@@ -77,15 +77,21 @@ const props = withDefaults(
     plugins?: CanvasPlugin[];
     addPluginSlot?: { x: number; y: number };
     selectedPluginId?: string | null;
+    /** Hide the seat while the plugin flies to center (plugin constructor mode). */
+    liftedPluginId?: string | null;
+    /** Hide the seat while the skill flies to center (skill constructor mode). */
+    liftedSkillId?: string | null;
     memorySelected?: boolean;
     memoryHistoryLine?: string;
     memoryStateLine?: string;
+    /** Memory card hidden because a flying copy has taken its place. */
+    liftedMemory?: boolean;
     highlight?: CanvasHighlight | null;
     /** When set, the hub is already at this screen point on the first paint. */
     bootPan?: { x: number; y: number } | null;
     /** World, skills, plugins, memory, and canvas chrome. The hub lives outside this canvas. */
     satellitesVisible?: boolean;
-    /** Fold the agent world back while a channel flies to the center. */
+    /** Fold the agent world back while a channel or memory flies to the center. */
     parked?: boolean;
     /** Channel card hidden because a flying copy has taken its place. */
     liftedChannelId?: string | null;
@@ -109,9 +115,12 @@ const props = withDefaults(
     plugins: () => [],
     addPluginSlot: () => addPluginSlotForCount(0),
     selectedPluginId: null,
+    liftedPluginId: null,
+    liftedSkillId: null,
     memorySelected: false,
     memoryHistoryLine: "",
     memoryStateLine: "",
+    liftedMemory: false,
     highlight: null,
     bootPan: null,
     satellitesVisible: true,
@@ -530,6 +539,7 @@ defineExpose({
           fill="none"
           class="stroke-base-content/30 transition-opacity duration-200"
           :class="dimMemory() ? 'opacity-25' : ''"
+          :style="liftedMemory ? { opacity: 0, transition: 'none' } : undefined"
           stroke-width="2.5"
           stroke-linecap="round"
         />
@@ -658,6 +668,7 @@ defineExpose({
       <button
         type="button"
         data-canvas-ui
+        data-memory-card
         class="pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
         :class="[
           memorySelected ? 'ring-2 ring-primary/40' : '',
@@ -668,8 +679,11 @@ defineExpose({
           top: `${MEMORY_CENTER_Y - MEMORY_NODE_HEIGHT / 2}px`,
           width: `${MEMORY_NODE_WIDTH}px`,
           height: `${MEMORY_NODE_HEIGHT}px`,
+          ...(liftedMemory ? { opacity: 0, transition: 'none' } : {}),
         }"
         :title="[memoryHistoryLine, memoryStateLine].filter(Boolean).join(' · ')"
+        :aria-hidden="liftedMemory ? 'true' : undefined"
+        :tabindex="liftedMemory ? -1 : undefined"
         @pointerdown.stop
         @click="emit('selectMemory')"
       >
@@ -687,6 +701,7 @@ defineExpose({
         v-for="plugin in plugins"
         :key="plugin.instanceId"
         data-canvas-ui
+        :data-plugin="plugin.instanceId"
         class="group pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
         :class="[
           addressBorderClass(plugin.status),
@@ -698,8 +713,11 @@ defineExpose({
           top: `${plugin.y - PLUGIN_NODE_HEIGHT / 2}px`,
           width: `${PLUGIN_NODE_WIDTH}px`,
           height: `${PLUGIN_NODE_HEIGHT}px`,
+          ...(liftedPluginId === plugin.instanceId ? { opacity: 0, transition: 'none' } : {}),
         }"
-        :title="`${plugin.reason} · клик — настроить плагин`"
+        :aria-hidden="liftedPluginId === plugin.instanceId ? 'true' : undefined"
+        :tabindex="liftedPluginId === plugin.instanceId ? -1 : undefined"
+        :title="`${plugin.reason} · клик — режим плагина`"
         @pointerdown.stop
         @click="emit('selectPlugin', plugin.instanceId)"
       >
@@ -766,11 +784,12 @@ defineExpose({
         :key="node.id"
         type="button"
         data-canvas-ui
-        class="pointer-events-auto absolute flex items-center justify-center rounded-2xl border px-4 text-center text-sm font-semibold shadow-md transition"
+        :data-skill="node.skillId"
+        class="pointer-events-auto absolute flex flex-col items-center justify-center rounded-2xl border-2 bg-base-100 px-3 text-center shadow-md transition"
         :class="[
           selectedNodeId === node.id
-            ? 'border-primary bg-base-100 text-base-content ring-2 ring-primary/40'
-            : 'border-base-300/70 bg-base-100/95 text-base-content hover:border-primary/50',
+            ? 'border-primary text-base-content ring-2 ring-primary/40'
+            : 'border-base-300 text-base-content hover:border-primary/50',
           dimSkill(node.skillId) ? 'opacity-35' : '',
         ]"
         :style="{
@@ -778,11 +797,17 @@ defineExpose({
           top: `${node.y}px`,
           width: `${node.width}px`,
           height: `${node.height}px`,
+          ...(liftedSkillId === node.skillId ? { opacity: 0, transition: 'none' } : {}),
         }"
+        :aria-hidden="liftedSkillId === node.skillId ? 'true' : undefined"
+        :tabindex="liftedSkillId === node.skillId ? -1 : undefined"
         @click="emit('selectNode', node.id)"
         @pointerdown.stop
       >
-        <span class="line-clamp-2">{{ node.name }}</span>
+        <span class="w-full truncate text-xs font-semibold">{{ node.name }}</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+          {{ node.role || "навык" }}
+        </span>
       </button>
     </div>
     </div>

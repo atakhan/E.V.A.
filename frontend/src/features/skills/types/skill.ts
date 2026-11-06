@@ -8,8 +8,8 @@ import type { BehaviorGraph } from "@/features/skills/types/behavior";
 import { compileBehavior } from "@/features/skills/utils/behaviorCompile";
 import { createId } from "@/shared/utils/id";
 
-/** Platform conversation skills. `talk_to_human` is not seeded onto project agents. */
-export type SystemSkillRole = "talk_to_agent" | "talk_to_human";
+/** Platform skills. `talk_to_human` is not seeded onto library agents. */
+export type SystemSkillRole = "talk_to_agent" | "talk_to_human" | "life";
 
 export interface Skill {
   id: string;
@@ -249,7 +249,9 @@ export function normalizeSkill(raw: LegacyCanvasSkill | SkillIncoming): Skill {
   }));
 
   const systemRole =
-    raw.systemRole === "talk_to_agent" || raw.systemRole === "talk_to_human"
+    raw.systemRole === "talk_to_agent" ||
+    raw.systemRole === "talk_to_human" ||
+    raw.systemRole === "life"
       ? raw.systemRole
       : undefined;
 

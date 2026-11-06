@@ -43,6 +43,8 @@ Skill editor source of truth is the FSM (`states[]`). UI: FsmCanvas + SkillInspe
 Canvas geometry (orthogonal routing, obstacles, labels): `docs/FSM_CANVAS_GEOMETRY.md`, code `features/skills/utils/geometry/`.
 The agent docking table (`features/constructor/`) is a separate canvas.
 
+Spatial desks / orbits / mode transitions: `.cursor/skills/eva-spatial-ui/SKILL.md` and `docs/06-experiments/constructor-orbit-ui-handoff.md`.
+
 ## Validation (constructor)
 
 `agents/utils/validateAgent.ts` — no runtime:

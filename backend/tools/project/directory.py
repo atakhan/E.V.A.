@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from definition.agent_protocol import RECEIVED
+from definition.interaction_manifest import normalize_interaction_manifest
 from definition.mappers.event_mapper import create_domain_event
 from definition.services.agent_service import AgentService
 from definition.services.project_service import ProjectService
@@ -18,6 +19,17 @@ class SqlAgentDirectory:
         self._session = session
         self._agents = AgentService(session)
         self._projects = ProjectService(session)
+
+    def agent_exists(self, agent_slug: str) -> bool:
+        return self._agents.get_agent_row(agent_slug) is not None
+
+    def interaction_manifest(self, agent_slug: str) -> dict[str, Any]:
+        """Connect policy from the draft — applies without publishing."""
+        body = self._agents.get_agent_by_slug(agent_slug)
+        if body is None:
+            return normalize_interaction_manifest(None)
+        memory = body.get("memory") if isinstance(body.get("memory"), dict) else {}
+        return normalize_interaction_manifest(memory.get("interaction"))
 
     def project_of(self, agent_slug: str) -> str | None:
         body = self._agents.get_agent_by_slug(agent_slug)
@@ -52,10 +64,17 @@ class SqlAgentDirectory:
         skills = publication.body.get("skills") or []
         return [skill for skill in skills if isinstance(skill, dict)]
 
-    def deliver(self, agent_slug: str, skill_id: str, payload: dict[str, Any]) -> None:
+    def deliver(
+        self,
+        agent_slug: str,
+        skill_id: str,
+        payload: dict[str, Any],
+        *,
+        source: str = "project",
+    ) -> None:
         event = create_domain_event(
             RECEIVED,
-            source="project",
+            source=source,
             payload=payload,
             correlation={"conversation_id": payload.get("conversation_id")},
         )

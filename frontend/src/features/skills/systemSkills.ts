@@ -2,8 +2,38 @@ import type { SystemSkillRole, Skill } from "@/features/skills/types/skill";
 
 export const TALK_TO_AGENT: SystemSkillRole = "talk_to_agent";
 export const TALK_TO_HUMAN: SystemSkillRole = "talk_to_human";
+export const LIFE: SystemSkillRole = "life";
 
 export function systemSkill(role: SystemSkillRole, now = new Date().toISOString()): Skill {
+  if (role === LIFE) {
+    return {
+      id: role,
+      name: "Жизнь",
+      description: "Системный навык. Пока пустой каркас жизни агента.",
+      version: "0.1.0",
+      createdAt: now,
+      updatedAt: now,
+      systemRole: role,
+      initial: "idle",
+      params: [],
+      states: [
+        {
+          id: "idle",
+          name: "Простой",
+          onEnter: [],
+          final: false,
+          x: 80,
+          y: 40,
+          width: 160,
+          height: 80,
+          transitions: [],
+        },
+      ],
+      viewport: { panX: 0, panY: 0, zoom: 1 },
+      flowDirection: "vertical",
+    };
+  }
+
   const agent = role === TALK_TO_AGENT;
   return {
     id: role,
@@ -44,5 +74,5 @@ export function systemSkill(role: SystemSkillRole, now = new Date().toISOString(
 }
 
 export function libraryAgentSkills(now = new Date().toISOString()): Skill[] {
-  return [systemSkill(TALK_TO_AGENT, now)];
+  return [systemSkill(TALK_TO_AGENT, now), systemSkill(LIFE, now)];
 }

@@ -3,6 +3,10 @@ import type { Skill } from "@/features/skills/types/skill";
 import type { ActionDef } from "@/features/actions/types/action";
 import type { ToolBinding } from "@/features/tools/types/tool";
 import {
+  createEmptyAgentMemory,
+  type AgentMemoryDoc,
+} from "@/features/agents/types/memory";
+import {
   createEmptyAgentWorld,
   type AgentWorld,
 } from "@/features/agents/types/world";
@@ -11,6 +15,11 @@ export type { Skill } from "@/features/skills/types/skill";
 export type { ActionDef } from "@/features/actions/types/action";
 export type { ToolBinding } from "@/features/tools/types/tool";
 export type { AgentWorld, WorldAddress } from "@/features/agents/types/world";
+export type {
+  AgentMemoryDoc,
+  InteractionManifest,
+  InteractionPeer,
+} from "@/features/agents/types/memory";
 
 /** Default avatar when agent.icon is empty. */
 export const DEFAULT_AGENT_ICON = "/eva-logo.png";
@@ -44,6 +53,8 @@ export interface Agent {
   constructorLayout?: ConstructorLayout;
   /** World axis: addresses hanging on world kinds. */
   world?: AgentWorld;
+  /** Durable agent memory; includes interaction manifesto with other agents. */
+  memory?: AgentMemoryDoc;
 }
 
 export type AgentInput = {
@@ -64,7 +75,7 @@ export type AgentMutationResult =
 
 export function createEmptyAgentBody(): Pick<
   Agent,
-  "skills" | "actions" | "tools" | "constructorLayout" | "world"
+  "skills" | "actions" | "tools" | "constructorLayout" | "world" | "memory"
 > {
   return {
     skills: [],
@@ -72,6 +83,7 @@ export function createEmptyAgentBody(): Pick<
     tools: [],
     constructorLayout: { nodes: [] },
     world: createEmptyAgentWorld(),
+    memory: createEmptyAgentMemory(),
   };
 }
 

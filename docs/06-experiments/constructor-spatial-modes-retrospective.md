@@ -212,12 +212,14 @@ features/projects/
 
 ## 6. Открытый хвост
 
-- Вынести общий motion/handoff helper из двух view.
-- Объединить или параметризовать `projectsHubLayout` / `deskLayout` (алгоритм один, константы разные).
-- Тесты на handoff-инварианты (хотя бы через чистые функции порядка шагов).
-- Закоммитить пласт осмысленными коммитами (режимы / motion principle / layout unify).
-- Прогнать полный ручной чеклист всех переходов ещё раз после коммита (регрессии handoff чувствительны).
-- (из §5) Развести `hubClear` на явные роли; refs вместо глобального querySelector; не трогать perf без профиля.
+**Сделано после ретро (коммит `bcf3975`):** общий `packedOrbit` + motion/handoff API, `DeskPass` вместо `hubClear`, measure через desk refs, тесты handoff/leaveHold, единый коммит spatial desks. Актуальный handoff: [`constructor-orbit-ui-handoff.md`](./constructor-orbit-ui-handoff.md).
+
+Ещё открыто / низкий приоритет:
+
+- Escape `[data-channel-mode]` через `querySelector` (не measure).
+- Полный merge desks → `OrbitBoard` — только по боли.
+- Тёплый `ConstructorView` / perf — только с профилем.
+- Продуктовый следующий шаг: UI вокруг иконок агентов и орбит (см. handoff).
 
 ---
 

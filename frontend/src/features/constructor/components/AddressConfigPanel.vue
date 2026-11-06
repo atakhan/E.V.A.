@@ -38,6 +38,7 @@ const PLACE_FIELDS: Record<
 > = {
   telegram: [{ id: "chat_id", label: "Chat ID", placeholder: "-100…" }],
   project: [{ id: "projectSlug", label: "Проект", placeholder: "pochta-ofisa" }],
+  agents: [{ id: "agentSlug", label: "Агент", placeholder: "rt-pochta" }],
 };
 
 const credentials = ref<ToolCredential[]>([]);

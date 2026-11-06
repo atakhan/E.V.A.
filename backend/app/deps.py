@@ -6,6 +6,7 @@ from app.config import get_settings
 from definition.services.agent_service import (
     AgentService,
     ensure_eva_agent,
+    ensure_life_skill_on_agents,
     prune_ephemeral_agents,
     seed_tool_catalog,
 )
@@ -64,6 +65,7 @@ def init_db() -> None:
     with session_scope() as session:
         seed_tool_catalog(session)
         ensure_eva_agent(session)
+        ensure_life_skill_on_agents(session)
         if settings.prune_ephemeral_agents:
             prune_ephemeral_agents(session)
 

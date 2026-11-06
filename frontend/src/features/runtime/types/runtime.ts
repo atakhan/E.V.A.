@@ -143,10 +143,26 @@ export interface AgentMemoryRun {
   updatedAt: string;
 }
 
+export interface AgentInteractionPeer {
+  agentSlug: string;
+  allowInbound: boolean;
+  allowOutbound: boolean;
+  name?: string;
+}
+
+export interface AgentInteractionManifest {
+  version: number;
+  defaultAllowInbound: boolean;
+  defaultAllowOutbound: boolean;
+  peers: AgentInteractionPeer[];
+}
+
 export interface AgentMemory {
   ok: boolean;
   events: AgentMemoryEvent[];
   runs: AgentMemoryRun[];
+  /** Connect policy with other agents — durable part of agent memory. */
+  interaction?: AgentInteractionManifest;
 }
 
 export type SkillRunStatusFilter = "active" | "waiting" | "completed" | "error" | "cancelled" | "all";

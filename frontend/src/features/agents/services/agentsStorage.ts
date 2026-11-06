@@ -12,6 +12,7 @@ import {
   unarchiveAgentApi,
 } from "@/features/agents/services/agentsApi";
 import { normalizeAction } from "@/features/actions/types/normalize";
+import { normalizeAgentMemory } from "@/features/agents/types/memory";
 import { normalizeAgentWorld } from "@/features/agents/types/world";
 import { normalizeConstructorLayout } from "@/features/constructor/types/constructor";
 import { normalizeToolBinding } from "@/features/tools/types/normalize";
@@ -225,6 +226,9 @@ function migrateAgentRecord(raw: unknown): Agent {
       record.constructorLayout ?? record.constructor,
     ),
     world: normalizeAgentWorld(record.world),
+    memory: normalizeAgentMemory(
+      (record as { memory?: unknown }).memory,
+    ),
   };
 }
 

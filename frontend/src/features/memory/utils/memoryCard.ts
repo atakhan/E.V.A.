@@ -25,7 +25,11 @@ export function formatMemoryValue(value: unknown): string {
 }
 
 export function describeMemoryCard(
-  memory: { events: AgentMemoryEvent[]; runs: AgentMemoryRun[] } | null,
+  memory: {
+    events: AgentMemoryEvent[];
+    runs: AgentMemoryRun[];
+    interaction?: { peers?: unknown[] };
+  } | null,
   state: { loading: boolean; failed: boolean },
 ): MemoryCardLines {
   if (!memory) {
@@ -37,8 +41,14 @@ export function describeMemoryCard(
   const latest = memory.events[0];
   const active = memory.runs.find((run) => run.status === "running" || run.status === "waiting");
   const run = active ?? memory.runs[0];
+  const peerCount = Array.isArray(memory.interaction?.peers) ? memory.interaction.peers.length : 0;
+  const peersLine = peerCount > 0 ? ` · агентов: ${peerCount}` : "";
   return {
     historyLine: latest ? latest.eventType : "Событий ещё не было",
-    stateLine: run ? `${runStatusWord(run.status)} · ${run.currentState}` : "Прогонов ещё не было",
+    stateLine: run
+      ? `${runStatusWord(run.status)} · ${run.currentState}${peersLine}`
+      : peerCount > 0
+        ? `Связей: ${peerCount}`
+        : "Прогонов ещё не было",
   };
 }

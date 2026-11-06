@@ -8,7 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from definition.services.agent_service import AgentService
+from definition.interaction_manifest import ensure_agents_channel
+from tools.pulse import ensure_pulse_tool
+from definition.services.agent_service import EVA_AGENT_SLUG, AgentService, ensure_eva_agent
 from definition.system_skills import runtime_agent_skills
 from infrastructure.models.tables import AgentRow, ProjectRow
 
@@ -109,6 +111,7 @@ class ProjectService:
         if found is not None:
             self._ensure_project_channel(found)
             self._sync_runtime_name(found, project_slug)
+            self._link_eva_to_runtime(found.slug, found.name)
             return found.slug
         agents = AgentService(self._session)
         slug = _runtime_slug(project_slug)
@@ -117,10 +120,11 @@ class ProjectService:
             found = self._find_runtime(project_slug)
             if found is not None:
                 self._sync_runtime_name(found, project_slug)
+                self._link_eva_to_runtime(found.slug, found.name)
                 return found.slug
             slug = f"{slug[:40].rstrip('-')}-{uuid.uuid4().hex[:4]}"
         now = datetime.now(timezone.utc).isoformat()
-        agents.create_agent(
+        created = agents.create_agent(
             name=self._project_name(project_slug),
             slug=slug,
             description="Системный агент проекта. Собирает работу агентов на столе и говорит с человеком.",
@@ -129,17 +133,46 @@ class ProjectService:
             skills=runtime_agent_skills(now),
             tools=[_project_channel_instance()],
         )
-        return slug
+        runtime_slug = str(created.get("slug") or slug)
+        self._link_eva_to_runtime(runtime_slug, str(created.get("name") or runtime_slug))
+        return runtime_slug
+
+    def _link_eva_to_runtime(self, runtime_slug: str, runtime_name: str) -> None:
+        """Default Agents-channel wire: Eva ↔ project runtime."""
+        ensure_eva_agent(self._session)
+        agents = AgentService(self._session)
+        eva = agents.get_agent_by_slug(EVA_AGENT_SLUG)
+        peers = []
+        if eva and isinstance(eva.get("memory"), dict):
+            interaction = eva["memory"].get("interaction")
+            if isinstance(interaction, dict):
+                peers = interaction.get("peers") or []
+        if any(isinstance(item, dict) and item.get("agentSlug") == runtime_slug for item in peers):
+            return
+        agents.link_agents(
+            EVA_AGENT_SLUG,
+            runtime_slug,
+            left_name="Ева",
+            right_name=runtime_name or runtime_slug,
+        )
 
     def _ensure_project_channel(self, row: AgentRow) -> None:
         if row.draft is None or not isinstance(row.draft.body, dict):
             return
         body = dict(row.draft.body)
         tools = [item for item in (body.get("tools") or []) if isinstance(item, dict)]
-        if any(item.get("toolId") == "project" for item in tools):
+        changed = False
+        if not any(item.get("toolId") == "project" for item in tools):
+            tools.append(_project_channel_instance())
+            body["tools"] = tools
+            changed = True
+        before = body.get("tools")
+        ensure_agents_channel(body)
+        ensure_pulse_tool(body)
+        if body.get("tools") != before:
+            changed = True
+        if not changed:
             return
-        tools.append(_project_channel_instance())
-        body["tools"] = tools
         row.draft.body = body
         row.draft.updated_at = datetime.now(timezone.utc)
 

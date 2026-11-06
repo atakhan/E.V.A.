@@ -35,6 +35,7 @@ def test_project_membership_roundtrip(client: TestClient):
         assert [skill["systemRole"] for skill in runtime_body["skills"]] == [
             "talk_to_agent",
             "talk_to_human",
+            "life",
         ]
         renamed = client.patch(f"/api/projects/{slug}", json={"name": "Офис"})
         assert renamed.status_code == 200, renamed.text

@@ -80,6 +80,20 @@ export function evaluateWorldLink(agent: Agent, toolId: string): WorldLinkEvalua
     }
   }
 
+  if (toolId === "agents") {
+    const linked = (agent.world?.addresses ?? []).some((address) => {
+      const slug = address.config?.agentSlug;
+      return address.toolId === toolId && typeof slug === "string" && slug.trim().length > 0;
+    });
+    if (!linked) {
+      return {
+        status: "yellow",
+        reason: "Нет связанного агента",
+        instanceId: instance.id,
+      };
+    }
+  }
+
   if (toolId === "web_client") {
     const hasApp = (agent.world?.addresses ?? []).some(
       (address) => address.toolId === toolId && Boolean(address.credentialId?.trim()),

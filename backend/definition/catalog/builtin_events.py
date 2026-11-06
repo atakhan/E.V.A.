@@ -20,13 +20,13 @@ BUILTIN_EVENT_TYPES: dict[str, dict[str, Any]] = {
     },
     "agent.message.received": {
         "version": "1.0",
-        "source": "project",
+        "source": "agents",
         "description": "Другой агент передал дело",
         "required_payload": ["conversation_id", "text", "matter"],
     },
     "agent.message.declined": {
         "version": "1.0",
-        "source": "project",
+        "source": "agents",
         "description": "Дело не принято",
         "required_payload": ["conversation_id", "reason"],
     },

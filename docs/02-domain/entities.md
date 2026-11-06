@@ -6,9 +6,11 @@
 
 **Что это.** Единица проектирования и публикации. Агент владеет своими Skills, Actions, инстансами Tools и credentials; у него есть один черновик и список публикаций.
 
-**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `icon` (аватар; пусто — логотип E.V.A.), `kind` (`library` — корневой агент библиотеки; `fork` — копия корневого агента внутри одного проекта, со своим `originSlug` и `projectSlug`, в библиотеке не показывается; `runtime` — системный агент одного проекта; `platform` — Ева, системный агент платформы со slug `eva`, ведёт стол проектов), `projectSlug` (у `runtime` и `fork`), `originSlug` (только у `fork`: slug корневого агента), `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `constructor` (раскладка навыков на столе конструктора: `{ nodes[] }`; во фронтенде поле называется `constructorLayout`), `world.addresses[]`, `createdAt`, `updatedAt`, `archivedAt`.
+**Свойства.** `slug` (уникальный, нижний регистр), `name`, `description`, `icon` (аватар; пусто — логотип E.V.A.), `kind` (`library` — корневой агент библиотеки; `fork` — копия корневого агента внутри одного проекта, со своим `originSlug` и `projectSlug`, в библиотеке не показывается; `runtime` — системный агент одного проекта; `platform` — Ева, системный агент платформы со slug `eva`, ведёт стол проектов), `projectSlug` (у `runtime` и `fork`), `originSlug` (только у `fork`: slug корневого агента), `defaultSkillId` (подсказка маршрутизации), `skills[]`, `actions[]`, `tools[]` (инстансы), `constructor` (раскладка навыков на столе конструктора: `{ nodes[] }`; во фронтенде поле называется `constructorLayout`), `world.addresses[]`, `memory` (долговременная память агента; сейчас — манифест взаимодействия), `createdAt`, `updatedAt`, `archivedAt`.
 
-**`world.addresses[]`.** Места, висящие на канале внешнего мира. Поля: `id`, `toolId`, `name`, необязательный `credentialId`, `config`. У Telegram адрес — чат (`config.chat_id`), токен бота обычно на инстансе. У `web_client` адрес — одно веб-приложение: URL и оба ключа лежат в credential, на который указывает `credentialId`. Сессия веб-приложения адресом не является. Подробности стола — [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md).
+**`world.addresses[]`.** Места, висящие на канале внешнего мира. Поля: `id`, `toolId`, `name`, необязательный `credentialId`, `config`. У Telegram адрес — чат (`config.chat_id`), токен бота обычно на инстансе. У `web_client` адрес — одно веб-приложение: URL и оба ключа лежат в credential, на который указывает `credentialId`. У канала `agents` адрес — другой агент (`config.agentSlug`); политика связи дублируется в `memory.interaction`. Сессия веб-приложения адресом не является. Подробности стола — [`03-architecture/constructor-world-axis.md`](../03-architecture/constructor-world-axis.md).
+
+**`memory.interaction`.** Манифест взаимодействия с другими агентами: `defaultAllowInbound` / `defaultAllowOutbound` и `peers[]` (`agentSlug`, `allowInbound`, `allowOutbound`, `name`). Канал — world-плагин `agents` (команда `send_message`). При создании проекта Ева и runtime проекта связываются автоматически (двусторонний peer). Политика читается из черновика без публикации; доставка дела по-прежнему требует опубликованный навык с `accepts`.
 
 **Состояния.**
 
@@ -26,7 +28,7 @@ stateDiagram-v2
   Draft --> [*]: delete
 ```
 
-- **Draft** — всегда существует после создания. У библиотечного агента сразу есть системный навык «Общение с агентом». У рантайма проекта — он и «Общение с человеком».
+- **Draft** — всегда существует после создания. У библиотечного агента сразу есть «Общение с агентом» и «Жизнь». У рантайма проекта и Евы — они же плюс «Общение с человеком».
 - **Published** — есть ≥1 публикации. Публикация — неизменяемый снимок `body`; версия начинается с `0.1.0`, далее автоинкремент patch. Runtime использует последнюю публикацию для новых run и **закреплённую** версию для существующих.
 - **Archived** — агент скрыт из списка, запрещены редактирование/публикация/новые run (HTTP 409); при архивации все активные run (`running`/`waiting`) отменяются. Публикации сохраняются.
 
@@ -38,7 +40,7 @@ stateDiagram-v2
 
 **Что это.** Процесс класса задач, описанный конечным автоматом. Один Skill — один автомат.
 
-**Свойства.** `id`, `name`, `description`, `version` (SemVer, по умолчанию `0.1.0`), `systemRole` (`talk_to_agent` | `talk_to_human` у системных навыков общения; иначе нет), `accepts` (какое дело навык принимает от другого агента; пусто — не участвует), `answers` (есть ли ответ в той же нити), `initial` (id начального состояния; если пуст — первое состояние), `params[]` (`name`, `type` ∈ string/number/boolean/object/array, `required`), `states[]`, геометрия холста (`x/y/width/height` состояний, `viewport`, `flowDirection`). «Общение с человеком» по умолчанию есть только у рантайма проекта. Канал «Проект» доставляет сообщение только навыку, чьё `accepts` совпало с делом, и только если ожидание ответа не противоречит `answers`.
+**Свойства.** `id`, `name`, `description`, `version` (SemVer, по умолчанию `0.1.0`), `systemRole` (`talk_to_agent` | `talk_to_human` | `life` у системных навыков; иначе нет), `accepts` (какое дело навык принимает от другого агента; пусто — не участвует), `answers` (есть ли ответ в той же нити), `initial` (id начального состояния; если пуст — первое состояние), `params[]` (`name`, `type` ∈ string/number/boolean/object/array, `required`), `states[]`, геометрия холста (`x/y/width/height` состояний, `viewport`, `flowDirection`). «Общение с человеком» по умолчанию есть только у рантайма проекта. «Жизнь» (`life`) — пустой каркас, входит во всех агентов. Каналы «Проект» и «Агенты» доставляют сообщение только навыку, чьё `accepts` совпало с делом, и только если ожидание ответа не противоречит `answers`.
 
 **Params vs vars.** `params` — объявленные входы процесса (намерение при старте); `vars` — изменяемое состояние конкретного run. **Fact:** `params` наполняются из payload стартового события и correlation-полей; `required` в коде не проверяется при старте (валидации отсутствия нет) — см. REVIEW.
 
@@ -86,7 +88,7 @@ stateDiagram-v2
 
 **Tool type** — запись каталога (библиотеки). Свойства: `id`, `name`, `description`, `world` (канал внешнего мира; на столе конструктора и в библиотеке отделён от инструментов действий), `implemented` (по умолчанию `true`; `false` — у runtime нет кода для типа), `commands[]` (каждая: `id`, `description`, `inputSchema[]`, `outputSchema[]` — плоские поля с типами `string | template | text | integer | boolean | enum | json | string_array`, `required`, `default`), `events[]`, `states[]`, `configSchema[]`, `credentialKind`, `credentialPolicy` (`shared_allowed` | `unique_per_instance`).
 
-Каталог (Fact, 13 типов):
+Каталог (Fact, 15 типов):
 
 | Тип | Команды | События | Исполнение в runtime |
 |---|---|---|---|
@@ -96,6 +98,8 @@ stateDiagram-v2
 | `text` | trim, normalize, truncate, match, extract, find_all, contains, replace, remove_lines, split, join | — | локальная обработка строк |
 | `ssh_commands` | run | — | SSH: `run` выполняет команду из библиотеки инстанса (`config.commands`). Хост в config, ключ в credential |
 | `web_client` | send_message, get_snapshot | channel.message.received, web.state.changed | HTTP к бэкенду веб-клиента |
+| `project` | send_message | agent.message.received / declined | канал к другому проекту; адрес = `projectSlug` |
+| `agents` | send_message | agent.message.received / declined | канал к агенту по slug; peers и направление — в `memory.interaction` |
 | `memory`, `context`, `crm`, `catalog`, `web_search`, `files`, `saby` | по манифесту | по манифесту | **нет реализации**, `implemented: false` — UI не даёт добавить или включить инстанс, включённый инстанс — ошибка валидации `unimplemented_tool`. В старой публикации инстанс не регистрируется, шаг recipe упадёт «Tool не зарегистрирован» |
 
 **Tool instance** — подключение типа к агенту: `id` (по умолчанию = toolId), `toolId`, `name`, `enabled`, `credentialId`, `config` (по `configSchema`, значения по умолчанию подмешиваются), legacy `configNote` (JSON-строка). Recipe step ссылается на **instance id**; ссылка на **type id** разрешается, только если у агента ровно один включённый инстанс этого типа.

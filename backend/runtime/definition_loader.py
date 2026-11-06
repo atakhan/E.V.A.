@@ -19,8 +19,10 @@ from tools.instance_config import merge_config_defaults, parse_instance_config
 from tools.llm import LlmStubTool
 from tools.polza import PolzaAiLlmTool
 from tools.registry import ToolRegistry
+from tools.agents import AgentsChannelTool
 from tools.project import ProjectChannelTool
 from tools.project.directory import SqlAgentDirectory
+from tools.pulse.tool import PulseTool
 from tools.ssh_commands import SshCommandsTool
 from tools.telegram import TelegramStubTool, TelegramTool
 from tools.text import TextTool
@@ -123,6 +125,26 @@ def _build_tool_for_binding(
                 connectors=[item for item in connectors if item],
                 directory=directory,
             ),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
+
+    if tool_type == "agents":
+        directory = SqlAgentDirectory(session) if session is not None else None
+        return _stamp_instance(
+            AgentsChannelTool(
+                agent_slug=str(agent_body.get("slug") or ""),
+                directory=directory,
+            ),
+            instance_id=instance_id,
+            tool_type=tool_type,
+            credential_id=credential_id,
+        )
+
+    if tool_type == "pulse":
+        return _stamp_instance(
+            PulseTool(agent_body=agent_body),
             instance_id=instance_id,
             tool_type=tool_type,
             credential_id=credential_id,

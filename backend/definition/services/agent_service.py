@@ -11,10 +11,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from definition.behavior.materialize import flatten_agent_document
+from definition.interaction_manifest import (
+    AGENTS_TOOL_ID,
+    empty_agent_memory,
+    ensure_agents_channel,
+    link_agent_peer,
+    reconcile_interaction_memory,
+)
 from definition.mappers.action_mapper import normalize_action_document
 from definition.mappers.skill_mapper import skill_from_document
-from definition.system_skills import library_agent_skills, runtime_agent_skills
+from definition.system_skills import (
+    ensure_life_skill_in_body,
+    library_agent_skills,
+    runtime_agent_skills,
+)
 from definition.validation.validate_agent import validate_agent
+from tools.pulse import ensure_pulse_tool
 from infrastructure.models.tables import (
     AgentDraftRow,
     AgentPublicationRow,
@@ -45,9 +57,14 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _ensure_system_plugins(body: dict[str, Any]) -> dict[str, Any]:
+    ensure_agents_channel(body)
+    return ensure_pulse_tool(body)
+
+
 def _empty_draft_body(agent: AgentRow) -> dict[str, Any]:
     now = _utcnow_iso()
-    return {
+    body = {
         "id": agent.id,
         "slug": agent.slug,
         "name": agent.name,
@@ -60,7 +77,9 @@ def _empty_draft_body(agent: AgentRow) -> dict[str, Any]:
         "tools": [],
         "constructor": {"nodes": []},
         "world": {"addresses": []},
+        "memory": empty_agent_memory(),
     }
+    return _ensure_system_plugins(body)
 
 
 def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +98,7 @@ def _merge_agent(agent: AgentRow, draft_body: dict[str, Any]) -> dict[str, Any]:
         "tools": draft_body.get("tools", []),
         "constructor": draft_body.get("constructor") or {"nodes": []},
         "world": draft_body.get("world") or {"addresses": []},
+        "memory": draft_body.get("memory") or empty_agent_memory(),
         "kind": draft_body.get("kind") if draft_body.get("kind") in _AGENT_KINDS else "library",
         "projectSlug": draft_body.get("projectSlug") or None,
         "originSlug": draft_body.get("originSlug") or None,
@@ -99,6 +119,21 @@ def _remap_world_credentials(world: dict[str, Any], mapping: dict[str, str]) -> 
             if isinstance(address, dict) and address.get("credentialId") in mapping:
                 address["credentialId"] = mapping[str(address["credentialId"])]
     return world
+
+
+def _world_without_agent_peers(world: dict[str, Any]) -> dict[str, Any]:
+    """Forks start with a clean Agents-channel roster."""
+    addresses = world.get("addresses")
+    if not isinstance(addresses, list):
+        return world
+    return {
+        **world,
+        "addresses": [
+            item
+            for item in addresses
+            if not (isinstance(item, dict) and item.get("toolId") == AGENTS_TOOL_ID)
+        ],
+    }
 
 
 def _summary_from_row(row: AgentRow) -> dict[str, Any]:
@@ -205,6 +240,7 @@ class AgentService:
         body["skills"] = skills if skills is not None else library_agent_skills(now)
         if tools is not None:
             body["tools"] = tools
+        _ensure_system_plugins(body)
         draft = AgentDraftRow(agent_id=agent.id, body=body)
         self.session.add(draft)
         self.session.flush()
@@ -249,11 +285,16 @@ class AgentService:
             "actions": copy.deepcopy(origin.get("actions") or []),
             "tools": _remap_credential_ids(copy.deepcopy(origin.get("tools") or []), mapping),
             "constructor": copy.deepcopy(origin.get("constructor") or {"nodes": []}),
-            "world": _remap_world_credentials(copy.deepcopy(origin.get("world") or {"addresses": []}), mapping),
+            "world": _remap_world_credentials(
+                _world_without_agent_peers(copy.deepcopy(origin.get("world") or {"addresses": []})),
+                mapping,
+            ),
+            "memory": empty_agent_memory(),
             "kind": "fork",
             "projectSlug": project_slug,
             "originSlug": origin_slug,
         }
+        _ensure_system_plugins(body)
         self.session.add(AgentDraftRow(agent_id=agent.id, body=body))
         self.session.flush()
         return _merge_agent(agent, body)
@@ -341,14 +382,50 @@ class AgentService:
             "tools": payload.get("tools", []),
             "constructor": payload.get("constructor") or {"nodes": []},
             "world": payload.get("world") or {"addresses": []},
+            "memory": payload.get("memory") if "memory" in payload else previous.get("memory"),
             "kind": kind,
             "projectSlug": project_slug or None,
             "originSlug": origin_slug or None,
         })
+        reconcile_interaction_memory(body, previous=previous)
+        _ensure_system_plugins(body)
         agent.draft.body = body
         agent.draft.updated_at = datetime.now(timezone.utc)
         self.session.flush()
         return _merge_agent(agent, body)
+
+    def link_agents(
+        self,
+        left_slug: str,
+        right_slug: str,
+        *,
+        left_name: str = "",
+        right_name: str = "",
+    ) -> None:
+        """Bidirectional Agents-channel peer link (manifesto + address on both drafts)."""
+        left = self.ensure_active(left_slug)
+        right = self.ensure_active(right_slug)
+        if left.draft is None or right.draft is None:
+            raise KeyError("Agent draft missing")
+        left_body = dict(left.draft.body) if isinstance(left.draft.body, dict) else {}
+        right_body = dict(right.draft.body) if isinstance(right.draft.body, dict) else {}
+        link_agent_peer(
+            left_body,
+            right_slug,
+            name=right_name or str(right.name or right_slug),
+        )
+        link_agent_peer(
+            right_body,
+            left_slug,
+            name=left_name or str(left.name or left_slug),
+        )
+        left.draft.body = left_body
+        right.draft.body = right_body
+        left.draft.updated_at = datetime.now(timezone.utc)
+        right.draft.updated_at = datetime.now(timezone.utc)
+        left.updated_at = datetime.now(timezone.utc)
+        right.updated_at = datetime.now(timezone.utc)
+        self.session.flush()
 
     def delete_agent(self, slug: str) -> None:
         agent = self.get_agent_row(slug)
@@ -419,6 +496,10 @@ class AgentService:
         )
         self.session.add(publication)
         self.session.flush()
+        # Ontology: publish wakes the life thread (one continuous root Skill Run).
+        from runtime.life import ensure_life_run_for_agent
+
+        ensure_life_run_for_agent(self.session, slug)
         return {
             "ok": True,
             "version": next_version,
@@ -478,8 +559,14 @@ class AgentService:
 def ensure_eva_agent(session: Session) -> str:
     """Platform agent that runs the projects desk. Hidden from the library."""
     service = AgentService(session)
-    existing = service.get_agent_by_slug(EVA_AGENT_SLUG)
+    existing = service.get_agent_row(EVA_AGENT_SLUG)
     if existing is not None:
+        if existing.draft is not None and isinstance(existing.draft.body, dict):
+            body = dict(existing.draft.body)
+            _ensure_system_plugins(body)
+            ensure_life_skill_in_body(body, now=_utcnow_iso())
+            existing.draft.body = body
+            session.flush()
         return EVA_AGENT_SLUG
     now = _utcnow_iso()
     service.create_agent(
@@ -491,6 +578,25 @@ def ensure_eva_agent(session: Session) -> str:
     )
     session.flush()
     return EVA_AGENT_SLUG
+
+
+def ensure_life_skill_on_agents(session: Session) -> int:
+    """Backfill empty «Жизнь» onto every agent draft that still lacks it."""
+    now = _utcnow_iso()
+    updated = 0
+    rows = session.scalars(select(AgentRow)).all()
+    for row in rows:
+        if row.draft is None or not isinstance(row.draft.body, dict):
+            continue
+        body = dict(row.draft.body)
+        if not ensure_life_skill_in_body(body, now=now):
+            continue
+        row.draft.body = body
+        row.draft.updated_at = datetime.now(timezone.utc)
+        updated += 1
+    if updated:
+        session.flush()
+    return updated
 
 
 def prune_ephemeral_agents(session: Session) -> list[str]:
