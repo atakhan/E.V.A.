@@ -83,6 +83,9 @@ class EventRouter:
                 if state is not None and any(item.event == event.type for item in state.transitions):
                     return existing, False
 
+        from definition.system_skills import LIFE
+        from runtime.life import attach_life_parent, find_active_life_run
+
         run = SkillRun(
             skill_id=self.catalog.skill.id,
             skill_version=self.catalog.skill.version,
@@ -91,6 +94,9 @@ class EventRouter:
             params=self._build_run_params(event),
             vars=self._build_run_vars(event),
         )
+        if self.catalog.skill.id != LIFE:
+            agent_slug = str(run.vars.get("_agent_slug") or "")
+            attach_life_parent(run, find_active_life_run(self.store, agent_slug))
         store_save_run(self.store, run)
         return run, True
 

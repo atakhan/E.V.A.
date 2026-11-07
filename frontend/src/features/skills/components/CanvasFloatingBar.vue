@@ -107,7 +107,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="root"
-    class="absolute left-4 top-4 z-20 flex items-center gap-1 rounded-box border border-base-300/60 bg-base-100/90 px-2 py-2 shadow-lg backdrop-blur-sm"
+    class="absolute left-4 top-20 z-20 flex items-center gap-1 rounded-box border border-base-300/60 bg-base-100/90 px-2 py-2 shadow-lg backdrop-blur-sm"
   >
     <button
       type="button"

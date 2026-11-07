@@ -7,11 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.api.access import require_agent_readable
 from app.config import get_settings
+from app.deps import db_session, require_user
 from definition.services.credential_service import CredentialService
 from definition.services.tool_api_log_service import ToolApiLogService
-from infrastructure.models.tables import AgentRow
-from sqlalchemy import select
+from infrastructure.models.tables import UserRow
 from tools.web_client import parse_web_client_binding_config, resolve_backend_url
 
 router = APIRouter(prefix="/api/agents/{slug}/tools/web_client", tags=["web_client"])
@@ -29,29 +30,16 @@ class IntegrationInfo(BaseModel):
     local_dev_hints: dict[str, str] = Field(alias="localDevHints")
 
 
-def _db_session():
-    from app.deps import session_scope
-
-    with session_scope() as session:
-        yield session
-
-
-def _require_agent(session: Session, slug: str) -> AgentRow:
-    agent = session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-    if agent is None:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
-
-
 @router.get("/integration", response_model=IntegrationInfo)
 def integration_info(
     slug: str,
     credential_id: str | None = Query(default=None, alias="credentialId"),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
     from definition.services.agent_service import AgentService
 
-    _require_agent(session, slug)
+    agent = require_agent_readable(session, slug, user)
     settings = get_settings()
     service = CredentialService(session)
 
@@ -63,8 +51,6 @@ def integration_info(
     resolved_id = credential_id or binding.get("credentialId")
     if not resolved_id:
         raise HTTPException(status_code=400, detail="credentialId is required")
-
-    agent = _require_agent(session, slug)
     secret = service.get_secret(agent.id, resolved_id)
     base_url = str(secret.get("backend_base_url") or "")
     inbound_key = str(secret.get("inbound_api_key") or "")
@@ -94,9 +80,10 @@ def list_web_client_logs(
     slug: str,
     credential_id: str | None = Query(default=None, alias="credentialId"),
     limit: int = Query(default=50, ge=1, le=200),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> list[dict[str, Any]]:
-    agent = _require_agent(session, slug)
+    agent = require_agent_readable(session, slug, user)
     return ToolApiLogService(session).list_logs(
         agent.id,
         tool_id="web_client",
@@ -106,5 +93,5 @@ def list_web_client_logs(
 
 
 @router.post("/generate-inbound-key")
-def generate_inbound_key() -> dict[str, str]:
+def generate_inbound_key(_user: UserRow = Depends(require_user)) -> dict[str, str]:
     return {"inboundApiKey": secrets.token_urlsafe(32)}

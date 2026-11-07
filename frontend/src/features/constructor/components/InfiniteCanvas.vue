@@ -1,0 +1,849 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import type { WorldLinkStatus } from "@/features/agents/utils/evaluateWorldLink";
+import {
+  ADD_SKILL_SLOT,
+  ADD_SLOT_HEIGHT,
+  addPluginSlotForCount,
+  AGENT_SIZE,
+  MEMORY_CENTER_Y,
+  MEMORY_NODE_HEIGHT,
+  MEMORY_NODE_WIDTH,
+  MEMORY_X,
+  PLUGIN_NODE_HEIGHT,
+  PLUGIN_NODE_WIDTH,
+  WORLD_ADDRESS_HEIGHT,
+  WORLD_ADDRESS_WIDTH,
+  WORLD_KIND_HEIGHT,
+  WORLD_KIND_WIDTH,
+  WORLD_PORT_GAP,
+  WORLD_PORT_SIZE,
+  type ConstructorSkillNode,
+} from "@/features/constructor/types/constructor";
+import {
+  DESK_ASIDE_MS,
+  DESK_EASE,
+  DESK_EASE_OPEN,
+  DESK_MOVE_MS,
+} from "@/features/projects/utils/deskMotion";
+
+export interface CanvasPlugin {
+  instanceId: string;
+  typeId: string;
+  name: string;
+  status: WorldLinkStatus;
+  reason: string;
+  x: number;
+  y: number;
+}
+
+/** What stays in focus while something is selected; everything else is dimmed. */
+export interface CanvasHighlight {
+  skillIds: string[];
+  kindToolIds: string[];
+  pluginIds: string[];
+}
+
+export interface CanvasWorldKind {
+  toolId: string;
+  name: string;
+  connected: boolean;
+  status: WorldLinkStatus;
+  reason: string;
+  x: number;
+  y: number;
+}
+
+export interface CanvasWorldAddress {
+  id: string;
+  toolId: string;
+  name: string;
+  status: WorldLinkStatus;
+  reason: string;
+  x: number;
+  y: number;
+}
+
+const props = withDefaults(
+  defineProps<{
+    nodes?: Array<ConstructorSkillNode & { name: string; role?: string }>;
+    selectedNodeId?: string | null;
+    selectedKindToolId?: string | null;
+    selectedAddressId?: string | null;
+    addSkillSlot?: { x: number; y: number };
+    addKindSlot?: { x: number; y: number };
+    worldKinds?: CanvasWorldKind[];
+    worldAddresses?: CanvasWorldAddress[];
+    plugins?: CanvasPlugin[];
+    addPluginSlot?: { x: number; y: number };
+    selectedPluginId?: string | null;
+    /** Hide the seat while the plugin flies to center (plugin constructor mode). */
+    liftedPluginId?: string | null;
+    /** Hide the seat while the skill flies to center (skill constructor mode). */
+    liftedSkillId?: string | null;
+    memorySelected?: boolean;
+    memoryHistoryLine?: string;
+    memoryStateLine?: string;
+    /** Memory card hidden because a flying copy has taken its place. */
+    liftedMemory?: boolean;
+    highlight?: CanvasHighlight | null;
+    /** When set, the hub is already at this screen point on the first paint. */
+    bootPan?: { x: number; y: number } | null;
+    /** World, skills, plugins, memory, and canvas chrome. The hub lives outside this canvas. */
+    satellitesVisible?: boolean;
+    /** Fold the agent world back while a channel or memory flies to the center. */
+    parked?: boolean;
+    /** Channel card hidden because a flying copy has taken its place. */
+    liftedChannelId?: string | null;
+    /** Keep the desk grid showing through during the project → agent handoff. */
+    clearBackdrop?: boolean;
+    /** Slide the world origin with the agent icon. */
+    glide?: boolean;
+    glideEase?: string;
+    glideMs?: number;
+    glideDelay?: number;
+  }>(),
+  {
+    nodes: () => [],
+    selectedNodeId: null,
+    selectedKindToolId: null,
+    selectedAddressId: null,
+    addSkillSlot: () => ({ ...ADD_SKILL_SLOT }),
+    addKindSlot: () => ({ x: -300, y: 0 }),
+    worldKinds: () => [],
+    worldAddresses: () => [],
+    plugins: () => [],
+    addPluginSlot: () => addPluginSlotForCount(0),
+    selectedPluginId: null,
+    liftedPluginId: null,
+    liftedSkillId: null,
+    memorySelected: false,
+    memoryHistoryLine: "",
+    memoryStateLine: "",
+    liftedMemory: false,
+    highlight: null,
+    bootPan: null,
+    satellitesVisible: true,
+    parked: false,
+    liftedChannelId: null,
+    clearBackdrop: false,
+    glide: false,
+    glideEase: DESK_EASE,
+    glideMs: DESK_MOVE_MS,
+    glideDelay: 0,
+  },
+);
+
+const emit = defineEmits<{
+  createSkill: [];
+  selectNode: [nodeId: string];
+  clearSelection: [];
+  viewport: [payload: { panX: number; panY: number; zoom: number }];
+  disconnectKind: [toolId: string];
+  selectKind: [toolId: string];
+  addKind: [];
+  addAddress: [toolId: string];
+  removeAddress: [addressId: string];
+  selectAddress: [addressId: string];
+  selectPlugin: [instanceId: string];
+  addPlugin: [];
+  disconnectPlugin: [instanceId: string];
+  selectMemory: [];
+  ready: [];
+}>();
+
+const GRID_SIZE = 20;
+const ADD_BTN_WIDTH = 168;
+const ADD_BTN_HEIGHT = ADD_SLOT_HEIGHT;
+const AGENT_RIM = AGENT_SIZE / 2 + 4;
+
+const panX = ref(props.bootPan?.x ?? 0);
+const panY = ref(props.bootPan?.y ?? 0);
+const zoom = ref(1);
+
+const viewportEl = useTemplateRef<HTMLElement>("viewport");
+
+type PanDrag = {
+  pointerId: number;
+  startClient: { x: number; y: number };
+  startPan: { x: number; y: number };
+  moved: boolean;
+};
+
+const panDrag = ref<PanDrag | null>(null);
+
+const addKindButtonStyle = computed(() => ({
+  left: `${props.addKindSlot.x - WORLD_KIND_WIDTH / 2}px`,
+  top: `${props.addKindSlot.y - ADD_BTN_HEIGHT / 2}px`,
+  width: `${WORLD_KIND_WIDTH}px`,
+  height: `${ADD_BTN_HEIGHT}px`,
+}));
+
+const viewportStyle = computed(() => {
+  const size = GRID_SIZE * zoom.value;
+  return {
+    backgroundImage: props.clearBackdrop
+      ? "none"
+      : "radial-gradient(circle, color-mix(in oklab, var(--color-base-content) 18%, transparent) 1px, transparent 1px)",
+    backgroundSize: `${size}px ${size}px`,
+    backgroundPosition: `${panX.value}px ${panY.value}px`,
+    cursor: panDrag.value ? "grabbing" : "grab",
+  };
+});
+
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const worldStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
+  transformOrigin: "0 0",
+    transition: props.glide && !prefersReducedMotion
+    ? `transform ${props.glideMs ?? DESK_MOVE_MS}ms ${props.glideEase || DESK_EASE} ${props.glideDelay ?? 0}ms`
+    : "none",
+}));
+
+/** Satellites grow out of the agent origin and fold back into it. */
+const satelliteLayerStyle = computed(() => {
+  const shown = props.satellitesVisible;
+  const ease = shown ? DESK_EASE_OPEN : DESK_EASE;
+  const opacity = !shown ? "0" : props.parked ? "0.3" : "1";
+  const opacityMs =
+    shown && props.parked ? DESK_ASIDE_MS : Math.round(DESK_MOVE_MS * 0.55);
+  return {
+    transform: shown ? "scale(1)" : "scale(0)",
+    transformOrigin: "0 0",
+    opacity,
+    transition: prefersReducedMotion
+      ? "none"
+      : `transform ${DESK_MOVE_MS}ms ${ease}, opacity ${opacityMs}ms ease`,
+  };
+});
+
+const addButtonStyle = computed(() => ({
+  left: `${props.addSkillSlot.x - ADD_BTN_WIDTH / 2}px`,
+  top: `${props.addSkillSlot.y - ADD_BTN_HEIGHT / 2}px`,
+  width: `${ADD_BTN_WIDTH}px`,
+  height: `${ADD_BTN_HEIGHT}px`,
+}));
+
+const addPluginButtonStyle = computed(() => ({
+  left: `${props.addPluginSlot.x - PLUGIN_NODE_WIDTH / 2}px`,
+  top: `${props.addPluginSlot.y - ADD_BTN_HEIGHT / 2}px`,
+  width: `${PLUGIN_NODE_WIDTH}px`,
+  height: `${ADD_BTN_HEIGHT}px`,
+}));
+
+/** Plugins hang on one bus under the agent: solid through plugins, dashed to the add slot. */
+const pluginBus = computed(() => {
+  const x = props.addPluginSlot.x;
+  const last = props.plugins[props.plugins.length - 1];
+  const addTop = props.addPluginSlot.y - ADD_BTN_HEIGHT / 2;
+  if (!last) return { solid: null, dashed: `M ${x} ${AGENT_RIM} L ${x} ${addTop}` };
+  return {
+    solid: `M ${x} ${AGENT_RIM} L ${x} ${last.y}`,
+    dashed: `M ${x} ${last.y + PLUGIN_NODE_HEIGHT / 2} L ${x} ${addTop}`,
+  };
+});
+
+function dimSkill(skillId: string): boolean {
+  return props.highlight !== null && !props.highlight.skillIds.includes(skillId);
+}
+
+function dimKind(toolId: string): boolean {
+  return props.highlight !== null && !props.highlight.kindToolIds.includes(toolId);
+}
+
+function dimPlugin(instanceId: string): boolean {
+  return props.highlight !== null && !props.highlight.pluginIds.includes(instanceId);
+}
+
+function dimMemory(): boolean {
+  return props.highlight !== null;
+}
+
+const memoryBus = computed(() => {
+  const bottom = MEMORY_CENTER_Y + MEMORY_NODE_HEIGHT / 2;
+  return `M ${MEMORY_X} ${-AGENT_RIM} L ${MEMORY_X} ${bottom}`;
+});
+
+function curvePath(toX: number, toY: number): string {
+  const len = Math.hypot(toX, toY) || 1;
+  const rim = AGENT_SIZE / 2 + 4;
+  const startX = (toX / len) * rim;
+  const startY = (toY / len) * rim;
+  const midX = toX * 0.5;
+  const midY = toY * 0.5;
+  const bulge = 36;
+  const nx = -toY / len;
+  const ny = toX / len;
+  const cx = midX + nx * bulge;
+  const cy = midY + ny * bulge;
+  return `M ${startX} ${startY} Q ${cx} ${cy} ${toX} ${toY}`;
+}
+
+function cableClass(status: WorldLinkStatus): string {
+  if (status === "green") return "stroke-success";
+  if (status === "yellow") return "stroke-warning";
+  if (status === "red") return "stroke-error";
+  return "stroke-base-content/25";
+}
+
+function addressBorderClass(status: WorldLinkStatus): string {
+  if (status === "green") return "border-success";
+  if (status === "yellow") return "border-warning";
+  if (status === "red") return "border-error";
+  return "border-base-300/70";
+}
+
+const addSkillPath = computed(() => curvePath(props.addSkillSlot.x, props.addSkillSlot.y));
+
+const skillPaths = computed(() =>
+  props.nodes.map((node) => ({
+    id: node.id,
+    skillId: node.skillId,
+    d: curvePath(node.x + node.width / 2, node.y + node.height / 2),
+  })),
+);
+
+const connectedKindCables = computed(() =>
+  props.worldKinds
+    .filter((kind) => kind.connected)
+    .map((kind) => ({
+      id: kind.toolId,
+      d: curvePath(kind.x, kind.y),
+      status: kind.status,
+    })),
+);
+
+const addressLinks = computed(() => {
+  const kindByTool = new Map(props.worldKinds.map((kind) => [kind.toolId, kind]));
+  return props.worldAddresses
+    .map((address) => {
+      const kind = kindByTool.get(address.toolId);
+      if (!kind?.connected) return null;
+      return {
+        id: address.id,
+        toolId: address.toolId,
+        d: `M ${address.x} ${address.y} L ${kind.x} ${kind.y}`,
+        status: address.status,
+        reason: address.reason,
+      };
+    })
+    .filter((item) => item !== null);
+});
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function centerOnOrigin(resetZoom = false) {
+  const rect = viewportEl.value?.getBoundingClientRect();
+  if (!rect) return;
+  if (resetZoom) zoom.value = 1;
+  panX.value = rect.width / 2;
+  panY.value = rect.height / 2;
+}
+
+function centerOnNode(node: ConstructorSkillNode, resetZoom = false) {
+  const rect = viewportEl.value?.getBoundingClientRect();
+  if (!rect) return;
+  if (resetZoom) zoom.value = 1;
+  panX.value = rect.width / 2 - (node.x + node.width / 2) * zoom.value;
+  panY.value = rect.height / 2 - (node.y + node.height / 2) * zoom.value;
+}
+
+function onWheel(event: WheelEvent) {
+  event.preventDefault();
+  const rect = viewportEl.value?.getBoundingClientRect();
+  if (!rect) return;
+
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+  const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+  const nextZoom = clamp(zoom.value * factor, 0.25, 2.5);
+  const worldX = (mouseX - panX.value) / zoom.value;
+  const worldY = (mouseY - panY.value) / zoom.value;
+
+  zoom.value = nextZoom;
+  panX.value = mouseX - worldX * nextZoom;
+  panY.value = mouseY - worldY * nextZoom;
+}
+
+function onPointerDown(event: PointerEvent) {
+  if (event.button !== 0 && event.button !== 1) return;
+  if (event.target instanceof Element && event.target.closest("[data-canvas-ui]")) return;
+
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+
+  panDrag.value = {
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    startPan: { x: panX.value, y: panY.value },
+    moved: false,
+  };
+  target.setPointerCapture(event.pointerId);
+}
+
+function onPointerMove(event: PointerEvent) {
+  const drag = panDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const dx = event.clientX - drag.startClient.x;
+  const dy = event.clientY - drag.startClient.y;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+  panX.value = drag.startPan.x + dx;
+  panY.value = drag.startPan.y + dy;
+}
+
+function onPointerUp(event: PointerEvent) {
+  const drag = panDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const wasClick = !drag.moved;
+  panDrag.value = null;
+  const target = event.currentTarget;
+  if (target instanceof HTMLElement && target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId);
+  }
+  if (wasClick && event.button === 0) {
+    emit("clearSelection");
+  }
+}
+
+watch(
+  [panX, panY, zoom],
+  ([x, y, z]) => {
+    emit("viewport", { panX: x, panY: y, zoom: z });
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
+  await nextTick();
+  if (!props.bootPan) centerOnOrigin(true);
+  emit("ready");
+});
+
+onUnmounted(() => {
+  panDrag.value = null;
+});
+
+function setPan(x: number, y: number) {
+  panX.value = x;
+  panY.value = y;
+}
+
+defineExpose({
+  centerOnOrigin,
+  centerOnNode,
+  setPan,
+});
+</script>
+
+<template>
+  <div
+    ref="viewport"
+    class="relative h-full w-full touch-none overflow-hidden select-none"
+    :class="clearBackdrop ? 'bg-transparent' : 'bg-base-300'"
+    :style="viewportStyle"
+    @wheel="onWheel"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerUp"
+    @contextmenu.prevent
+  >
+    <div class="pointer-events-none absolute inset-0" :style="worldStyle">
+    <div
+      class="pointer-events-none absolute inset-0"
+      :inert="!satellitesVisible || parked"
+      :style="satelliteLayerStyle"
+    >
+      <svg
+        class="pointer-events-none absolute overflow-visible"
+        width="1"
+        height="1"
+        aria-hidden="true"
+      >
+        <path
+          v-for="link in addressLinks"
+          :key="`addr-${link.id}`"
+          :d="link.d"
+          fill="none"
+          class="transition-opacity duration-200"
+          :class="[cableClass(link.status), dimKind(link.toolId) ? 'opacity-25' : '']"
+          :style="liftedChannelId === link.toolId ? { opacity: 0, transition: 'none' } : undefined"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        >
+          <title>{{ link.reason }}</title>
+        </path>
+        <path
+          v-for="cable in connectedKindCables"
+          :key="`cable-hit-${cable.id}`"
+          :d="cable.d"
+          fill="none"
+          stroke="transparent"
+          stroke-width="16"
+          stroke-linecap="round"
+          class="pointer-events-auto cursor-pointer"
+          @pointerdown.stop
+          @click.stop="emit('selectKind', cable.id)"
+        />
+        <path
+          v-for="cable in connectedKindCables"
+          :key="`cable-${cable.id}`"
+          :d="cable.d"
+          fill="none"
+          :class="[cableClass(cable.status), dimKind(cable.id) ? 'opacity-25' : '']"
+          :style="liftedChannelId === cable.id ? { opacity: 0, transition: 'none' } : undefined"
+          stroke-width="3"
+          stroke-linecap="round"
+          class="pointer-events-none transition-opacity duration-200"
+        />
+        <path
+          v-for="link in skillPaths"
+          :key="link.id"
+          :d="link.d"
+          fill="none"
+          class="stroke-base-content/25 transition-opacity duration-200"
+          :class="dimSkill(link.skillId) ? 'opacity-30' : ''"
+          stroke-width="2"
+          stroke-dasharray="6 6"
+          stroke-linecap="round"
+        />
+        <path
+          :d="addSkillPath"
+          fill="none"
+          class="stroke-base-content/35"
+          stroke-width="2"
+          stroke-dasharray="6 6"
+          stroke-linecap="round"
+        />
+        <path
+          v-if="pluginBus.solid"
+          :d="pluginBus.solid"
+          fill="none"
+          class="stroke-base-content/30"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+        <path
+          :d="pluginBus.dashed"
+          fill="none"
+          class="stroke-base-content/35"
+          stroke-width="2"
+          stroke-dasharray="6 6"
+          stroke-linecap="round"
+        />
+        <path
+          :d="memoryBus"
+          fill="none"
+          class="stroke-base-content/30 transition-opacity duration-200"
+          :class="dimMemory() ? 'opacity-25' : ''"
+          :style="liftedMemory ? { opacity: 0, transition: 'none' } : undefined"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+      </svg>
+
+      <button
+        type="button"
+        data-canvas-ui
+        class="pointer-events-auto absolute flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-base-content/35 bg-base-100/40 text-sm font-medium text-base-content/70 backdrop-blur-sm transition hover:border-primary/60 hover:bg-base-100/80 hover:text-base-content"
+        :style="addKindButtonStyle"
+        title="Добавить канал"
+        @click="emit('addKind')"
+        @pointerdown.stop
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="size-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Добавить
+      </button>
+
+      <!-- Connected world kinds -->
+      <div
+        v-for="kind in worldKinds"
+        :key="kind.toolId"
+        data-canvas-ui
+        class="pointer-events-auto absolute transition-opacity duration-200"
+        :class="[
+          liftedChannelId === kind.toolId ? 'opacity-0 transition-none' : '',
+          liftedChannelId !== kind.toolId && dimKind(kind.toolId) ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${kind.x - WORLD_KIND_WIDTH / 2}px`,
+          top: `${kind.y - WORLD_KIND_HEIGHT / 2}px`,
+          width: `${WORLD_KIND_WIDTH}px`,
+          opacity: liftedChannelId === kind.toolId ? 0 : undefined,
+          transition: liftedChannelId === kind.toolId ? 'none' : undefined,
+        }"
+        @pointerdown.stop
+      >
+        <div class="relative flex flex-col items-stretch gap-1">
+          <div
+            class="flex h-14 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-2 text-center text-xs font-semibold text-base-content shadow-md hover:border-primary/50"
+            :class="selectedKindToolId === kind.toolId ? 'ring-2 ring-primary/40' : ''"
+            :data-channel="kind.toolId"
+            :title="`${kind.reason} · открыть канал`"
+            @click="emit('selectKind', kind.toolId)"
+          >
+            <span class="line-clamp-2">{{ kind.name }}</span>
+          </div>
+
+          <!-- Add address port (left of kind) -->
+          <button
+            v-if="kind.connected"
+            type="button"
+            class="absolute top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full border border-base-content/30 bg-base-200/90 text-base-content/45 shadow-sm transition hover:border-primary/50 hover:text-primary"
+            :style="{
+              left: `${-(WORLD_PORT_GAP + WORLD_PORT_SIZE)}px`,
+              width: `${WORLD_PORT_SIZE}px`,
+              height: `${WORLD_PORT_SIZE}px`,
+            }"
+            title="Добавить адрес"
+            aria-label="Добавить адрес"
+            @click="emit('addAddress', kind.toolId)"
+          >
+            <svg viewBox="0 0 24 24" class="size-2.5" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+              <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+
+          <button
+            v-if="kind.connected"
+            type="button"
+            class="btn btn-ghost btn-xs text-base-content/50"
+            title="Отключить канал"
+            aria-label="Отключить канал"
+            @click="emit('disconnectKind', kind.toolId)"
+          >
+            Отключить
+          </button>
+        </div>
+      </div>
+
+      <!-- Addresses -->
+      <div
+        v-for="address in worldAddresses"
+        :key="address.id"
+        data-canvas-ui
+        class="group pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-xl border-2 bg-base-100/90 px-2 text-center text-[11px] font-medium shadow-sm transition-opacity duration-200"
+        :class="[
+          addressBorderClass(address.status),
+          selectedAddressId === address.id ? 'ring-2 ring-primary/40' : '',
+          dimKind(address.toolId) ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${address.x - WORLD_ADDRESS_WIDTH / 2}px`,
+          top: `${address.y - WORLD_ADDRESS_HEIGHT / 2}px`,
+          width: `${WORLD_ADDRESS_WIDTH}px`,
+          height: `${WORLD_ADDRESS_HEIGHT}px`,
+          opacity: liftedChannelId === address.toolId ? 0 : undefined,
+          transition: liftedChannelId === address.toolId ? 'none' : undefined,
+        }"
+        :title="address.reason"
+        @pointerdown.stop
+        @click="emit('selectAddress', address.id)"
+      >
+        <span class="line-clamp-2 px-3">{{ address.name }}</span>
+        <button
+          type="button"
+          class="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-base-300 bg-base-100 text-[10px] text-base-content/45 opacity-0 shadow-sm transition hover:border-error/50 hover:text-error group-hover:opacity-100"
+          title="Удалить адрес"
+          aria-label="Удалить адрес"
+          @click.stop="emit('removeAddress', address.id)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Memory above the agent -->
+      <button
+        type="button"
+        data-canvas-ui
+        data-memory-card
+        class="pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-base-300 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
+        :class="[
+          memorySelected ? 'ring-2 ring-primary/40' : '',
+          dimMemory() ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${MEMORY_X - MEMORY_NODE_WIDTH / 2}px`,
+          top: `${MEMORY_CENTER_Y - MEMORY_NODE_HEIGHT / 2}px`,
+          width: `${MEMORY_NODE_WIDTH}px`,
+          height: `${MEMORY_NODE_HEIGHT}px`,
+          ...(liftedMemory ? { opacity: 0, transition: 'none' } : {}),
+        }"
+        :title="[memoryHistoryLine, memoryStateLine].filter(Boolean).join(' · ')"
+        :aria-hidden="liftedMemory ? 'true' : undefined"
+        :tabindex="liftedMemory ? -1 : undefined"
+        @pointerdown.stop
+        @click="emit('selectMemory')"
+      >
+        <span class="w-full truncate text-xs font-semibold">Память</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+          {{ memoryHistoryLine }}
+        </span>
+        <span v-if="memoryStateLine" class="w-full truncate text-[10px] text-base-content/55">
+          {{ memoryStateLine }}
+        </span>
+      </button>
+
+      <!-- Plugins (non-world tools) under the agent -->
+      <div
+        v-for="plugin in plugins"
+        :key="plugin.instanceId"
+        data-canvas-ui
+        :data-plugin="plugin.instanceId"
+        class="group pointer-events-auto absolute flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 bg-base-100 px-3 text-center shadow-md transition-opacity duration-200"
+        :class="[
+          addressBorderClass(plugin.status),
+          selectedPluginId === plugin.instanceId ? 'ring-2 ring-primary/40' : '',
+          dimPlugin(plugin.instanceId) ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${plugin.x - PLUGIN_NODE_WIDTH / 2}px`,
+          top: `${plugin.y - PLUGIN_NODE_HEIGHT / 2}px`,
+          width: `${PLUGIN_NODE_WIDTH}px`,
+          height: `${PLUGIN_NODE_HEIGHT}px`,
+          ...(liftedPluginId === plugin.instanceId ? { opacity: 0, transition: 'none' } : {}),
+        }"
+        :aria-hidden="liftedPluginId === plugin.instanceId ? 'true' : undefined"
+        :tabindex="liftedPluginId === plugin.instanceId ? -1 : undefined"
+        :title="`${plugin.reason} · клик — режим плагина`"
+        @pointerdown.stop
+        @click="emit('selectPlugin', plugin.instanceId)"
+      >
+        <span class="w-full truncate text-xs font-semibold">{{ plugin.name }}</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/45">
+          {{ plugin.typeId }}
+        </span>
+        <button
+          type="button"
+          class="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-base-300 bg-base-100 text-[10px] text-base-content/45 opacity-0 shadow-sm transition hover:border-error/50 hover:text-error group-hover:opacity-100"
+          title="Отключить плагин"
+          aria-label="Отключить плагин"
+          @click.stop="emit('disconnectPlugin', plugin.instanceId)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <button
+        type="button"
+        data-canvas-ui
+        class="pointer-events-auto absolute flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-base-content/35 bg-base-100/40 text-sm font-medium text-base-content/70 backdrop-blur-sm transition hover:border-primary/60 hover:bg-base-100/80 hover:text-base-content"
+        :style="addPluginButtonStyle"
+        title="Добавить плагин"
+        @click="emit('addPlugin')"
+        @pointerdown.stop
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="size-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Добавить плагин
+      </button>
+
+      <button
+        type="button"
+        data-canvas-ui
+        class="pointer-events-auto absolute flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-base-content/35 bg-base-100/40 text-sm font-medium text-base-content/70 backdrop-blur-sm transition hover:border-primary/60 hover:bg-base-100/80 hover:text-base-content"
+        :style="addButtonStyle"
+        @click="emit('createSkill')"
+        @pointerdown.stop
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="size-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        Добавить навык
+      </button>
+
+      <button
+        v-for="node in props.nodes"
+        :key="node.id"
+        type="button"
+        data-canvas-ui
+        :data-skill="node.skillId"
+        class="pointer-events-auto absolute flex flex-col items-center justify-center rounded-2xl border-2 bg-base-100 px-3 text-center shadow-md transition"
+        :class="[
+          selectedNodeId === node.id
+            ? 'border-primary text-base-content ring-2 ring-primary/40'
+            : 'border-base-300 text-base-content hover:border-primary/50',
+          dimSkill(node.skillId) ? 'opacity-35' : '',
+        ]"
+        :style="{
+          left: `${node.x}px`,
+          top: `${node.y}px`,
+          width: `${node.width}px`,
+          height: `${node.height}px`,
+          ...(liftedSkillId === node.skillId ? { opacity: 0, transition: 'none' } : {}),
+        }"
+        :aria-hidden="liftedSkillId === node.skillId ? 'true' : undefined"
+        :tabindex="liftedSkillId === node.skillId ? -1 : undefined"
+        @click="emit('selectNode', node.id)"
+        @pointerdown.stop
+      >
+        <span class="w-full truncate text-xs font-semibold">{{ node.name }}</span>
+        <span class="w-full truncate font-mono text-[10px] text-base-content/70">
+          {{ node.role || "навык" }}
+        </span>
+      </button>
+    </div>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-circle btn-md absolute bottom-4 left-4 z-10 border border-base-300/60 bg-base-100/90 shadow-lg backdrop-blur-sm transition-opacity motion-reduce:transition-none"
+      :class="satellitesVisible && !parked ? 'opacity-100' : 'pointer-events-none opacity-0'"
+      :style="{ transitionDuration: `${Math.round(DESK_MOVE_MS * 0.55)}ms` }"
+      data-canvas-ui
+      title="К центру холста"
+      aria-label="К центру холста"
+      @click="centerOnOrigin(true)"
+      @pointerdown.stop
+    >
+      <svg
+        viewBox="0 0 24 24"
+        class="size-5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    </button>
+
+    <div
+      class="pointer-events-none absolute bottom-4 right-4 rounded-box border border-base-300/60 bg-base-100/90 px-2 py-1 font-mono text-xs text-base-content/70 shadow-lg backdrop-blur-sm transition-opacity motion-reduce:transition-none"
+      :class="satellitesVisible && !parked ? 'opacity-100' : 'opacity-0'"
+      :style="{ transitionDuration: `${Math.round(DESK_MOVE_MS * 0.55)}ms` }"
+    >
+      {{ Math.round(zoom * 100) }}%
+    </div>
+  </div>
+</template>

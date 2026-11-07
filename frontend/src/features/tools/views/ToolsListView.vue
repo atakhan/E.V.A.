@@ -2,6 +2,10 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useTools } from "@/features/tools/composables/useTools";
+import {
+  isToolImplemented,
+  UNIMPLEMENTED_TOOL_LABEL,
+} from "@/features/tools/registry/builtinTools";
 import type { ToolDefinition } from "@/features/tools/types/tool";
 import { mergeConfigDefaults } from "@/features/tools/utils/instanceConfig";
 import {
@@ -19,6 +23,9 @@ const { catalog, getInstances, addInstance } = useTools();
 
 const libraryOpen = ref(false);
 const instances = computed(() => getInstances(props.agentSlug));
+const libraryTypes = computed(() =>
+  [...catalog].sort((a, b) => Number(isToolImplemented(b)) - Number(isToolImplemented(a))),
+);
 
 function nextInstanceName(type: ToolDefinition): string {
   const n = instances.value.filter((item) => item.toolId === type.id).length + 1;
@@ -116,14 +123,25 @@ function openInstance(instanceId: string) {
         </p>
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <button
-            v-for="type in catalog"
+            v-for="type in libraryTypes"
             :key="type.id"
             type="button"
-            class="card card-border border-base-300 bg-base-200/30 text-left transition hover:border-primary hover:bg-base-100"
+            class="card card-border border-base-300 bg-base-200/30 text-left transition"
+            :class="
+              isToolImplemented(type)
+                ? 'hover:border-primary hover:bg-base-100'
+                : 'cursor-not-allowed opacity-60'
+            "
+            :disabled="!isToolImplemented(type)"
             @click="addFromLibrary(type)"
           >
             <div class="card-body gap-1 p-4">
-              <h4 class="font-medium">{{ type.name }}</h4>
+              <div class="flex items-start justify-between gap-2">
+                <h4 class="font-medium">{{ type.name }}</h4>
+                <span v-if="!isToolImplemented(type)" class="badge badge-xs badge-ghost shrink-0">
+                  {{ UNIMPLEMENTED_TOOL_LABEL }}
+                </span>
+              </div>
               <p class="line-clamp-2 text-xs text-base-content/60">{{ type.description }}</p>
               <p class="font-mono text-[10px] text-base-content/40">{{ type.id }}</p>
               <p class="text-[10px] text-base-content/45">

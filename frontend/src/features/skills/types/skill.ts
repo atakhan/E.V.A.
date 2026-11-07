@@ -8,6 +8,9 @@ import type { BehaviorGraph } from "@/features/skills/types/behavior";
 import { compileBehavior } from "@/features/skills/utils/behaviorCompile";
 import { createId } from "@/shared/utils/id";
 
+/** Platform skills. `talk_to_human` is not seeded onto library agents. */
+export type SystemSkillRole = "talk_to_agent" | "talk_to_human" | "life";
+
 export interface Skill {
   id: string;
   name: string;
@@ -15,6 +18,11 @@ export interface Skill {
   version: string;
   createdAt: string;
   updatedAt: string;
+  systemRole?: SystemSkillRole;
+  /** Named matter this skill accepts from another agent. Empty means it does not. */
+  accepts?: string;
+  /** True when a reply on the same thread is part of this matter. */
+  answers?: boolean;
   initial: string | null;
   params: SkillParam[];
   states: FsmState[];
@@ -24,6 +32,7 @@ export interface Skill {
 
 /** Incoming document may still carry a leftover Behavior Graph from drafts. */
 type SkillIncoming = Skill & {
+  systemRole?: string;
   behavior?: BehaviorGraph;
   rectangles?: LegacyCanvasSkill["rectangles"];
 };
@@ -49,6 +58,9 @@ interface LegacyCanvasSkill {
   version?: string;
   behavior?: BehaviorGraph;
   flowDirection?: FlowDirection;
+    systemRole?: string;
+    accepts?: string;
+    answers?: boolean;
 }
 
 export function createEmptyFsmEditorState(): FsmEditorState {
@@ -236,6 +248,13 @@ export function normalizeSkill(raw: LegacyCanvasSkill | SkillIncoming): Skill {
     transitions: state.transitions.filter((transition) => stateIds.has(transition.to)),
   }));
 
+  const systemRole =
+    raw.systemRole === "talk_to_agent" ||
+    raw.systemRole === "talk_to_human" ||
+    raw.systemRole === "life"
+      ? raw.systemRole
+      : undefined;
+
   const preferredInitial = flattened?.initial ?? raw.initial;
   const initial =
     preferredInitial && stateIds.has(preferredInitial)
@@ -249,6 +268,9 @@ export function normalizeSkill(raw: LegacyCanvasSkill | SkillIncoming): Skill {
     version: raw.version?.trim() || "0.1.0",
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: raw.updatedAt || new Date().toISOString(),
+    systemRole,
+    accepts: typeof raw.accepts === "string" ? raw.accepts.trim() : "",
+    answers: raw.answers === true,
     initial,
     params: Array.isArray(raw.params)
       ? raw.params

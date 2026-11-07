@@ -28,6 +28,12 @@ export function getBuiltinTools(): ToolDefinition[] {
   return live.length ? live : builtinTools;
 }
 
+export function isToolImplemented(tool: ToolDefinition): boolean {
+  return tool.implemented !== false;
+}
+
+export const UNIMPLEMENTED_TOOL_LABEL = "Нет реализации";
+
 export function formatToolCommand(toolId: string, commandId: string): string {
   if (!toolId) return commandId || "(пусто)";
   if (!commandId) return toolId;

@@ -54,6 +54,7 @@ class AgentRunCounts:
     completed: int = 0
     cancelled: int = 0
     latest_publication_version: str | None = None
+    latest_published_at: datetime | None = None
     is_published: bool = False
     archived: bool = False
 
@@ -66,6 +67,7 @@ class AgentRunCounts:
             "completed": self.completed,
             "cancelled": self.cancelled,
             "latestPublicationVersion": self.latest_publication_version,
+            "latestPublishedAt": self.latest_published_at.isoformat() if self.latest_published_at else None,
             "isPublished": self.is_published,
             "archived": self.archived,
         }
@@ -105,7 +107,37 @@ def row_to_list_item(row: SkillRunRow) -> SkillRunListItem:
     )
 
 
+def visible_run_memory(vars_data: object) -> tuple[dict, dict]:
+    """Params and vars a person may read.
+
+    Keys starting with '_' are runtime bookkeeping (`_desk`, `_agent_slug`, `_skill_params`, …).
+    Declared params are stored inside `vars._skill_params` and returned separately.
+    """
+    raw = dict(vars_data) if isinstance(vars_data, dict) else {}
+    stored_params = raw.get("_skill_params")
+    params = dict(stored_params) if isinstance(stored_params, dict) else {}
+    visible_params = {key: value for key, value in params.items() if not str(key).startswith("_")}
+    visible_vars = {key: value for key, value in raw.items() if not str(key).startswith("_")}
+    return visible_params, visible_vars
+
+
+def run_memory_from_row(row: SkillRunRow) -> dict:
+    params, visible_vars = visible_run_memory(row.vars)
+    return {
+        "skillRunId": row.id,
+        "skillId": row.skill_id,
+        "status": row.status,
+        "currentState": row.current_state,
+        "params": params,
+        "vars": visible_vars,
+        "conversationId": row.conversation_id,
+        "error": row.error,
+        "updatedAt": row.updated_at.isoformat(),
+    }
+
+
 def run_detail_from_row(row: SkillRunRow) -> dict:
+    params, visible_vars = visible_run_memory(row.vars)
     return {
         "ok": True,
         "created": False,
@@ -118,6 +150,8 @@ def run_detail_from_row(row: SkillRunRow) -> dict:
         "conversationId": row.conversation_id,
         "error": row.error,
         "history": list(row.history or []),
+        "params": params,
+        "vars": visible_vars,
         "toolCalls": [],
         "createdAt": row.created_at.isoformat(),
         "updatedAt": row.updated_at.isoformat(),

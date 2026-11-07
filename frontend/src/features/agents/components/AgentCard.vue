@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatDateTime } from "@/shared/utils/formatDate";
-import type { Agent } from "@/features/agents/types/agent";
+import { agentIconSrc, type Agent } from "@/features/agents/types/agent";
 
 defineProps<{
   agent: Agent;
@@ -19,7 +19,13 @@ const emit = defineEmits<{
 <template>
   <article class="card border border-base-300 bg-base-100 shadow-sm transition hover:shadow-md">
     <div class="card-body gap-3">
-      <button type="button" class="text-left" @click="emit('open')">
+      <button type="button" class="flex gap-3 text-left" @click="emit('open')">
+        <img
+          :src="agentIconSrc(agent)"
+          alt=""
+          class="size-12 shrink-0 rounded-full border border-base-300 object-cover"
+        />
+        <span class="min-w-0">
         <h2 class="text-lg font-semibold hover:text-primary">{{ agent.name }}</h2>
         <p class="mt-1 font-mono text-xs text-base-content/50">/{{ agent.slug }}</p>
         <p
@@ -29,6 +35,7 @@ const emit = defineEmits<{
           {{ agent.description }}
         </p>
         <p v-else class="mt-2 text-sm text-base-content/40">Без описания</p>
+        </span>
       </button>
 
       <p class="text-xs text-base-content/50">

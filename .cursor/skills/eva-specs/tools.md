@@ -47,6 +47,7 @@ backend/tools/
 ├── telegram/tool.py, stub.py
 ├── polza/client.py, llm.py
 ├── text/tool.py, regex_utils.py, validators.py
+├── ssh_commands/manifest.py, library.py, runner.py, tool.py
 └── web_client/config.py, http.py, tool.py
 ```
 

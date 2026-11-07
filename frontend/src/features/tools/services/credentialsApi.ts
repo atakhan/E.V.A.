@@ -10,7 +10,8 @@ export interface ToolCredential {
     balance_amount?: string;
     provider?: string;
     backend_base_url?: string;
-    health_status?: number;
+    health_status?: number | null;
+    health_error?: string | null;
     latency_ms?: number;
   };
   oneTimeSecrets?: {
@@ -59,26 +60,11 @@ export async function fetchPolzaLogs(
   return page.items;
 }
 
-const API_BASE = "/api";
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `HTTP ${response.status}`);
-  }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return (await response.json()) as T;
-}
+import { apiRequest } from "@/shared/api/http";
 
 export async function fetchCredentials(agentSlug: string, toolId?: string): Promise<ToolCredential[]> {
   const query = toolId ? `?tool_id=${encodeURIComponent(toolId)}` : "";
-  return request(`/agents/${encodeURIComponent(agentSlug)}/credentials${query}`);
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/credentials${query}`);
 }
 
 export async function createCredential(
@@ -92,13 +78,16 @@ export async function createCredential(
         backendBaseUrl: string;
         outboundApiKey: string;
         inboundApiKey?: string;
-      },
+      }
+    | { toolId: "ssh_commands"; name: string; privateKey: string },
 ): Promise<ToolCredential> {
   let secret: Record<string, string>;
   if (input.toolId === "telegram") {
     secret = { bot_token: input.botToken };
   } else if (input.toolId === "polza_ai_llm") {
     secret = { api_key: input.apiKey };
+  } else if (input.toolId === "ssh_commands") {
+    secret = { private_key: input.privateKey.trim() };
   } else {
     secret = {
       backend_base_url: input.backendBaseUrl.trim(),
@@ -109,7 +98,7 @@ export async function createCredential(
     }
   }
 
-  return request(`/agents/${encodeURIComponent(agentSlug)}/credentials`, {
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/credentials`, {
     method: "POST",
     body: JSON.stringify({
       toolId: input.toolId,
@@ -120,20 +109,20 @@ export async function createCredential(
 }
 
 export async function verifyCredential(agentSlug: string, credentialId: string): Promise<ToolCredential> {
-  return request(
+  return apiRequest(
     `/agents/${encodeURIComponent(agentSlug)}/credentials/${encodeURIComponent(credentialId)}/verify`,
     { method: "POST" },
   );
 }
 
 export async function deleteCredential(agentSlug: string, credentialId: string): Promise<void> {
-  await request(`/agents/${encodeURIComponent(agentSlug)}/credentials/${encodeURIComponent(credentialId)}`, {
+  await apiRequest(`/agents/${encodeURIComponent(agentSlug)}/credentials/${encodeURIComponent(credentialId)}`, {
     method: "DELETE",
   });
 }
 
 export async function setTelegramWebhook(agentSlug: string, credentialId: string): Promise<{ ok: boolean; url: string }> {
-  return request(
+  return apiRequest(
     `/agents/${encodeURIComponent(agentSlug)}/credentials/${encodeURIComponent(credentialId)}/set-webhook`,
     { method: "POST" },
   );
@@ -144,7 +133,7 @@ export async function fetchPolzaModels(
   credentialId?: string,
 ): Promise<PolzaModel[]> {
   const query = credentialId ? `?credentialId=${encodeURIComponent(credentialId)}` : "";
-  return request(`/agents/${encodeURIComponent(agentSlug)}/tools/polza_ai_llm/models${query}`);
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/tools/polza_ai_llm/models${query}`);
 }
 
 export async function fetchPolzaBalance(
@@ -152,5 +141,5 @@ export async function fetchPolzaBalance(
   credentialId?: string,
 ): Promise<{ amount: string; credentialId: string }> {
   const query = credentialId ? `?credentialId=${encodeURIComponent(credentialId)}` : "";
-  return request(`/agents/${encodeURIComponent(agentSlug)}/tools/polza_ai_llm/balance${query}`);
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/tools/polza_ai_llm/balance${query}`);
 }

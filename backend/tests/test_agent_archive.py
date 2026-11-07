@@ -18,8 +18,12 @@ from tests.test_runtime_cockpit_api import (
 
 @pytest.fixture
 def client():
+    from tests.conftest import authenticate_client
+
     with TestClient(app) as test_client:
+        authenticate_client(test_client)
         yield test_client
+
 
 
 @pytest.mark.integration

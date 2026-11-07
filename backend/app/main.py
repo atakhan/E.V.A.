@@ -6,15 +6,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agents import router as agents_router
+from app.api.auth import router as auth_router
 from app.api.credentials import router as credentials_router
 from app.api.channels.telegram import router as telegram_router
 from app.api.channels.web import router as web_channel_router
 from app.api.polza import router as polza_router
+from app.api.projects import router as projects_router
 from app.api.runtime import router as runtime_router
 from app.api.runtime_demo import router as runtime_demo_router
 from app.api.tool_logs import router as tool_logs_router
 from app.api.tools import router as tools_router
 from app.api.web_client import router as web_client_router
+from app.config import get_settings
 from app.deps import init_db
 
 
@@ -25,13 +28,17 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="E.V.A.", lifespan=lifespan)
+_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_settings.cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 app.include_router(agents_router)
+app.include_router(projects_router)
 app.include_router(credentials_router)
 app.include_router(tools_router)
 app.include_router(polza_router)

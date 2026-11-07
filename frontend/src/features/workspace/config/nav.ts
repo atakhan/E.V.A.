@@ -8,6 +8,12 @@ export interface WorkspaceSection {
 /** Constructor IA aligned with architecture v1: Agent → Skills / Actions / Tools. */
 export const workspaceSections: WorkspaceSection[] = [
   {
+    id: "constructor",
+    slug: "constructor",
+    title: "Конструктор",
+    description: "Пространство проектирования агента.",
+  },
+  {
     id: "overview",
     slug: "overview",
     title: "Overview",
@@ -36,6 +42,12 @@ export const workspaceSections: WorkspaceSection[] = [
     slug: "logs",
     title: "Logs",
     description: "История вызовов Tools: команды, запросы, ответы и ошибки.",
+  },
+  {
+    id: "memory",
+    slug: "memory",
+    title: "Память",
+    description: "История событий агента и рабочее состояние его прогонов.",
   },
   {
     id: "runtime",

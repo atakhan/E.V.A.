@@ -70,7 +70,8 @@ export function useAgents() {
       ...agent,
       name,
       slug: normalizeAgentSlug(slugCandidate),
-      description: patch.description?.trim() ?? agent.description,
+      description: patch.description !== undefined ? patch.description.trim() : agent.description,
+      icon: patch.icon !== undefined ? patch.icon.trim() : agent.icon,
     });
 
     replaceAgent(next);
@@ -120,10 +121,16 @@ export function useAgents() {
   }
 
   const activeAgents = computed(() => agents.value.filter((agent) => !agent.archivedAt));
+  const libraryAgents = computed(() =>
+    activeAgents.value.filter(
+      (agent) => agent.kind !== "runtime" && agent.kind !== "fork" && agent.kind !== "platform",
+    ),
+  );
 
   return {
     agents,
     activeAgents,
+    libraryAgents,
     apiAvailable,
     getAgentById,
     getAgentBySlug,

@@ -4,6 +4,7 @@ import {
   getBuiltinTools,
   getToolCommandIds,
   getToolDefinition,
+  isToolImplemented,
 } from "@/features/tools/registry/builtinTools";
 import {
   getAgentBySlug,
@@ -62,7 +63,9 @@ export function useTools() {
   function addInstance(agentSlug: string, typeId: string, partial?: Partial<ToolInstance>): ToolMutationResult {
     const agent = getAgentBySlug(agentSlug);
     if (!agent) return { ok: false, error: "Агент не найден" };
-    if (!getToolDefinition(typeId)) return { ok: false, error: "Неизвестный Tool" };
+    const def = getToolDefinition(typeId);
+    if (!def) return { ok: false, error: "Неизвестный Tool" };
+    if (!isToolImplemented(def)) return { ok: false, error: "Tool пока без реализации в runtime" };
 
     const existing = partial?.id ? getInstance(agentSlug, partial.id) : undefined;
     if (existing) return { ok: false, error: "Instance с таким id уже есть" };
@@ -104,6 +107,11 @@ export function useTools() {
   }
 
   function setInstanceEnabled(agentSlug: string, instanceId: string, enabled: boolean): ToolMutationResult {
+    const existing = getInstance(agentSlug, instanceId);
+    const def = existing ? getToolDefinition(existing.toolId) : undefined;
+    if (enabled && def && !isToolImplemented(def)) {
+      return { ok: false, error: "Tool пока без реализации в runtime" };
+    }
     return updateInstance(agentSlug, instanceId, { enabled });
   }
 

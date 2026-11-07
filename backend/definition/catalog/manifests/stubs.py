@@ -6,6 +6,7 @@ MEMORY_TOOL_MANIFEST: dict = {
     "id": "memory",
     "name": "Memory",
     "description": "Поиск по опыту и заметкам агента.",
+    "implemented": False,
     "commands": [
         {
             "id": "search",
@@ -25,6 +26,7 @@ CONTEXT_TOOL_MANIFEST: dict = {
     "id": "context",
     "name": "Context",
     "description": "Сборка порции мира на один шаг.",
+    "implemented": False,
     "commands": [
         {
             "id": "build",
@@ -48,6 +50,7 @@ CRM_TOOL_MANIFEST: dict = {
     "id": "crm",
     "name": "CRM",
     "description": "Заявки и сущности в рабочей системе.",
+    "implemented": False,
     "commands": [
         {
             "id": "get",
@@ -80,6 +83,7 @@ CATALOG_TOOL_MANIFEST: dict = {
     "id": "catalog",
     "name": "Catalog",
     "description": "Справочник ТМЦ и альтернатив.",
+    "implemented": False,
     "commands": [
         {
             "id": "search_tmc",
@@ -109,6 +113,7 @@ WEB_SEARCH_TOOL_MANIFEST: dict = {
     "id": "web_search",
     "name": "Web Search",
     "description": "Поиск во внешнем вебе.",
+    "implemented": False,
     "commands": [
         {
             "id": "search",
@@ -128,6 +133,7 @@ FILES_TOOL_MANIFEST: dict = {
     "id": "files",
     "name": "Files",
     "description": "Чтение и запись файлов.",
+    "implemented": False,
     "commands": [
         {
             "id": "read",
@@ -155,6 +161,7 @@ SABY_TOOL_MANIFEST: dict = {
     "id": "saby",
     "name": "Saby",
     "description": "Интеграция со СБИС / документооборотом.",
+    "implemented": False,
     "commands": [
         {
             "id": "send_document",

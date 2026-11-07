@@ -43,6 +43,10 @@ class ToolDefinitionApi(BaseModel):
     id: str
     name: str
     description: str = ""
+    # World-facing tool: opens a bidirectional place in the environment.
+    world: bool = False
+    # False: manifest only — runtime has no implementation, an enabled instance cannot execute.
+    implemented: bool = True
     commands: list[ToolCommandDefApi] = Field(default_factory=list)
     events: list[ToolEventDefApi] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)
@@ -152,6 +156,9 @@ class SkillApi(BaseModel):
     created_at: str = Field(alias="createdAt", default="")
     updated_at: str = Field(alias="updatedAt", default="")
     initial: str | None = None
+    system_role: str | None = Field(default=None, alias="systemRole")
+    accepts: str = ""
+    answers: bool = False
     params: list[SkillParamApi] = Field(default_factory=list)
     states: list[FsmStateApi] = Field(default_factory=list)
     viewport: dict[str, float] = Field(default_factory=lambda: {"panX": 0, "panY": 0, "zoom": 1})
@@ -161,6 +168,24 @@ class SkillApi(BaseModel):
     logic_viewport: dict[str, float] | None = Field(default=None, alias="logicViewport")
 
 
+class WorldAddressApi(BaseModel):
+    """Place on a world channel. Telegram: a chat. Web Client: one application; URL and keys live in credentialId."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    tool_id: str = Field(alias="toolId")
+    name: str = ""
+    credential_id: str | None = Field(default=None, alias="credentialId")
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentWorldApi(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    addresses: list[WorldAddressApi] = Field(default_factory=list)
+
+
 class AgentApi(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -168,13 +193,19 @@ class AgentApi(BaseModel):
     slug: str
     name: str
     description: str = ""
+    icon: str = ""
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
     archived_at: str | None = Field(default=None, alias="archivedAt")
+    kind: str = "library"
+    project_slug: str | None = Field(default=None, alias="projectSlug")
+    origin_slug: str | None = Field(default=None, alias="originSlug")
     default_skill_id: str | None = Field(default=None, alias="defaultSkillId")
     skills: list[SkillApi] = Field(default_factory=list)
     actions: list[ActionDefApi] = Field(default_factory=list)
     tools: list[ToolInstanceApi] = Field(default_factory=list)
+    constructor: dict[str, Any] | None = None
+    world: AgentWorldApi | None = None
 
 
 class AgentSummaryApi(BaseModel):
@@ -184,6 +215,7 @@ class AgentSummaryApi(BaseModel):
     slug: str
     name: str
     description: str = ""
+    icon: str = ""
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
     archived_at: str | None = Field(default=None, alias="archivedAt")

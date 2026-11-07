@@ -2,8 +2,9 @@ import type { Agent } from "@/features/agents/types/agent";
 import { isValidActionVersion } from "@/features/actions/types/normalize";
 import { getCommandInputFields } from "@/features/actions/utils/commandInputSchema";
 import { validateFields } from "@/shared/schema/fieldSchema";
-import { getToolDefinition } from "@/features/tools/registry/builtinTools";
+import { getToolDefinition, isToolImplemented } from "@/features/tools/registry/builtinTools";
 import { resolveRecipeTool } from "@/features/tools/utils/resolveToolInstance";
+import { readSshLibrary, SSH_COMMANDS_TOOL_ID, SSH_RUN_COMMAND } from "@/features/tools/utils/sshLibrary";
 import { validateSkill } from "@/features/skills/utils/validateSkill";
 import {
   agentActionsPath,
@@ -212,6 +213,27 @@ export function validateAgent(agent: Agent): AgentValidationReport {
           });
         }
       }
+
+      const commandId = step.input.command_id;
+      if (
+        typeId === SSH_COMMANDS_TOOL_ID &&
+        step.command === SSH_RUN_COMMAND &&
+        typeof commandId === "string" &&
+        commandId &&
+        !commandId.includes("{{")
+      ) {
+        const bound = agent.tools.find((item) => item.id === resolved.instanceId);
+        const known = readSshLibrary(bound?.config).some((item) => item.id === commandId);
+        if (!known) {
+          issues.push({
+            id: `action.${action.id}.step.${step.id}.unknown-ssh-command`,
+            severity: "warning",
+            code: "unknown_ssh_command",
+            message: `Action «${action.name}»: в библиотеке SSH нет команды «${commandId}»`,
+            href: actionHref,
+          });
+        }
+      }
     }
 
     if (!referencedActions.has(action.id)) {
@@ -221,6 +243,20 @@ export function validateAgent(agent: Agent): AgentValidationReport {
         code: "unused_action",
         message: `Action «${action.name}» нигде не используется в Skills`,
         href: actionHref,
+      });
+    }
+  }
+
+  for (const instance of agent.tools) {
+    if (!instance.enabled) continue;
+    const def = getToolDefinition(instance.toolId);
+    if (def && !isToolImplemented(def)) {
+      issues.push({
+        id: `tool.${instance.id}.unimplemented`,
+        severity: "error",
+        code: "unimplemented_tool",
+        message: `Tool «${def.name}» без реализации в runtime — выключите instance «${instance.name}»`,
+        href: agentToolsPath(agent.slug),
       });
     }
   }

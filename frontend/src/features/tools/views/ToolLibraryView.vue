@@ -21,11 +21,18 @@ const searchQuery = ref("");
 
 const filteredIndex = computed(() => filterToolLibraryIndex(index.value, searchQuery.value));
 
+const worldTypes = computed(() =>
+  filteredIndex.value.types.filter((entry) => entry.definition.world),
+);
+const innerTypes = computed(() =>
+  filteredIndex.value.types.filter((entry) => !entry.definition.world),
+);
+
 const summaryLine = computed(() => {
-  const typeCount = catalog.length;
+  const worldCount = catalog.filter((tool) => tool.world).length;
   const instanceCount = index.value.totalInstances;
   const agentsWithTools = uniqueAgentSlugsWithInstances.value;
-  return `${typeCount} типов · ${instanceCount} инстансов в ${agentsWithTools} агентах`;
+  return `${worldCount} внешнего мира · ${catalog.length} типов · ${instanceCount} инстансов в ${agentsWithTools} агентах`;
 });
 
 const hasResults = computed(
@@ -51,7 +58,7 @@ async function openInstance(row: ToolLibraryUsageRow) {
       <header>
         <h1 class="text-2xl font-semibold tracking-wide">Библиотека Tools</h1>
         <p class="mt-1 text-sm text-base-content/60">
-          Справочник типов tools и их использование в агентах
+          Справочник типов: каналы связи с внешним миром и инструменты, которыми пользуются действия агента
         </p>
         <p class="mt-2 text-sm text-base-content/50">{{ summaryLine }}</p>
       </header>
@@ -84,15 +91,43 @@ async function openInstance(row: ToolLibraryUsageRow) {
         <p class="mt-2 text-sm text-base-content/60">Попробуйте другой запрос</p>
       </div>
 
-      <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <ToolLibraryTypeCard
-          v-for="entry in filteredIndex.types"
-          :key="entry.definition.id"
-          :entry="entry"
-          @open-agent="openAgentTools"
-          @open-instance="openInstance"
-        />
-      </div>
+      <template v-else>
+        <section v-if="worldTypes.length" class="space-y-3">
+          <div>
+            <h2 class="text-lg font-semibold">Внешний мир</h2>
+            <p class="mt-1 text-sm text-base-content/60">
+              Каналы связи с внешним миром. На столе конструктора подключаются кабелем.
+            </p>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ToolLibraryTypeCard
+              v-for="entry in worldTypes"
+              :key="entry.definition.id"
+              :entry="entry"
+              @open-agent="openAgentTools"
+              @open-instance="openInstance"
+            />
+          </div>
+        </section>
+
+        <section v-if="innerTypes.length" class="space-y-3">
+          <div>
+            <h2 class="text-lg font-semibold">Инструменты действий</h2>
+            <p class="mt-1 text-sm text-base-content/60">
+              Команды, которые агент вызывает из шагов действия.
+            </p>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ToolLibraryTypeCard
+              v-for="entry in innerTypes"
+              :key="entry.definition.id"
+              :entry="entry"
+              @open-agent="openAgentTools"
+              @open-instance="openInstance"
+            />
+          </div>
+        </section>
+      </template>
 
       <section v-if="filteredIndex.orphanInstances.length > 0" class="space-y-3">
         <div>

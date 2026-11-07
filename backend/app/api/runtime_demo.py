@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.deps import require_user
+from infrastructure.models.tables import UserRow
 from scenarios.foreman_request import run_foreman_happy_path
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
@@ -19,7 +21,7 @@ class DemoResponse(BaseModel):
 
 
 @router.post("/demo", response_model=DemoResponse)
-def runtime_demo() -> DemoResponse:
+def runtime_demo(_user: UserRow = Depends(require_user)) -> DemoResponse:
     """In-memory foreman happy-path demo (no persistence)."""
     from scenarios.foreman_request import get_telegram_stub
 

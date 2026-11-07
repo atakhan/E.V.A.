@@ -29,6 +29,16 @@ function typeEntryMatchesQuery(entry: ToolLibraryTypeEntry, query: string): bool
   ) {
     return true;
   }
+  if (
+    entry.definition.world &&
+    (query.includes("внеш") ||
+      query.includes("мир") ||
+      query.includes("world") ||
+      query.includes("род") ||
+      query.includes("канал"))
+  ) {
+    return true;
+  }
   return entry.instances.some((row) => rowMatchesQuery(row, query));
 }
 

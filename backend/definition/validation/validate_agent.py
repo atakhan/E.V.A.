@@ -7,11 +7,12 @@ from definition.catalog.builtin_tools import get_tool_definition
 from definition.validation.validate_skill import validate_skill
 from definition.validation.validate_tool_command_input import validate_command_input
 from runtime.tool_instance_resolver import list_tool_instances, resolve_recipe_tool
+from tools.ssh_commands.library import library_command_ids
 
 AgentIssueSeverity = Literal["error", "warning", "info"]
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 _VALID_POLICIES = frozenset({"auto", "needs_human"})
-_CREDENTIAL_TYPES = frozenset({"telegram", "polza_ai_llm", "web_client"})
+_CREDENTIAL_TYPES = frozenset({"telegram", "polza_ai_llm", "web_client", "ssh_commands"})
 
 
 def _issue(
@@ -214,7 +215,24 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
                 )
                 continue
 
-            for err in validate_command_input(type_id, command, step.get("input") or {}):
+            step_input = step.get("input") or {}
+            if type_id == "ssh_commands" and command == "run" and resolved is not None:
+                command_id = step_input.get("command_id")
+                if isinstance(command_id, str) and command_id and "{{" not in command_id:
+                    instance = next((item for item in instances if item["id"] == resolved.instance_id), None)
+                    known = library_command_ids((instance or {}).get("config"))
+                    if command_id not in known:
+                        issues.append(
+                            _issue(
+                                f"action.{action_id}.step.{step_id}.unknown-ssh-command",
+                                "warning",
+                                "unknown_ssh_command",
+                                f"Action «{action_name}»: в библиотеке SSH нет команды «{command_id}»",
+                                actions_href,
+                            )
+                        )
+
+            for err in validate_command_input(type_id, command, step_input):
                 if err.startswith("warning: "):
                     issues.append(
                         _issue(
@@ -265,10 +283,31 @@ def validate_agent(agent: dict[str, Any]) -> dict[str, Any]:
             continue
         tool_type = item.get("toolId", "")
         instance_id = item.get("id", "")
-        if tool_type in _CREDENTIAL_TYPES and not item.get("credentialId"):
-            label = {"telegram": "Telegram", "polza_ai_llm": "PolzaAI_LLM", "web_client": "Web Client"}.get(
-                tool_type, tool_type
+        tool_def = get_tool_definition(tool_type)
+        if tool_def and tool_def.get("implemented") is False:
+            issues.append(
+                _issue(
+                    f"tool.{instance_id}.unimplemented",
+                    "error",
+                    "unimplemented_tool",
+                    f"Tool «{tool_def.get('name', tool_type)}» без реализации в runtime — "
+                    f"выключите instance «{item.get('name', instance_id)}»",
+                    tools_href,
+                )
             )
+        address_has_credential = any(
+            str(address.get("toolId") or "") == tool_type and address.get("credentialId")
+            for address in (agent.get("world") or {}).get("addresses") or []
+        )
+        if tool_type in _CREDENTIAL_TYPES and not item.get("credentialId") and not (
+            tool_type == "web_client" and address_has_credential
+        ):
+            label = {
+                "telegram": "Telegram",
+                "polza_ai_llm": "PolzaAI_LLM",
+                "web_client": "Web Client",
+                "ssh_commands": "SSH Commands",
+            }.get(tool_type, tool_type)
             issues.append(
                 _issue(
                     f"tool.{instance_id}.missing-credential",

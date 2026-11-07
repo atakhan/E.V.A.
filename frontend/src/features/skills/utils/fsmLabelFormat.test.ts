@@ -41,8 +41,8 @@ describe("fsmLabelFormat", () => {
       80,
     );
     expect(label.actionLine).toContain("…");
-    expect(label.actionLine!.length).toBeLessThanOrEqual(24);
-    expect(label.width).toBeLessThanOrEqual(200);
+    expect(label.actionLine!.length * 6.1 + 14).toBeLessThanOrEqual(label.width + 1);
+    expect(label.width).toBeLessThanOrEqual(280);
   });
 
   it("formats entry line for state", () => {

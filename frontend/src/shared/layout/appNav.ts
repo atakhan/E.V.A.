@@ -1,8 +1,8 @@
-import { RouteNames, agentsPath, globalRuntimePath, toolsLibraryPath } from "@/router/paths";
+import { RouteNames, agentsPath, globalRuntimePath, projectsPath, toolsLibraryPath } from "@/router/paths";
 import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 export type AppNavItem = {
-  id: "agents" | "runtime" | "tools";
+  id: "projects" | "agents" | "runtime" | "tools";
   label: string;
   to: string;
   routeName: string;
@@ -10,8 +10,14 @@ export type AppNavItem = {
 
 export const appNavItems: AppNavItem[] = [
   {
+    id: "projects",
+    label: "Проекты",
+    to: projectsPath(),
+    routeName: RouteNames.projects,
+  },
+  {
     id: "agents",
-    label: "Agents",
+    label: "Агенты",
     to: agentsPath(),
     routeName: RouteNames.agents,
   },
@@ -30,6 +36,7 @@ export const appNavItems: AppNavItem[] = [
 ];
 
 const agentWorkspaceRouteNames = new Set<string>([
+  RouteNames.agentConstructor,
   RouteNames.agentOverview,
   RouteNames.agentSkills,
   RouteNames.agentActions,
@@ -51,6 +58,10 @@ const runtimeRouteNames = new Set<string>([
 
 export function isAppNavActive(item: AppNavItem, route: RouteLocationNormalizedLoaded): boolean {
   const routeName = String(route.name ?? "");
+
+  if (item.id === "projects") {
+    return routeName === RouteNames.projects;
+  }
 
   if (item.id === "agents") {
     return routeName === RouteNames.agents || agentWorkspaceRouteNames.has(routeName);

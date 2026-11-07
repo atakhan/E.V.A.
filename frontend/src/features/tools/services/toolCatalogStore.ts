@@ -47,7 +47,7 @@ export async function loadToolCatalog(): Promise<void> {
     const cached = readCache();
     if (cached.length) catalog = cached;
     try {
-      const response = await fetch("/api/tools/catalog");
+      const response = await fetch("/api/tools/catalog", { credentials: "include" });
       if (response.ok) {
         catalog = (await response.json()) as ToolDefinition[];
         writeCache(catalog);

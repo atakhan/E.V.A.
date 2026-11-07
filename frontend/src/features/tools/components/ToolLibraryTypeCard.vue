@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { ToolLibraryTypeEntry, ToolLibraryUsageRow } from "@/features/tools/utils/buildToolLibraryIndex";
+import {
+  isToolImplemented,
+  UNIMPLEMENTED_TOOL_LABEL,
+} from "@/features/tools/registry/builtinTools";
 import { instanceStatusBadge } from "@/features/tools/utils/toolInstanceCardMeta";
 
 defineProps<{
@@ -16,7 +20,15 @@ const emit = defineEmits<{
   <article class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-3">
       <div>
-        <h2 class="text-lg font-semibold leading-tight">{{ entry.definition.name }}</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-lg font-semibold leading-tight">{{ entry.definition.name }}</h2>
+          <span v-if="entry.definition.world" class="badge badge-sm badge-primary badge-outline">
+            Внешний мир
+          </span>
+          <span v-if="!isToolImplemented(entry.definition)" class="badge badge-sm badge-ghost">
+            {{ UNIMPLEMENTED_TOOL_LABEL }}
+          </span>
+        </div>
         <p class="mt-1 font-mono text-xs text-base-content/50">{{ entry.definition.id }}</p>
       </div>
 

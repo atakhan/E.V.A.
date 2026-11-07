@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import AgentsListView from "@/features/agents/views/AgentsListView.vue";
+import ProjectsListView from "@/features/projects/views/ProjectsListView.vue";
 import AgentOverviewView from "@/features/agents/views/AgentOverviewView.vue";
 import ActionsListView from "@/features/actions/views/ActionsListView.vue";
 import ToolsListView from "@/features/tools/views/ToolsListView.vue";
@@ -13,7 +14,12 @@ import AgentRuntimeView from "@/features/runtime/views/AgentRuntimeView.vue";
 import GlobalRuntimeView from "@/features/runtime/views/GlobalRuntimeView.vue";
 import RuntimeSimulateView from "@/features/runtime/views/RuntimeSimulateView.vue";
 import SkillRunDetailView from "@/features/runtime/views/SkillRunDetailView.vue";
+import MemoryView from "@/features/memory/views/MemoryView.vue";
+import ConstructorView from "@/features/constructor/views/ConstructorView.vue";
 import AgentWorkspaceView from "@/features/workspace/views/AgentWorkspaceView.vue";
+import LoginView from "@/features/auth/views/LoginView.vue";
+import RegisterView from "@/features/auth/views/RegisterView.vue";
+import { useAuthStore } from "@/features/auth/stores/authStore";
 import AppShellLayout from "@/shared/layout/AppShellLayout.vue";
 import {
   agentRouteGuard,
@@ -22,18 +28,36 @@ import {
   legacyAgentSlugModuleRedirect,
   legacyFsmCanvasRedirect,
 } from "@/router/guards";
-import { RouteNames } from "@/router/paths";
+import { loginPath, RouteNames } from "@/router/paths";
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {
+      path: "/login",
+      name: RouteNames.login,
+      component: LoginView,
+      meta: { public: true },
+    },
+    {
+      path: "/register",
+      name: RouteNames.register,
+      component: RegisterView,
+      meta: { public: true },
+    },
     {
       path: "/",
       component: AppShellLayout,
       children: [
         {
           path: "",
-          redirect: "/agents",
+          redirect: "/projects",
+        },
+        {
+          path: "projects/:projectSlug?/:agentSlug?",
+          name: RouteNames.projects,
+          component: ProjectsListView,
+          props: true,
         },
         {
           path: "agents",
@@ -80,6 +104,12 @@ const router = createRouter({
         {
           path: "",
           redirect: legacyAgentRootRedirect,
+        },
+        {
+          path: "constructor",
+          name: RouteNames.agentConstructor,
+          component: ConstructorView,
+          props: true,
         },
         {
           path: "overview",
@@ -130,6 +160,12 @@ const router = createRouter({
           props: true,
         },
         {
+          path: "memory",
+          name: RouteNames.agentMemory,
+          component: MemoryView,
+          props: true,
+        },
+        {
           path: "runtime",
           name: RouteNames.agentRuntime,
           component: AgentRuntimeView,
@@ -160,6 +196,21 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach(agentRouteGuard);
+router.beforeEach(async (to, from, next) => {
+  const { ready, isAuthenticated, loadMe } = useAuthStore();
+  if (!ready.value) {
+    await loadMe();
+  }
+  const isPublic = Boolean(to.meta.public);
+  if (!isAuthenticated.value && !isPublic) {
+    next(loginPath(to.fullPath));
+    return;
+  }
+  if (isAuthenticated.value && (to.name === RouteNames.login || to.name === RouteNames.register)) {
+    next("/projects");
+    return;
+  }
+  return agentRouteGuard(to, from, next);
+});
 
 export default router;

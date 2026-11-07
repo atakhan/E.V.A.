@@ -19,6 +19,7 @@ import {
 } from "@/router/paths";
 
 const workspaceRouteNames = new Set<string>([
+  RouteNames.agentConstructor,
   RouteNames.agentOverview,
   RouteNames.agentSkills,
   RouteNames.agentActions,

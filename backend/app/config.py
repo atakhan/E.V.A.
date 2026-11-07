@@ -75,3 +75,13 @@ class Settings:
         )
         self.event_max_attempts = _require_int("EVA_EVENT_MAX_ATTEMPTS")
         self.prune_ephemeral_agents = _require_bool("EVA_PRUNE_EPHEMERAL_AGENTS")
+        self.auth_cookie_name = _require_nonempty("EVA_AUTH_COOKIE_NAME")
+        self.auth_session_ttl_hours = _require_int("EVA_AUTH_SESSION_TTL_HOURS")
+        self.auth_open_registration = _require_bool("EVA_AUTH_OPEN_REGISTRATION")
+        self.auth_cookie_secure = _require_bool("EVA_AUTH_COOKIE_SECURE")
+        self.bootstrap_admin_email = _require_nonempty("EVA_BOOTSTRAP_ADMIN_EMAIL")
+        self.bootstrap_admin_password = _require_nonempty("EVA_BOOTSTRAP_ADMIN_PASSWORD")
+        raw_origins = _require_nonempty("EVA_CORS_ORIGINS")
+        self.cors_origins = [item.strip() for item in raw_origins.split(",") if item.strip()]
+        if not self.cors_origins:
+            raise SettingsError("empty required environment variable: EVA_CORS_ORIGINS")

@@ -21,10 +21,16 @@ INFISICAL_RUN_STAGE = $(INFISICAL) run --env=$(INFISICAL_ENV_STAGE) $(INFISICAL_
 COMPOSE_PROD = $(COMPOSE) -f docker-compose.prod.yml
 COMPOSE_STAGE = $(COMPOSE) -f docker-compose.stage.yml
 
-.PHONY: start-prod stop-prod build-prod restart-prod logs-prod health-prod \
+.PHONY: dev \
+	start-prod stop-prod build-prod restart-prod logs-prod health-prod \
 	prod-secrets-check prod-secrets-upload \
 	start-stage stop-stage build-stage restart-stage logs-stage health-stage \
 	stage-secrets-check stage-secrets-upload
+
+# --- Dev (docker-compose.yml). Хост: API 8100, Postgres 5433, Redis 6380, фронт 5173. ---
+
+dev:
+	$(COMPOSE) -f docker-compose.yml up -d --build
 
 # --- Production (tetrakomnet, Infisical env=prod) ---
 

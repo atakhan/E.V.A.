@@ -1,0 +1,29 @@
+---
+description: Principles for collaborating with the project owner — faster mutual understanding, fewer chat round-trips
+alwaysApply: true
+---
+
+# Collaboration with the owner
+
+Derived from the spatial-modes retrospective (`docs/06-experiments/constructor-spatial-modes-retrospective.md`). Apply in every chat.
+
+## How the owner communicates
+
+- Expect **local symptoms** («дергается», «копия в конечной точке», «блик») plus optional **desired physics** — not vague taste notes.
+- Treat an explicit **principle / invariant** as acceptance criteria. When one appears, stop polishing by taste and audit against it.
+- Prefer **compare two existing solutions → reuse/adapt** over inventing a third when the owner points at a working pattern nearby.
+
+## How to respond
+
+1. **Invariant before multi-step UX.** If a transition/flow will have several moving parts, propose or extract the one-pass / handoff rule first, then implement. Do not ship sequential `await` phases and retrofit the principle later.
+2. **Minimal diff + neighbor check.** Fix the named symptom; then quickly check the reverse transition and adjacent modes for the same class of bug (twin icons, blank frame, focus collapsed with satellites, opacity fade on handoff).
+3. **Name the principle in code/docs the same turn it is stated** (comment next to the motion helper, short note in the relevant doc) — do not leave it only in chat.
+4. **One concern per pass.** Do not mix “add a mode/feature” and “rewrite all timings/layout” unless the owner asks for both. Isolate motion/layout passes.
+5. **Close the loop in their language.** After a fix, say what changed in terms of the symptom/physics they used — not an internal refactor narrative.
+
+## Anti-patterns that burned rounds
+
+- Sequential animation phases when the owner wants one simultaneous pass
+- Collapsing/hiding the focused flying element with the other satellites
+- Showing the destination icon before the flyer arrives (or fading opacity on seat handoff)
+- Stretching a layout algorithm to “fill the arc” when a denser packed pattern already exists next door

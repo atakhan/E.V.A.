@@ -80,7 +80,7 @@ const inboundPayloadExample = `{
 <template>
   <section class="rounded-xl border border-primary/25 bg-primary/5">
     <div class="collapse collapse-arrow">
-      <input type="checkbox" checked />
+      <input type="checkbox" />
       <div class="collapse-title min-h-0 py-3 text-sm font-semibold">
         Как подключить Web Client к агенту
       </div>
@@ -146,7 +146,7 @@ const inboundPayloadExample = `{
               Runtime вызывает <strong>backend base URL</strong>. Секрет —
               <strong>{{ credentialCopy.outbound.fieldLabel }}</strong>
               → <code class="font-mono">{{ credentialCopy.outbound.backendEnvVar }}</code>.
-              Проверка — Verify ниже.
+              Проверка — кнопка «Проверить связь».
             </p>
           </div>
         </div>
@@ -154,18 +154,13 @@ const inboundPayloadExample = `{
         <div>
           <p class="font-medium">Шаги на этой странице</p>
           <ol class="mt-2 list-decimal space-y-1.5 pl-5 text-xs">
-            <li>Убедитесь, что instance <strong>Enabled</strong>.</li>
+            <li>Укажите адрес приложения и два ключа, затем нажмите <strong>Подключить</strong>.</li>
             <li>
-              Создайте <strong>Credential</strong>: URL бэкенда и оба ключа (см. таблицу
-              соответствия выше).
+              Нажмите <strong>Проверить связь</strong> — E.V.A. вызовет
+              <code class="font-mono">{{ paths.health }}</code>.
             </li>
-            <li>Выберите credential в списке (привязка к instance — автоматически).</li>
-            <li>Нажмите <strong>Verify</strong> — E.V.A. проверит <code class="font-mono">{{ paths.health }}</code>.</li>
-            <li>
-              Нажмите <strong>Скопировать .env</strong> и вставьте секреты в конфиг приложения.
-            </li>
-            <li>Реализуйте HTTP-контракт на бэкенде или используйте stub для теста.</li>
-            <li>Опубликуйте агента в Overview и проверьте в Simulate или из UI приложения.</li>
+            <li>Скопируйте блок <strong>.env</strong> в конфиг приложения.</li>
+            <li>Принимайте вызовы E.V.A. на путях ниже и шлите события людей на ingress.</li>
           </ol>
         </div>
 
@@ -228,7 +223,7 @@ const inboundPayloadExample = `{
             <p class="text-[11px] uppercase tracking-wide text-base-content/50">Ingress URL</p>
             <p class="mt-1 break-all font-mono text-xs">{{ ingressUrl }}</p>
             <p v-if="!hasCredential" class="mt-2 text-xs text-warning">
-              Выберите credential ниже — URL подтвердится после привязки.
+              Адрес подтвердится после подключения.
             </p>
           </div>
           <details class="rounded-lg border border-base-300 bg-base-100/60">

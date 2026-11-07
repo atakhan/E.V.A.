@@ -89,6 +89,9 @@ class RuntimeService:
         return results[0]
 
     def route_all(self, event: Event) -> list[RouterResult]:
+        from runtime.life import ensure_life_run_on_service
+
+        ensure_life_run_on_service(self)
         event = self._apply_dispatch(event)
         targets = self._resolve_targets(event)
         results: list[RouterResult] = []
@@ -128,7 +131,14 @@ class RuntimeService:
         run.vars.setdefault("_agent_slug", self.context.agent_slug)
 
         for key, value in event_copy.payload.items():
-            if key not in run.vars or key in ("text", "last_message", "conversation_id"):
+            if key not in run.vars or key in (
+                "text",
+                "last_message",
+                "conversation_id",
+                "matter",
+                "waits",
+                "reply_allowed",
+            ):
                 run.vars[key] = value
         if "text" in event_copy.payload:
             run.vars["last_message"] = event_copy.payload["text"]
@@ -195,6 +205,9 @@ class RuntimeService:
             if discovered:
                 skill_ids = discovered
 
+        from runtime.life import attach_life_parent, ensure_life_run_on_service
+
+        life_run = ensure_life_run_on_service(self)
         targets: list[tuple[SkillRun, bool, RuntimeService]] = []
         for skill_id in skill_ids:
             service = self if skill_id == self.context.catalog.skill.id else self._service_for_skill(skill_id)
@@ -212,6 +225,7 @@ class RuntimeService:
                     **service._build_run_vars(event),
                 },
             )
+            attach_life_parent(run, life_run)
             store_save_run(service.context.store, run)
             targets.append((run, True, service))
         return targets
