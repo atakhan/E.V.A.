@@ -730,6 +730,7 @@ watch(
         :clear-backdrop="hubClear"
         @open="openProject"
         @remove="remove"
+        @create="createDialog?.open()"
       />
 
       <div
@@ -774,24 +775,6 @@ watch(
         >проекты</span>
       </button>
 
-      <div
-        class="fab z-40 transition-opacity motion-reduce:transition-none"
-        :class="hubClear || dimmed || evaConstructorOn ? 'pointer-events-none opacity-0' : 'opacity-100'"
-        :style="chromeStyle"
-      >
-        <div class="tooltip tooltip-left" data-tip="Новый проект">
-          <button
-            type="button"
-            class="btn btn-lg btn-circle btn-primary shadow-lg"
-            aria-label="Новый проект"
-            @click="createDialog?.open()"
-          >
-            <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </div>
-      </div>
     </div>
 
     <div v-if="evaConstructorOn" class="absolute inset-0 z-30">

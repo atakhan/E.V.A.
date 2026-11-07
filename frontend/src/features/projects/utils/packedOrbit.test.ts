@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { layoutAroundRuntime, RUNTIME_MIN_CHORD, RUNTIME_TOP_MENU } from "@/features/projects/utils/deskLayout";
 import type { ProjectAgent } from "@/features/projects/types/project";
 import {
+  CREATE_PROJECT_SIZE,
   layoutAroundEva,
+  layoutCreateAroundEva,
   PROJECT_LABEL_CLEAR,
   PROJECT_TOP_MENU,
 } from "@/features/projects/utils/projectsHubLayout";
@@ -50,6 +52,20 @@ describe("layoutAroundEva (hub orbit)", () => {
     expect(toEva).toBeGreaterThan(PROJECT_LABEL_CLEAR * 0.9);
     expect(toEva).toBeLessThanOrEqual(bounds.height / 2);
     expect(toEva).toBeLessThan(toMenu);
+  });
+
+  it("seats create dead-center above Eva, closer than the project ring", () => {
+    const create = layoutCreateAroundEva(anchor, bounds);
+    const createCenter = {
+      x: create.x,
+      y: create.y + CREATE_PROJECT_SIZE / 2,
+    };
+    const [project] = centers(layoutAroundEva(ids(1), anchor, bounds));
+    const createR = Math.hypot(createCenter.x - anchor.x, createCenter.y - anchor.y);
+    const projectR = Math.hypot(project.x - anchor.x, project.y - anchor.y);
+    expect(createCenter.x).toBe(anchor.x);
+    expect(createCenter.y).toBeLessThan(anchor.y);
+    expect(createR).toBeLessThan(projectR * 0.7);
   });
 
   it("keeps label clearance and stays nearer Eva than the top menu", () => {

@@ -6,7 +6,11 @@ import type { Flight } from "@/features/projects/motion";
 import { AGENT_ICON, type DeskAnchor } from "@/features/projects/utils/deskLayout";
 import { DESK_ASIDE_MS } from "@/features/projects/utils/deskMotion";
 import { orbitIconStyle, orbitPlaceStyle } from "@/features/projects/utils/orbitStyles";
-import { layoutAroundEva } from "@/features/projects/utils/projectsHubLayout";
+import {
+  CREATE_PROJECT_SIZE,
+  layoutAroundEva,
+  layoutCreateAroundEva,
+} from "@/features/projects/utils/projectsHubLayout";
 
 const props = withDefaults(
   defineProps<{
@@ -46,6 +50,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   open: [project: Project];
   remove: [project: Project];
+  create: [];
 }>();
 
 const board = ref<HTMLElement | null>(null);
@@ -62,6 +67,13 @@ const placed = computed(() => {
     anchor,
     size.value,
   );
+});
+
+/** Inner-orbit create seat — closer to Eva than the packed project ring. */
+const createSlot = computed(() => {
+  const anchor = props.anchor;
+  if (!anchor || size.value.width <= 0 || size.value.height <= 0) return null;
+  return layoutCreateAroundEva(anchor, size.value);
 });
 
 function projectOf(slug: string): Project | undefined {
@@ -140,7 +152,7 @@ defineExpose({ rootEl: board });
       v-if="projects.length === 0 && satellites"
       class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 pb-40 text-center text-sm text-base-content/60"
     >
-      Пока нет проектов. Ева соберёт стол, когда появится первый.
+      Пока нет проектов. Нажми «Новый» у Евы — она соберёт стол.
     </p>
     <article
       v-for="(slot, index) in placed"
@@ -188,5 +200,32 @@ defineExpose({ rootEl: board });
         ✕
       </button>
     </article>
+
+    <!-- Create: gray seat on Eva’s inner orbit (closer than projects). -->
+    <button
+      v-if="createSlot"
+      type="button"
+      data-create-project
+      class="absolute z-20 flex flex-col items-center gap-1.5 text-center motion-reduce:transition-none"
+      :class="dimmed || !satellites || clearBackdrop ? 'pointer-events-none' : ''"
+      :style="placeStyle(createSlot, 0)"
+      aria-label="Новый проект"
+      title="Новый проект"
+      @click="emit('create')"
+    >
+      <span
+        class="flex items-center justify-center rounded-full border-2 border-dashed border-base-content/35 bg-base-300/50 text-base-content/55 shadow-sm transition hover:border-base-content/50 hover:bg-base-300/80 hover:text-base-content/80"
+        :style="{ width: `${CREATE_PROJECT_SIZE}px`, height: `${CREATE_PROJECT_SIZE}px` }"
+      >
+        <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      <span
+        class="text-sm font-medium leading-tight text-base-content/55 transition-opacity motion-reduce:transition-none"
+        :class="dimmed || !satellites ? 'opacity-0' : 'opacity-100'"
+        :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
+      >Новый</span>
+    </button>
   </div>
 </template>
