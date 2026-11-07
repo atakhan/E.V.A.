@@ -52,16 +52,7 @@ export interface ToolLogQuery {
   offset?: number;
 }
 
-const API_BASE = "/api";
-
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `HTTP ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
+import { apiRequest } from "@/shared/api/http";
 
 export async function fetchAgentToolLogs(
   agentSlug: string,
@@ -76,7 +67,7 @@ export async function fetchAgentToolLogs(
   if (query.limit) params.set("limit", String(query.limit));
   if (query.offset) params.set("offset", String(query.offset));
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/agents/${encodeURIComponent(agentSlug)}/tool-logs${suffix}`);
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/tool-logs${suffix}`);
 }
 
 export async function fetchAgentToolLogStats(
@@ -89,7 +80,7 @@ export async function fetchAgentToolLogStats(
   if (query.skillRunId) params.set("skillRunId", query.skillRunId);
   if (query.hours) params.set("hours", String(query.hours));
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/agents/${encodeURIComponent(agentSlug)}/tool-logs/stats${suffix}`);
+  return apiRequest(`/agents/${encodeURIComponent(agentSlug)}/tool-logs/stats${suffix}`);
 }
 
 /** Fetch all pages up to `max` records (for export). */

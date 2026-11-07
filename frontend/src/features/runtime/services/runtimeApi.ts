@@ -10,27 +10,7 @@ import type {
   SkillRunStatusFilter,
 } from "@/features/runtime/types/runtime";
 
-const API_BASE = "/api";
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!response.ok) {
-    let detail = await response.text();
-    try {
-      const parsed = JSON.parse(detail) as { detail?: string };
-      if (typeof parsed.detail === "string") {
-        detail = parsed.detail;
-      }
-    } catch {
-      // keep raw text
-    }
-    throw new Error(detail || `HTTP ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
+import { apiRequest } from "@/shared/api/http";
 
 function statusQueryParam(filter: SkillRunStatusFilter): string | undefined {
   switch (filter) {
@@ -50,7 +30,7 @@ function statusQueryParam(filter: SkillRunStatusFilter): string | undefined {
 }
 
 export async function listPublicationsApi(slug: string): Promise<AgentPublicationSummary[]> {
-  const rows = await request<
+  const rows = await apiRequest<
     Array<{ id: string; version: string; publishedAt: string; body?: unknown }>
   >(`/agents/${encodeURIComponent(slug)}/publications`);
   return rows.map((row) => ({
@@ -77,23 +57,23 @@ export async function listSkillRuns(input: {
   if (input.limit !== undefined) params.set("limit", String(input.limit));
   if (input.offset !== undefined) params.set("offset", String(input.offset));
   const suffix = params.toString();
-  return request(`/runtime/runs${suffix ? `?${suffix}` : ""}`);
+  return apiRequest(`/runtime/runs${suffix ? `?${suffix}` : ""}`);
 }
 
 export async function getRuntimeSummary(): Promise<RuntimeSummary> {
-  return request("/runtime/summary");
+  return apiRequest("/runtime/summary");
 }
 
 export async function getAgentRuntimeSummary(slug: string): Promise<AgentRuntimeSummary> {
-  return request(`/runtime/agents/${encodeURIComponent(slug)}/summary`);
+  return apiRequest(`/runtime/agents/${encodeURIComponent(slug)}/summary`);
 }
 
 export async function getAgentMemory(slug: string): Promise<AgentMemory> {
-  return request(`/runtime/agents/${encodeURIComponent(slug)}/memory`);
+  return apiRequest(`/runtime/agents/${encodeURIComponent(slug)}/memory`);
 }
 
 export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
-  return request("/runtime/metrics");
+  return apiRequest("/runtime/metrics");
 }
 
 export async function createRuntimeRun(input: {
@@ -102,7 +82,7 @@ export async function createRuntimeRun(input: {
   eventType: string;
   payload: Record<string, unknown>;
 }): Promise<RuntimeRunResponse> {
-  return request("/runtime/runs", {
+  return apiRequest("/runtime/runs", {
     method: "POST",
     body: JSON.stringify({
       agentSlug: input.agentSlug,
@@ -120,7 +100,7 @@ export async function postRuntimeEvent(input: {
   eventType: string;
   payload: Record<string, unknown>;
 }): Promise<RuntimeRunResponse> {
-  return request("/runtime/events", {
+  return apiRequest("/runtime/events", {
     method: "POST",
     body: JSON.stringify({
       skillRunId: input.skillRunId,
@@ -131,11 +111,11 @@ export async function postRuntimeEvent(input: {
 }
 
 export async function getRuntimeRun(runId: string): Promise<RuntimeRunResponse> {
-  return request(`/runtime/runs/${encodeURIComponent(runId)}`);
+  return apiRequest(`/runtime/runs/${encodeURIComponent(runId)}`);
 }
 
 export async function getSkillRunHistory(runId: string): Promise<SkillRunHistory> {
-  return request(`/runtime/runs/${encodeURIComponent(runId)}/history`);
+  return apiRequest(`/runtime/runs/${encodeURIComponent(runId)}/history`);
 }
 
 export async function cancelSkillRun(runId: string): Promise<{
@@ -144,7 +124,7 @@ export async function cancelSkillRun(runId: string): Promise<{
   status: string;
   currentState: string;
 }> {
-  return request(`/runtime/runs/${encodeURIComponent(runId)}/cancel`, {
+  return apiRequest(`/runtime/runs/${encodeURIComponent(runId)}/cancel`, {
     method: "POST",
   });
 }

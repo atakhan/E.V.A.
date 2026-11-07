@@ -1,6 +1,8 @@
 import { defaultWorkspaceSectionSlug } from "@/features/workspace/config/nav";
 
 export const RouteNames = {
+  login: "login",
+  register: "register",
   agents: "agents",
   projects: "projects",
   projectDesk: "project-desk",
@@ -21,6 +23,15 @@ export const RouteNames = {
   agentRun: "agent-run",
   skillCanvas: "skill-canvas",
 } as const;
+
+export function loginPath(next?: string): string {
+  if (!next || next === "/login" || next === "/register") return "/login";
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
+export function registerPath(): string {
+  return "/register";
+}
 
 export function agentsPath(): string {
   return "/agents";
