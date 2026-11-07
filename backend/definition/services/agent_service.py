@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from definition.behavior.materialize import flatten_agent_document
@@ -187,10 +187,44 @@ class AgentService:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_agents(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+    def can_read(self, agent: AgentRow, owner_user_id: str) -> bool:
+        if agent.slug == EVA_AGENT_SLUG:
+            return True
+        return agent.owner_user_id == owner_user_id
+
+    def can_write(self, agent: AgentRow, owner_user_id: str) -> bool:
+        if agent.slug == EVA_AGENT_SLUG:
+            return False
+        return agent.owner_user_id == owner_user_id
+
+    def require_readable(self, slug: str, owner_user_id: str) -> AgentRow:
+        agent = self.get_agent_row(slug)
+        if agent is None or not self.can_read(agent, owner_user_id):
+            raise KeyError(f"Agent '{slug}' not found")
+        return agent
+
+    def require_writable(self, slug: str, owner_user_id: str) -> AgentRow:
+        agent = self.get_agent_row(slug)
+        if agent is None or not self.can_write(agent, owner_user_id):
+            raise KeyError(f"Agent '{slug}' not found")
+        return agent
+
+    def list_agents(
+        self,
+        *,
+        include_archived: bool = False,
+        owner_user_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         query = select(AgentRow).order_by(AgentRow.updated_at.desc())
         if not include_archived:
             query = query.where(AgentRow.archived_at.is_(None))
+        if owner_user_id is not None:
+            query = query.where(
+                or_(
+                    AgentRow.owner_user_id == owner_user_id,
+                    AgentRow.slug == EVA_AGENT_SLUG,
+                )
+            )
         rows = self.session.scalars(query).all()
         return [_summary_from_row(row) for row in rows]
 
@@ -224,11 +258,17 @@ class AgentService:
         project_slug: str | None = None,
         skills: list[dict[str, Any]] | None = None,
         tools: list[dict[str, Any]] | None = None,
+        owner_user_id: str | None = None,
     ) -> dict[str, Any]:
         if self.session.scalar(select(AgentRow).where(AgentRow.slug == slug)):
             raise ValueError(f"Slug '{slug}' already exists")
 
-        agent = AgentRow(slug=slug, name=name.strip(), description=description.strip())
+        agent = AgentRow(
+            slug=slug,
+            name=name.strip(),
+            description=description.strip(),
+            owner_user_id=owner_user_id,
+        )
         self.session.add(agent)
         self.session.flush()
 
@@ -246,13 +286,23 @@ class AgentService:
         self.session.flush()
         return _merge_agent(agent, body)
 
-    def fork_library_agent(self, origin_slug: str, project_slug: str) -> dict[str, Any]:
+    def fork_library_agent(
+        self,
+        origin_slug: str,
+        project_slug: str,
+        *,
+        owner_user_id: str | None = None,
+    ) -> dict[str, Any]:
         """Copy a library agent into a project. Later edits of either side stay apart."""
         origin = self.get_agent_by_slug(origin_slug)
         if origin is None:
             raise KeyError(f"Agent '{origin_slug}' not found")
         if origin.get("kind") == "fork" and origin.get("originSlug"):
-            return self.fork_library_agent(str(origin["originSlug"]), project_slug)
+            return self.fork_library_agent(
+                str(origin["originSlug"]),
+                project_slug,
+                owner_user_id=owner_user_id,
+            )
         if origin.get("kind") == "runtime":
             raise ValueError("Системного агента проекта нельзя форкнуть")
         if origin.get("kind") == "platform":
@@ -267,6 +317,7 @@ class AgentService:
             name=str(origin.get("name") or origin_slug),
             description=str(origin.get("description") or ""),
             icon=str(origin.get("icon") or ""),
+            owner_user_id=owner_user_id,
         )
         self.session.add(agent)
         self.session.flush()
@@ -575,8 +626,13 @@ def ensure_eva_agent(session: Session) -> str:
         description="Системный агент платформы. Ведёт проекты и говорит с человеком.",
         kind="platform",
         skills=runtime_agent_skills(now),
+        owner_user_id=None,
     )
     session.flush()
+    eva = service.get_agent_row(EVA_AGENT_SLUG)
+    if eva is not None:
+        eva.owner_user_id = None
+        session.flush()
     return EVA_AGENT_SLUG
 
 

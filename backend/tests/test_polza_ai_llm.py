@@ -9,8 +9,12 @@ from tools.polza import PolzaAiLlmTool, PolzaApiError, PolzaClient
 
 @pytest.fixture
 def client():
+    from tests.conftest import authenticate_client
+
     with TestClient(app) as test_client:
+        authenticate_client(test_client)
         yield test_client
+
 
 
 def test_polza_client_balance_parses_amount():

@@ -36,7 +36,7 @@
 | Универсальный NLU «один скилл на всё» | INTERACTION_SPEC §15; `INTERACTION_FUNDAMENTAL_PROBLEM.md` §4 — выбор работы = классификация акта, не понимание текста |
 | LLM выбирает Action внутри FSM | `ARCHITECTURE_DOCS_ALIGNMENT.md` decision #6 — FSM выбирает action id по event/guard; LLM — Tool в recipe |
 | Planner (приоритизация и планирование очереди работ) | agent_architecture §23, §29 — отложен за пределы v0.1. **Пересмотрено D24:** список задач формирует контроллер задач, алгоритм открыт |
-| Multi-tenant изоляция, квоты | agent_architecture §29 — открыто |
+| Multi-tenant изоляция, квоты | **Частично** — owner isolation (D25, email/password); org/квоты открыто |
 | Distributed tracing, replay в production | RUNTIME_IMPLEMENTATION_STATUS — ❌ / admin-only |
 | Параллельные группы шагов recipe | RUNTIME_SPEC §24 — ❌ deferred |
 | Composition Action-in-Action | ACTIONS_SPEC §24 — используйте FSM Skill |

@@ -10,8 +10,12 @@ from scenarios.foreman_agent_document import build_foreman_agent_document
 
 @pytest.fixture
 def client():
+    from tests.conftest import authenticate_client
+
     with TestClient(app) as test_client:
+        authenticate_client(test_client)
         yield test_client
+
 
 
 def test_validate_foreman_document_has_no_errors():

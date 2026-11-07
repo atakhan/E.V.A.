@@ -11,8 +11,12 @@ from tests.conftest import new_ephemeral_agent_slug
 
 @pytest.fixture
 def client():
+    from tests.conftest import authenticate_client
+
     with TestClient(app) as test_client:
+        authenticate_client(test_client)
         yield test_client
+
 
 
 SKILL_ID = "cockpit_skill"

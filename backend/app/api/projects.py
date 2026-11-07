@@ -6,15 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.deps import session_scope
+from app.deps import db_session, require_user
 from definition.services.project_service import ProjectService
+from infrastructure.models.tables import UserRow
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-
-
-def _db_session():
-    with session_scope() as session:
-        yield session
 
 
 class ProjectAgentApi(BaseModel):
@@ -58,25 +54,37 @@ def _service(session: Session) -> ProjectService:
 
 
 @router.get("", response_model=list[ProjectApi])
-def list_projects(session: Session = Depends(_db_session)) -> list[dict[str, Any]]:
-    return _service(session).list_projects()
+def list_projects(
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> list[dict[str, Any]]:
+    return _service(session).list_projects(owner_user_id=user.id)
 
 
 @router.post("", response_model=ProjectApi, status_code=201)
-def create_project(payload: ProjectCreateRequest, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def create_project(
+    payload: ProjectCreateRequest,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
     try:
         return _service(session).create_project(
             name=payload.name,
             slug=payload.slug,
             description=payload.description,
+            owner_user_id=user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/{slug}", response_model=ProjectApi)
-def get_project(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
-    project = _service(session).get_by_slug(slug)
+def get_project(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
+    project = _service(session).get_by_slug(slug, owner_user_id=user.id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
@@ -86,7 +94,8 @@ def get_project(slug: str, session: Session = Depends(_db_session)) -> dict[str,
 def update_project(
     slug: str,
     payload: ProjectUpdateRequest,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
     agents = None
     if payload.agents is not None:
@@ -94,6 +103,7 @@ def update_project(
     try:
         return _service(session).update_project(
             slug,
+            owner_user_id=user.id,
             name=payload.name,
             description=payload.description,
             agents=agents,
@@ -105,9 +115,13 @@ def update_project(
 
 
 @router.delete("/{slug}", status_code=204, response_class=Response)
-def delete_project(slug: str, session: Session = Depends(_db_session)) -> Response:
+def delete_project(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> Response:
     try:
-        _service(session).delete_project(slug)
+        _service(session).delete_project(slug, owner_user_id=user.id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Project not found") from exc
     return Response(status_code=204)

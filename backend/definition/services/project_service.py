@@ -106,9 +106,11 @@ class ProjectService:
             return
         row.name = name
 
-    def ensure_runtime_agent(self, project_slug: str) -> str:
+    def ensure_runtime_agent(self, project_slug: str, *, owner_user_id: str | None = None) -> str:
         found = self._find_runtime(project_slug)
         if found is not None:
+            if owner_user_id and found.owner_user_id is None:
+                found.owner_user_id = owner_user_id
             self._ensure_project_channel(found)
             self._sync_runtime_name(found, project_slug)
             self._link_eva_to_runtime(found.slug, found.name)
@@ -119,6 +121,8 @@ class ProjectService:
         if existing is not None:
             found = self._find_runtime(project_slug)
             if found is not None:
+                if owner_user_id and found.owner_user_id is None:
+                    found.owner_user_id = owner_user_id
                 self._sync_runtime_name(found, project_slug)
                 self._link_eva_to_runtime(found.slug, found.name)
                 return found.slug
@@ -132,6 +136,7 @@ class ProjectService:
             project_slug=project_slug,
             skills=runtime_agent_skills(now),
             tools=[_project_channel_instance()],
+            owner_user_id=owner_user_id,
         )
         runtime_slug = str(created.get("slug") or slug)
         self._link_eva_to_runtime(runtime_slug, str(created.get("name") or runtime_slug))
@@ -176,11 +181,24 @@ class ProjectService:
         row.draft.body = body
         row.draft.updated_at = datetime.now(timezone.utc)
 
+    def _owned_project(self, slug: str, owner_user_id: str) -> ProjectRow | None:
+        return self._session.scalar(
+            select(ProjectRow).where(
+                ProjectRow.slug == slug,
+                ProjectRow.owner_user_id == owner_user_id,
+            )
+        )
+
     def _ensure_forks(self, row: ProjectRow) -> None:
         current = list(row.agents or [])
         if not current:
             return
-        bound = self._bind_agents(row.slug, current, previous=current)
+        bound = self._bind_agents(
+            row.slug,
+            current,
+            previous=current,
+            owner_user_id=row.owner_user_id,
+        )
         if bound != current:
             row.agents = bound
             row.updated_at = datetime.now(timezone.utc)
@@ -192,6 +210,7 @@ class ProjectService:
         requested: list[dict[str, Any]],
         *,
         previous: list[dict[str, Any]],
+        owner_user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Each library agent placed on a project becomes that project's own copy."""
         agents = AgentService(self._session)
@@ -217,7 +236,11 @@ class ProjectService:
                 if origin_doc is None:
                     bound.append({"agentSlug": slug, **point})
                     continue
-            fork = agents.fork_library_agent(origin_slug, project_slug)
+            fork = agents.fork_library_agent(
+                origin_slug,
+                project_slug,
+                owner_user_id=owner_user_id,
+            )
             origin = str(fork.get("originSlug") or origin_slug)
             bound.append(
                 {
@@ -234,22 +257,33 @@ class ProjectService:
                 agents.delete_agent(old_slug)
         return bound
 
-    def list_projects(self) -> list[dict[str, Any]]:
-        rows = self._session.scalars(select(ProjectRow).order_by(ProjectRow.updated_at.desc())).all()
+    def list_projects(self, *, owner_user_id: str) -> list[dict[str, Any]]:
+        rows = self._session.scalars(
+            select(ProjectRow)
+            .where(ProjectRow.owner_user_id == owner_user_id)
+            .order_by(ProjectRow.updated_at.desc())
+        ).all()
         result: list[dict[str, Any]] = []
         for row in rows:
             found = self._find_runtime(row.slug)
             result.append(_to_api(row, found.slug if found else None))
         return result
 
-    def get_by_slug(self, slug: str) -> dict[str, Any] | None:
-        row = self._session.scalar(select(ProjectRow).where(ProjectRow.slug == slug))
+    def get_by_slug(self, slug: str, *, owner_user_id: str) -> dict[str, Any] | None:
+        row = self._owned_project(slug, owner_user_id)
         if row is None:
             return None
         self._ensure_forks(row)
-        return _to_api(row, self.ensure_runtime_agent(slug))
+        return _to_api(row, self.ensure_runtime_agent(slug, owner_user_id=owner_user_id))
 
-    def create_project(self, *, name: str, slug: str, description: str = "") -> dict[str, Any]:
+    def create_project(
+        self,
+        *,
+        name: str,
+        slug: str,
+        description: str = "",
+        owner_user_id: str,
+    ) -> dict[str, Any]:
         cleaned_name = name.strip()
         cleaned_slug = slug.strip().lower()
         if not cleaned_name:
@@ -265,23 +299,25 @@ class ProjectService:
             name=cleaned_name,
             description=description.strip(),
             agents=[],
+            owner_user_id=owner_user_id,
             created_at=now,
             updated_at=now,
         )
         self._session.add(row)
         self._session.flush()
-        runtime_slug = self.ensure_runtime_agent(cleaned_slug)
+        runtime_slug = self.ensure_runtime_agent(cleaned_slug, owner_user_id=owner_user_id)
         return _to_api(row, runtime_slug)
 
     def update_project(
         self,
         slug: str,
         *,
+        owner_user_id: str,
         name: str | None = None,
         description: str | None = None,
         agents: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        row = self._session.scalar(select(ProjectRow).where(ProjectRow.slug == slug))
+        row = self._owned_project(slug, owner_user_id)
         if row is None:
             raise KeyError(slug)
         if name is not None:
@@ -292,7 +328,12 @@ class ProjectService:
         if description is not None:
             row.description = description.strip()
         if agents is not None:
-            row.agents = self._bind_agents(slug, _normalize_agents(agents), previous=list(row.agents or []))
+            row.agents = self._bind_agents(
+                slug,
+                _normalize_agents(agents),
+                previous=list(row.agents or []),
+                owner_user_id=owner_user_id,
+            )
         row.updated_at = datetime.now(timezone.utc)
         self._session.flush()
         found = self._find_runtime(slug)
@@ -301,8 +342,8 @@ class ProjectService:
             self._session.flush()
         return _to_api(row, found.slug if found else None)
 
-    def delete_project(self, slug: str) -> None:
-        row = self._session.scalar(select(ProjectRow).where(ProjectRow.slug == slug))
+    def delete_project(self, slug: str, *, owner_user_id: str) -> None:
+        row = self._owned_project(slug, owner_user_id)
         if row is None:
             raise KeyError(slug)
         runtime = self._find_runtime(slug)

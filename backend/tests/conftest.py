@@ -2,9 +2,33 @@ import os
 import uuid
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.config import get_settings
+
+
+def authenticate_client(client: TestClient) -> TestClient:
+    """Log in as bootstrap admin (created by init_db on app lifespan)."""
+    settings = get_settings()
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": settings.bootstrap_admin_email,
+            "password": settings.bootstrap_admin_password,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return client
+
+
+@pytest.fixture
+def client():
+    from app.main import app
+
+    with TestClient(app) as test_client:
+        authenticate_client(test_client)
+        yield test_client
 
 
 def _services_available() -> bool:

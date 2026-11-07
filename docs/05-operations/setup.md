@@ -86,6 +86,13 @@ npm run dev        # :5173; прокси /api и /health → VITE_API_PROXY (п�
 | `EVA_WEB_CLIENT_DOCKER_HOST` | `host.docker.internal` | хост для rewrite (в compose добавлен `extra_hosts: host-gateway`) |
 | `EVA_TOOL_INPUT_VALIDATION` | `warn` | `warn` / `strict` / `off` — валидация входа команд по схеме |
 | `EVA_PRUNE_EPHEMERAL_AGENTS` | `true` | удалять при старте агентов `eva-test-*`, `test-agent-*`, `web-agent-*`, `cred-agent-*` |
+| `EVA_AUTH_COOKIE_NAME` | `eva_session` | имя HttpOnly cookie сессии |
+| `EVA_AUTH_SESSION_TTL_HOURS` | `168` | TTL сессии в часах |
+| `EVA_AUTH_OPEN_REGISTRATION` | `true` | разрешить `POST /api/auth/register` |
+| `EVA_AUTH_COOKIE_SECURE` | `false` | `Secure` на cookie (prod HTTPS → `true`) |
+| `EVA_BOOTSTRAP_ADMIN_EMAIL` | `admin@eva.local` | admin при старте; получает orphan projects/agents |
+| `EVA_BOOTSTRAP_ADMIN_PASSWORD` | `changeme-admin` | пароль bootstrap admin |
+| `EVA_CORS_ORIGINS` | `http://localhost:5173,...` | origins с credentials (через запятую) |
 | `VITE_API_PROXY` | `http://backend:8000` | только для dev-сервера Vite (сервис `frontend` читает тот же `.env`) |
 
 Stage/prod-значения — `infisical/{stage,prod}/eva-backend.env.example` (`EVA_TELEGRAM_MODE=real`, `EVA_WEB_CLIENT_DOCKER_REWRITE=false`, `EVA_PRUNE_EPHEMERAL_AGENTS=false`, публичные URL доменов).

@@ -7,21 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.access import require_agent_readable
 from app.config import get_settings
+from app.deps import db_session, require_user
 from definition.services.agent_service import AgentService
 from definition.services.tool_api_log_service import ToolApiLogService
 from infrastructure.crypto.secrets import decrypt_secret
-from infrastructure.models.tables import AgentRow, ToolCredentialRow
+from infrastructure.models.tables import ToolCredentialRow, UserRow
 from tools.polza import PolzaApiError, PolzaClient
 
 router = APIRouter(prefix="/api/agents/{slug}/tools/polza_ai_llm", tags=["polza"])
-
-
-def _db_session():
-    from app.deps import session_scope
-
-    with session_scope() as session:
-        yield session
 
 
 class PolzaBalanceResponse(BaseModel):
@@ -38,13 +33,6 @@ class PolzaModelItem(BaseModel):
     name: str
     type: str = "chat"
     context_length: int | None = Field(default=None, alias="contextLength")
-
-
-def _require_agent(session: Session, slug: str) -> AgentRow:
-    agent = session.scalar(select(AgentRow).where(AgentRow.slug == slug))
-    if agent is None:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
 
 
 from runtime.tool_instance_resolver import instances_by_type
@@ -75,10 +63,11 @@ def _bound_polza_credential_id(
 def _resolve_polza_credential(
     session: Session,
     slug: str,
+    user: UserRow,
     credential_id: str | None,
     instance_id: str | None = None,
 ) -> ToolCredentialRow:
-    agent = _require_agent(session, slug)
+    agent = require_agent_readable(session, slug, user)
     resolved_id = credential_id or _bound_polza_credential_id(session, slug, instance_id)
 
     query = select(ToolCredentialRow).where(
@@ -107,14 +96,15 @@ def _client_for_row(row: ToolCredentialRow) -> PolzaClient:
 def list_polza_models(
     slug: str,
     credential_id: str | None = Query(default=None, alias="credentialId"),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> list[dict[str, Any]]:
-    _require_agent(session, slug)
+    require_agent_readable(session, slug, user)
     settings = get_settings()
 
     models: list[dict[str, Any]] = []
     try:
-        row = _resolve_polza_credential(session, slug, credential_id)
+        row = _resolve_polza_credential(session, slug, user, credential_id)
         models = _client_for_row(row).list_models(model_type="chat")
     except (HTTPException, PolzaApiError):
         try:
@@ -148,9 +138,10 @@ def list_polza_models(
 def get_polza_balance(
     slug: str,
     credential_id: str | None = Query(default=None, alias="credentialId"),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
-    row = _resolve_polza_credential(session, slug, credential_id)
+    row = _resolve_polza_credential(session, slug, user, credential_id)
     client = _client_for_row(row)
     try:
         balance = client.get_balance()
@@ -174,9 +165,10 @@ def list_polza_logs(
     slug: str,
     credential_id: str | None = Query(default=None, alias="credentialId"),
     limit: int = Query(default=50, ge=1, le=200),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> list[dict[str, Any]]:
-    agent = _require_agent(session, slug)
+    agent = require_agent_readable(session, slug, user)
     return ToolApiLogService(session).list_logs(
         agent.id,
         tool_id="polza_ai_llm",

@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.api.access import require_agent_readable, require_agent_writable
+from app.deps import db_session, require_user
 from definition.services.credential_service import CredentialService
+from infrastructure.models.tables import UserRow
 
 router = APIRouter(prefix="/api/agents", tags=["credentials"])
 
@@ -40,19 +43,14 @@ class CredentialCreateApi(CredentialPublicApi):
     one_time_secrets: CredentialOneTimeSecretsApi | None = Field(default=None, alias="oneTimeSecrets")
 
 
-def _db_session():
-    from app.deps import session_scope
-
-    with session_scope() as session:
-        yield session
-
-
 @router.get("/{slug}/credentials", response_model=list[CredentialPublicApi])
 def list_credentials(
     slug: str,
     tool_id: str | None = None,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> list[dict[str, Any]]:
+    require_agent_readable(session, slug, user)
     service = CredentialService(session)
     try:
         return service.list_credentials(slug, tool_id=tool_id)
@@ -64,8 +62,10 @@ def list_credentials(
 def create_credential(
     slug: str,
     payload: CredentialCreateRequest,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = CredentialService(session)
     try:
         return service.create_credential(
@@ -82,8 +82,10 @@ def create_credential(
 def delete_credential(
     slug: str,
     credential_id: str,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> Response:
+    require_agent_writable(session, slug, user)
     service = CredentialService(session)
     try:
         service.delete_credential(slug, credential_id)
@@ -96,8 +98,10 @@ def delete_credential(
 def verify_credential(
     slug: str,
     credential_id: str,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = CredentialService(session)
     try:
         return service.verify_credential(slug, credential_id)
@@ -111,8 +115,10 @@ def verify_credential(
 def set_webhook(
     slug: str,
     credential_id: str,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = CredentialService(session)
     try:
         return service.set_telegram_webhook(slug, credential_id)

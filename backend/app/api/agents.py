@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.api.access import require_agent_readable, require_agent_writable
 from app.api.agent_http import raise_agent_service_error
-from app.deps import get_agent_service
+from app.deps import db_session, get_agent_service, require_user
 from definition.schemas.agent_api import (
     AgentApi,
     AgentArchiveResponseApi,
@@ -20,35 +20,30 @@ from definition.schemas.agent_api import (
 from definition.services.agent_service import (
     EVA_AGENT_SLUG,
     AgentArchivedError,
-    AgentService,
     ensure_eva_agent,
     ensure_life_skill_on_agents,
 )
+from infrastructure.models.tables import UserRow
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
-
-
-def _db_session():
-    from app.deps import session_scope
-
-    with session_scope() as session:
-        yield session
 
 
 @router.get("", response_model=list[AgentSummaryApi])
 def list_agents(
     include_archived: bool = Query(default=False, alias="includeArchived"),
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> list[dict[str, Any]]:
     ensure_life_skill_on_agents(session)
     service = get_agent_service(session)
-    return service.list_agents(include_archived=include_archived)
+    return service.list_agents(include_archived=include_archived, owner_user_id=user.id)
 
 
 @router.post("", response_model=AgentApi, status_code=201)
 def create_agent(
     payload: AgentCreateRequest,
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
     service = get_agent_service(session)
     try:
@@ -56,16 +51,22 @@ def create_agent(
             name=payload.name,
             slug=payload.slug.strip().lower(),
             description=payload.description,
+            owner_user_id=user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/{slug}", response_model=AgentApi)
-def get_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def get_agent(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
     if slug == EVA_AGENT_SLUG:
         ensure_eva_agent(session)
     ensure_life_skill_on_agents(session)
+    require_agent_readable(session, slug, user)
     service = get_agent_service(session)
     agent = service.get_agent_by_slug(slug)
     if agent is None:
@@ -77,8 +78,10 @@ def get_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, A
 def upsert_agent(
     slug: str,
     payload: dict[str, Any],
-    session: Session = Depends(_db_session),
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
 ) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         return service.upsert_draft(slug, payload)
@@ -87,7 +90,12 @@ def upsert_agent(
 
 
 @router.delete("/{slug}", status_code=204, response_class=Response)
-def delete_agent(slug: str, session: Session = Depends(_db_session)) -> Response:
+def delete_agent(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> Response:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         service.delete_agent(slug)
@@ -97,7 +105,12 @@ def delete_agent(slug: str, session: Session = Depends(_db_session)) -> Response
 
 
 @router.post("/{slug}/validate", response_model=AgentValidationReportApi)
-def validate_agent_endpoint(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def validate_agent_endpoint(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         return service.validate_draft(slug)
@@ -106,7 +119,12 @@ def validate_agent_endpoint(slug: str, session: Session = Depends(_db_session)) 
 
 
 @router.post("/{slug}/archive", response_model=AgentArchiveResponseApi)
-def archive_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def archive_agent(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         summary = service.archive_agent(slug)
@@ -120,7 +138,12 @@ def archive_agent(slug: str, session: Session = Depends(_db_session)) -> dict[st
 
 
 @router.post("/{slug}/unarchive", response_model=AgentArchiveResponseApi)
-def unarchive_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def unarchive_agent(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         summary = service.unarchive_agent(slug)
@@ -134,7 +157,12 @@ def unarchive_agent(slug: str, session: Session = Depends(_db_session)) -> dict[
 
 
 @router.post("/{slug}/publish", response_model=PublishResponseApi)
-def publish_agent(slug: str, session: Session = Depends(_db_session)) -> dict[str, Any]:
+def publish_agent(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> dict[str, Any]:
+    require_agent_writable(session, slug, user)
     service = get_agent_service(session)
     try:
         return service.publish(slug)
@@ -145,7 +173,12 @@ def publish_agent(slug: str, session: Session = Depends(_db_session)) -> dict[st
 
 
 @router.get("/{slug}/publications", response_model=list[AgentPublicationApi])
-def list_publications(slug: str, session: Session = Depends(_db_session)) -> list[dict[str, Any]]:
+def list_publications(
+    slug: str,
+    session: Session = Depends(db_session),
+    user: UserRow = Depends(require_user),
+) -> list[dict[str, Any]]:
+    require_agent_readable(session, slug, user)
     service = get_agent_service(session)
     try:
         return service.list_publications(slug)
