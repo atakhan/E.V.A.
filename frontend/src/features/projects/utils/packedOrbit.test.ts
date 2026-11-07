@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { layoutAroundRuntime, RUNTIME_MIN_CHORD, RUNTIME_TOP_MENU } from "@/features/projects/utils/deskLayout";
+import {
+  AGENT_ICON,
+  CREATE_AGENT_SIZE,
+  layoutAroundRuntime,
+  layoutCreateAroundRuntime,
+  RUNTIME_MIN_CHORD,
+  RUNTIME_TOP_MENU,
+} from "@/features/projects/utils/deskLayout";
 import type { ProjectAgent } from "@/features/projects/types/project";
 import {
   CREATE_PROJECT_SIZE,
@@ -122,6 +129,21 @@ describe("layoutAroundRuntime (desk orbit)", () => {
     expect(toRuntime).toBeGreaterThan(RUNTIME_MIN_CHORD * 0.9);
     expect(toRuntime).toBeLessThanOrEqual(bounds.height / 2);
     expect(toRuntime).toBeLessThan(toMenu);
+  });
+
+  it("seats create dead-center above the runtime, closer than the agent ring", () => {
+    const create = layoutCreateAroundRuntime(anchor, bounds);
+    const createCenter = {
+      x: create.x,
+      y: create.y + CREATE_AGENT_SIZE / 2,
+    };
+    const [agent] = centers(layoutAroundRuntime(agents(1), anchor, bounds));
+    const createR = Math.hypot(createCenter.x - anchor.x, createCenter.y - anchor.y);
+    const agentR = Math.hypot(agent.x - anchor.x, agent.y - anchor.y);
+    expect(createCenter.x).toBe(anchor.x);
+    expect(createCenter.y).toBeLessThan(anchor.y);
+    expect(createR).toBeLessThan(agentR * 0.7);
+    expect(AGENT_ICON).toBeGreaterThan(CREATE_AGENT_SIZE);
   });
 
   it("packs neighbors tightly and stays nearer the runtime than the top menu", () => {

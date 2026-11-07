@@ -690,6 +690,7 @@ async function remove() {
       @open="openAgent"
       @remove="removeAgent"
       @arrange="onArrange"
+      @create="togglePanel('library')"
     />
     <div v-if="constructorOn && focusSlug" class="absolute inset-0 z-30">
       <ConstructorView
@@ -744,20 +745,6 @@ async function remove() {
       Меню
     </button>
 
-    <button
-      v-if="project"
-      type="button"
-      :class="[edgeButtonClass, chromeClass, 'btn-circle btn-md fixed bottom-4 left-4']"
-      :style="chromeStyle"
-      aria-label="Подключить агента"
-      :aria-expanded="panel === 'library'"
-      @click="togglePanel('library')"
-    >
-      <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path stroke-linecap="round" d="M12 5v14M5 12h14" />
-      </svg>
-    </button>
-
     <aside
       v-if="panel === 'nav'"
       class="fixed left-[4.25rem] top-20 z-30 w-64 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-xl"
@@ -808,7 +795,7 @@ async function remove() {
 
     <aside
       v-if="panel === 'library' && project"
-      class="fixed bottom-64 left-4 z-30 flex max-h-[min(24rem,calc(100vh-18rem))] w-72 flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-xl"
+      class="fixed bottom-40 left-1/2 z-30 flex max-h-[min(24rem,calc(100vh-18rem))] w-72 -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-xl"
     >
       <header class="border-b border-base-300 px-4 py-3">
         <h2 class="text-base font-semibold">Подключить агента</h2>

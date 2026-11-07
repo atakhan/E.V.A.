@@ -4,7 +4,12 @@ import { agentIconSrc } from "@/features/agents/types/agent";
 import type { Agent } from "@/features/agents/types/agent";
 import type { ProjectAgent } from "@/features/projects/types/project";
 import type { Flight } from "@/features/projects/motion";
-import { layoutAroundRuntime, type DeskAnchor } from "@/features/projects/utils/deskLayout";
+import {
+  CREATE_AGENT_SIZE,
+  layoutAroundRuntime,
+  layoutCreateAroundRuntime,
+  type DeskAnchor,
+} from "@/features/projects/utils/deskLayout";
 import { DESK_ASIDE_MS } from "@/features/projects/utils/deskMotion";
 import { orbitIconStyle, orbitPlaceStyle } from "@/features/projects/utils/orbitStyles";
 
@@ -41,6 +46,7 @@ const emit = defineEmits<{
   open: [agentSlug: string];
   remove: [agentSlug: string];
   arrange: [agents: ProjectAgent[]];
+  create: [];
 }>();
 
 const board = ref<HTMLElement | null>(null);
@@ -57,6 +63,13 @@ const placed = computed(() => {
   const anchor = props.anchor;
   if (!anchor || size.value.width <= 0) return props.agents;
   return layoutAroundRuntime(props.agents, anchor, size.value);
+});
+
+/** Inner-orbit create seat — closer to the runtime than the packed agent ring. */
+const createSlot = computed(() => {
+  const anchor = props.anchor;
+  if (!anchor || size.value.width <= 0 || size.value.height <= 0) return null;
+  return layoutCreateAroundRuntime(anchor, size.value);
 });
 
 let arrangeTimer = 0;
@@ -114,11 +127,15 @@ onUnmounted(() => {
   window.clearTimeout(arrangeTimer);
 });
 
-function placeStyle(agent: ProjectAgent & { x: number; y: number }, index: number) {
+function placeStyle(
+  seat: { x: number; y: number },
+  index: number,
+  options?: { focused?: boolean },
+) {
   return orbitPlaceStyle({
-    x: agent.x,
-    y: agent.y,
-    focused: agent.agentSlug === props.focusSlug,
+    x: seat.x,
+    y: seat.y,
+    focused: options?.focused ?? false,
     dimmed: props.dimmed,
     satellites: props.satellites,
     anchor: props.anchor,
@@ -154,9 +171,9 @@ defineExpose({ rootEl: board });
   >
     <p
       v-if="agents.length === 0 && satellites"
-      class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-base-content/60"
+      class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 pb-40 text-center text-sm text-base-content/60"
     >
-      На столе пока никого нет. Подключите агента из библиотеки.
+      На столе пока никого нет. Нажми «Новый» у проекта — подключи агента из библиотеки.
     </p>
     <article
       v-for="(agent, index) in placed"
@@ -169,7 +186,7 @@ defineExpose({ rootEl: board });
         dimmed || !satellites ? 'pointer-events-none' : '',
         agent.agentSlug === focusSlug ? 'z-30' : 'z-10',
       ]"
-      :style="placeStyle(agent, index)"
+      :style="placeStyle(agent, index, { focused: agent.agentSlug === focusSlug })"
       @click="onOpen($event, agent)"
     >
       <img
@@ -203,5 +220,32 @@ defineExpose({ rootEl: board });
         ✕
       </button>
     </article>
+
+    <!-- Create: gray seat on the runtime’s inner orbit (closer than agents). -->
+    <button
+      v-if="createSlot"
+      type="button"
+      data-create-agent
+      class="absolute z-20 flex flex-col items-center gap-1.5 text-center motion-reduce:transition-none"
+      :class="dimmed || !satellites ? 'pointer-events-none' : ''"
+      :style="placeStyle(createSlot, 0)"
+      aria-label="Подключить агента"
+      title="Подключить агента"
+      @click="emit('create')"
+    >
+      <span
+        class="flex items-center justify-center rounded-full border-2 border-dashed border-base-content/35 bg-base-300/50 text-base-content/55 shadow-sm transition hover:border-base-content/50 hover:bg-base-300/80 hover:text-base-content/80"
+        :style="{ width: `${CREATE_AGENT_SIZE}px`, height: `${CREATE_AGENT_SIZE}px` }"
+      >
+        <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      <span
+        class="text-sm font-medium leading-tight text-base-content/55 transition-opacity motion-reduce:transition-none"
+        :class="dimmed || !satellites ? 'opacity-0' : 'opacity-100'"
+        :style="{ transitionDuration: `${DESK_ASIDE_MS}ms` }"
+      >Новый</span>
+    </button>
   </div>
 </template>
